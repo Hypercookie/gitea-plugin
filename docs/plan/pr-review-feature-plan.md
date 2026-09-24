@@ -496,12 +496,33 @@ Advisor-identified build order (dependency order, not user-facing order):
       original plan but is being split out — see Phase 17 below.
 - [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 
-### Phase 17 — tool window review actions (was part of Phase 15) [ ]
-- [ ] A panel in the "Gitea Pull Requests" tool window bound to "the PR for
-      the current branch" (Phase 13) with its own Approve/Comment/Request
-      Changes buttons + pending-count label, reading/writing the same
-      per-PR `PendingReviewStoreService` store — reachable while editing any
-      file, without needing a detail tab open.
+### Phase 17 — tool window review actions (was part of Phase 15) [x]
+- [x] `pullrequest/ReviewActionsPanel.kt` — Approve/Comment/Request Changes +
+      pending-count label, extracted out of `PullRequestDetailPanel` (which
+      now just instantiates it) so it can be reused anywhere a
+      `PendingReviewStore` needs a submit UI.
+- [x] `pullrequest/CurrentBranchReviewPanel.kt` — resolves "the PR for the
+      current branch" (Phase 13, forcing a cache `invalidate()` on manual
+      refresh) and embeds a `ReviewActionsPanel` for it. Mounted at the
+      **top of the PR list tab** (`PullRequestListPanel`, `BorderLayout.NORTH`,
+      above the toolbar/list) so it's visible regardless of which file is
+      being edited, without needing a detail tab open.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+
+### Phase 16 — checkout on double-click [x]
+- [x] `PullRequestListPanel` double-click now calls `checkoutBranch(pr)` —
+      `GitBrancher.getInstance(project).checkout(pr.head.ref, false, listOf(repo), callback)`.
+      Confirms first via `Messages.showYesNoDialog` if
+      `ChangeListManager.getInstance(project).allChanges` is non-empty
+      (dirty working tree) — this is a hard-to-reverse action on the user's
+      tree. New "View Details" toolbar button opens the old detail-tab flow
+      for the selected row instead (kept, per the "keep both" decision).
+      **Known v1 limitation**: only resolves same-repo PRs (branch already
+      exists locally or as `origin/<ref>`) — fork-based PRs not handled.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+
+All of Phases 11-17 (the architecture-pivot work) built; **none of it has
+been manually tested in a running sandbox yet** — next step.
 
 ### Phase 16 — checkout on double-click [ ]
 - [ ] `PullRequestListPanel` double-click: use `GitBrancher.getInstance(project)
