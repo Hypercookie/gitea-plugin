@@ -2,8 +2,10 @@ package com.github.hypercookie.giteaplugin.pullrequest
 
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.ChangedFile
+import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
 import com.github.hypercookie.giteaplugin.api.dto.PullRequest
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
+import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GITEA_DIFF_COMMENT_CONTEXT_KEY
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaDiffCommentContext
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
@@ -25,9 +27,11 @@ import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
+import java.awt.FlowLayout
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.DefaultListModel
+import javax.swing.JButton
 import javax.swing.JList
 import javax.swing.ListCellRenderer
 
@@ -45,11 +49,15 @@ class PullRequestDetailPanel(
     private val pr: PullRequest,
 ) {
 
+    private val pendingReviewStore = PendingReviewStore()
+
     private val filesModel = DefaultListModel<ChangedFile>()
     private val filesList = JBList(filesModel).apply {
         cellRenderer = ChangedFileCellRenderer()
     }
     private val statusLabel = JBLabel("Loading changed files…")
+    private val pendingLabel = JBLabel(" ")
+    private val reviewStatusLabel = JBLabel(" ")
 
     val component = JBPanel<JBPanel<*>>(BorderLayout()).apply {
         add(buildOverviewPanel(), BorderLayout.NORTH)
@@ -57,11 +65,15 @@ class PullRequestDetailPanel(
         val filesPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
             add(statusLabel, BorderLayout.NORTH)
             add(JBScrollPane(filesList), BorderLayout.CENTER)
+            add(pendingLabel, BorderLayout.SOUTH)
         }
         add(filesPanel, BorderLayout.CENTER)
+        add(buildReviewActionsPanel(), BorderLayout.SOUTH)
     }
 
     init {
+        pendingReviewStore.addListener { updatePendingLabel() }
+        updatePendingLabel()
         filesList.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 if (e.clickCount == 2) {
@@ -70,6 +82,47 @@ class PullRequestDetailPanel(
             }
         })
         loadFiles()
+    }
+
+    private fun updatePendingLabel() {
+        val count = pendingReviewStore.pendingComments.size
+        pendingLabel.text = if (count == 0) " " else "$count pending comment(s) — not yet submitted"
+    }
+
+    private fun buildReviewActionsPanel(): Component =
+        JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
+            add(JButton("Approve").apply { addActionListener { submitReview(ReviewEvent.APPROVED) } })
+            add(JButton("Comment").apply { addActionListener { submitReview(ReviewEvent.COMMENT) } })
+            add(JButton("Request Changes").apply { addActionListener { submitReview(ReviewEvent.REQUEST_CHANGES) } })
+            add(reviewStatusLabel)
+        }
+
+    /** Bundles every queued pending comment (Phase 8, across every file
+     * diffed so far) into one review submission — Gitea creates and submits
+     * a review in the same call. `commitId` pinned to the PR's current head
+     * SHA so the review doesn't show as stale on the next commit. */
+    private fun submitReview(event: ReviewEvent) {
+        reviewStatusLabel.text = "Submitting…"
+        val pendingComments = pendingReviewStore.pendingComments
+        GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
+            val result = runCatching {
+                client.createReview(
+                    context.owner, context.repo, pr.number,
+                    CreatePullReviewOptions(event = event, commitId = pr.head.sha, comments = pendingComments),
+                )
+            }
+            withContext(Dispatchers.Main) {
+                result.fold(
+                    onSuccess = {
+                        pendingReviewStore.clear()
+                        reviewStatusLabel.text = "Review submitted (${event.name.lowercase()})."
+                    },
+                    onFailure = { error ->
+                        reviewStatusLabel.text = "Failed to submit review: ${error.message}"
+                    },
+                )
+            }
+        }
     }
 
     private fun buildOverviewPanel(): Component {
@@ -161,7 +214,7 @@ class PullRequestDetailPanel(
         )
         request.putUserData(
             GITEA_DIFF_COMMENT_CONTEXT_KEY,
-            GiteaDiffCommentContext(context.owner, context.repo, pr.number, client, file.filename, comments),
+            GiteaDiffCommentContext(context.owner, context.repo, pr.number, client, file.filename, comments, pendingReviewStore),
         )
         DiffManager.getInstance().showDiff(project, request)
     }

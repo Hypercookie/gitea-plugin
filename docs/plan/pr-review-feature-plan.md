@@ -335,17 +335,64 @@ verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
   UX-in-testing gotcha (a comment on an unchanged/scrolled-past line can look
   like a missing feature).
 
-## Phase 8 — pending review: add inline comment
-- [ ] Gutter "+" action on any diff line → add comment, buffered locally as
-      "pending" (not yet submitted).
-- [ ] Visual indicator distinguishing pending vs submitted comments.
+## Phase 8 — pending review: add inline comment [x]
+- [x] `pullrequest/PendingReviewStore.kt` — one instance per opened PR detail
+      tab (not per-diff), shared across every file diffed for that PR so
+      pending comments survive closing/reopening a file's diff and Phase 9's
+      submit can see comments added from any file. Pure in-memory, listener
+      callback for UI to react to changes.
+- [x] `GiteaCommentDiffExtension` rewritten around per-line rendering: each
+      line gets **at most one** gutter icon — pending (orange/"Modified"
+      icon) takes priority over an existing submitted thread (balloon icon),
+      which takes priority over a plain "+" add-affordance (only shown on
+      lines actually inside a `SimpleDiffChange` range for that side, via
+      `SimpleDiffViewer.getDiffChanges()` / `getStartLine`/`getEndLine` — both
+      confirmed public via `javap`). Known v1 limitation: a line with an
+      existing submitted thread can't also get a "+" to add a second,
+      separate pending comment on that same line — acceptable for now, not
+      revisited this pass.
+      **Why restrict "+" to diff-changed lines**: Gitea's API does **not**
+      validate this server-side (confirmed in the Phase 2 hardening pass —
+      it silently accepted comments on context lines and even completely
+      out-of-diff lines), so enforcing "only comment on lines actually in the
+      diff" is entirely this plugin's job, matching GitHub/GitLab's UX.
+- [x] Add-comment popup is purely local (`PendingReviewStore.addComment`, no
+      network call) — click a pending icon again to see the queued text and
+      Discard it.
+- [x] `PullRequestDetailPanel` shows a live "N pending comment(s)" label
+      (via `PendingReviewStore`'s listener), independent of which file's diff
+      is currently open.
+- [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
+      succeed.
 
-## Phase 9 — submit review
-- [ ] Actions: Approve / Comment / Request Changes (fall back to
-      Approve/Comment-only if Request Changes unconfirmed on target Gitea
-      version, per Phase 2 spike).
-- [ ] Bundle pending comments (Phase 8) into one
-      `POST /pulls/{index}/reviews` call with chosen state.
+## Phase 9 — submit review [x]
+- [x] Three buttons in `PullRequestDetailPanel` (always visible, not
+      per-file): Approve / Comment / Request Changes. **No fallback needed**
+      — Request Changes confirmed supported by the target Gitea version back
+      in the Phase 2 spike.
+- [x] `submitReview(event)` bundles every pending comment across every
+      diffed file into one `client.createReview(...)` call
+      (`CreatePullReviewOptions(event, commitId = pr.head.sha, comments = ...)`
+      — `commitId` pinned per the DTO doc comment from the hardening pass, so
+      the review doesn't show as stale on the next commit). On success:
+      clears `PendingReviewStore` (across all files at once, not just the
+      currently open one). On failure (e.g. Gitea's "approve your own pull
+      is not allowed" for self-review, hit repeatedly during earlier
+      testing): shown inline, pending comments preserved for retry.
+- [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
+      succeed.
+- [ ] **Not yet manually tested** — Phases 8 and 9 built together in one
+      pass since they're only meaningfully testable together (queue a
+      comment, then submit). Needs a `runIde` restart. Test plan: open a
+      file's diff, click "+" on a couple of changed lines, add comment text,
+      confirm pending icon appears and "N pending comment(s)" label updates;
+      click a pending icon and Discard one to confirm removal; click
+      "Comment" (not Approve/Request Changes — this account authored
+      `pr-test`'s PRs, so those are expected to fail with Gitea's
+      self-review restriction, same as integration-test findings) and
+      confirm the pending comments land as a real review on the PR
+      (check via `http://localhost:3000/plugindev/pr-test/pulls/<n>`, or the
+      icons should switch from pending→submitted style on next diff open).
 
 ## Phase 10 — polish
 - [ ] Background execution via project `CoroutineScope` service — no EDT
