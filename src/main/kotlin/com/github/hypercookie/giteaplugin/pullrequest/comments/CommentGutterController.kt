@@ -9,6 +9,7 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.editor.ComponentInlayRenderer
 import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.markup.GutterIconRenderer
@@ -22,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.Color
 import javax.swing.Icon
+import javax.swing.JComponent
 
 /**
  * Renders one editor's worth of Gitea PR review comments as real embedded
@@ -46,9 +48,9 @@ class CommentGutterController(
 ) {
     private val addGutterHighlighters = mutableListOf<RangeHighlighter>()
     private val lineBackgroundHighlighters = mutableListOf<RangeHighlighter>()
-    private val threadInlays = mutableMapOf<Int, Inlay<*>>()
-    private val pendingInlays = mutableMapOf<Int, Inlay<*>>()
-    private var newCommentBox: Pair<Int, Inlay<*>>? = null
+    private val threadInlays = mutableMapOf<Int, Inlay<ComponentInlayRenderer<JComponent>>>()
+    private val pendingInlays = mutableMapOf<Int, Inlay<ComponentInlayRenderer<JComponent>>>()
+    private var newCommentBox: Pair<Int, Inlay<ComponentInlayRenderer<JComponent>>>? = null
 
     private var currentComments: List<PullReviewComment> = emptyList()
 
@@ -105,7 +107,7 @@ class CommentGutterController(
                         PendingCommentBoxPanel(
                             pending = pending,
                             onDiscard = { commentContext.pendingStore.removeComment(pending) },
-                            onResized = { pendingInlays[lineIndex]?.update() },
+                            onResized = { pendingInlays[lineIndex]?.let(InlineComponentHost::relayout) },
                         ),
                     ) ?: continue
                 }
@@ -116,7 +118,7 @@ class CommentGutterController(
                         CommentThreadBoxPanel(
                             project, thread,
                             onReply = { text, onResult -> reply(thread, text, onResult) },
-                            onResized = { threadInlays[lineIndex]?.update() },
+                            onResized = { threadInlays[lineIndex]?.let(InlineComponentHost::relayout) },
                         ),
                     ) ?: continue
                 }
@@ -164,7 +166,7 @@ class CommentGutterController(
                 newCommentBox = null
                 render()
             },
-            onResized = { newCommentBox?.second?.update() },
+            onResized = { newCommentBox?.second?.let(InlineComponentHost::relayout) },
         )
         val inlay = InlineComponentHost.install(editor, lineIndex, panel) ?: return
         newCommentBox = lineIndex to inlay

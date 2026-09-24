@@ -11,7 +11,6 @@ import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
-import kotlinx.coroutines.runBlocking
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.util.function.Function
@@ -35,19 +34,25 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
         project: Project,
         file: VirtualFile,
     ): Function<in FileEditor, out JComponent?>? {
+        // Must not touch PasswordSafe or the network here — this runs
+        // inside a non-cancelable read action (confirmed via a SEVERE
+        // SlowOperations log during manual testing when this used to call
+        // getToken()/resolveForCurrentBranch() synchronously). Only reads
+        // already-resolved, in-memory state; the token/client are resolved
+        // lazily below, once, when the banner component is actually built.
         val repoContext = GiteaRepoLinkService.getInstance(project).resolveDefault() ?: return null
-        val token = GiteaAccountManager.getInstance().getToken(repoContext.account)
-        if (token.isNullOrBlank()) return null
-        val client = GiteaApiClient(repoContext.account.serverUrl, token)
-
         val resolver = GiteaBranchPrResolverService.getInstance(project)
-        val pr = runCatching { runBlocking { resolver.resolveForCurrentBranch(repoContext, client) } }.getOrNull()
-            ?: return null
+        val branch = resolver.currentBranchName() ?: return null
+        val pr = resolver.peekCachedPr(branch) ?: return null
 
         val store = PendingReviewStoreService.getInstance(project).storeFor(repoContext.owner, repoContext.repo, pr.number)
         if (store.pendingComments.isEmpty()) return null
 
         return Function {
+            val token = GiteaAccountManager.getInstance().getToken(repoContext.account)
+            if (token.isNullOrBlank()) return@Function null
+            val client = GiteaApiClient(repoContext.account.serverUrl, token)
+
             JBPanel<JBPanel<*>>(BorderLayout()).apply {
                 background = JBColor.namedColor("EditorTooltip.background", JBColor(0xF5F5F5, 0x4B4D51))
                 border = JBUI.Borders.customLineBottom(JBColor.border())

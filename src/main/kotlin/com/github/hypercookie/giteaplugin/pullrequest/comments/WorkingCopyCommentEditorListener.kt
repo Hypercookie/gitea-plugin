@@ -48,14 +48,20 @@ class WorkingCopyCommentEditorListener(private val project: Project) : FileEdito
         installed.keys.removeAll { it.isDisposed }
         if (installed.containsKey(editor)) return
 
-        val repoContext = GiteaRepoLinkService.getInstance(project).resolveDefault() ?: return
-        val token = GiteaAccountManager.getInstance().getToken(repoContext.account)
-        if (token.isNullOrBlank()) return
-        val repoRoot = GitRepositoryManager.getInstance(project).repositories.firstOrNull()?.root ?: return
-        val relativePath = VfsUtilCore.getRelativePath(file, repoRoot) ?: return
-        val client = GiteaApiClient(repoContext.account.serverUrl, token)
+        // `fileOpened` fires from a write-intent read action on the EDT —
+        // PasswordSafe access (inside getToken) is a "slow operation" the
+        // platform explicitly disallows there (confirmed via a SEVERE
+        // SlowOperations log during manual testing). Do every bit of
+        // resolution, not just the network calls, inside the coroutine on
+        // a background dispatcher.
+        GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch(Dispatchers.IO) {
+            val repoContext = GiteaRepoLinkService.getInstance(project).resolveDefault() ?: return@launch
+            val token = GiteaAccountManager.getInstance().getToken(repoContext.account)
+            if (token.isNullOrBlank()) return@launch
+            val repoRoot = GitRepositoryManager.getInstance(project).repositories.firstOrNull()?.root ?: return@launch
+            val relativePath = VfsUtilCore.getRelativePath(file, repoRoot) ?: return@launch
+            val client = GiteaApiClient(repoContext.account.serverUrl, token)
 
-        GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
             val pr = runCatching {
                 GiteaBranchPrResolverService.getInstance(project).resolveForCurrentBranch(repoContext, client)
             }.getOrNull() ?: return@launch
