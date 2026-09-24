@@ -251,12 +251,45 @@ verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
       scaffolding with no styling pass; polish is Phase 10, deliberately not
       done yet.
 
-## Phase 6 — inline comments, read-only
-- [ ] Fetch existing review comments for PR (file+line keyed — confirmed to be
-      real line numbers, not diff-offsets, see hardening pass above).
-- [ ] Render as gutter icons/inlay in the diff viewer via `com.intellij.diff.DiffExtension`
-      (`onViewerCreated`, confirmed available — see hardening pass above),
-      keyed by file+line. Click → popup/panel showing comment thread.
+## Phase 6 — inline comments, read-only [x]
+- [x] **Prior-art check done first, as planned**: read
+      `JpMand/gitea-idea-integration`'s `GiteaPRDiffExtension`/`GiteaPRInlayModel`/
+      etc (via a research fork — see conversation, not persisted as a
+      separate doc). Findings: (a) they hook `DiffExtension.onViewerCreated`
+      the same way we planned; (b) their code independently confirms
+      position = 1-indexed real file line number (`line - 1` for editor
+      conversion), corroborating our own empirical test; (c) their rendering
+      is a full inlay-based comment UI built on `com.intellij.collaboration.*`
+      — confirmed real, and confirmed to require
+      `@Suppress("UnstableApiUsage")` throughout. **Deliberately not copied**:
+      that module is exactly the internal/unstable dependency our plan chose
+      to avoid (see Phase 5/6 §1 caveat in the research doc). Built our own
+      version on stable primitives instead (below).
+- [x] `client.getAllReviewComments()` added to `GiteaApiClient` — flattens
+      every review's comments for a PR into one list.
+- [x] `pullrequest/diff/GiteaCommentDiffExtension.kt` — extends
+      `com.intellij.diff.DiffExtension`, registered via `<diff.DiffExtension>`.
+      Reads a `GiteaDiffCommentContext` (filename + comments) off the
+      `DiffRequest`'s user data (attached by `PullRequestDetailPanel.showDiff`
+      before calling `DiffManager.showDiff`), gets both editors via
+      `TwosideTextDiffViewer.getEditor1()/getEditor2()` (public, confirmed via
+      `javap` on the bundled platform jar), and for each comment adds a
+      `RangeHighlighter` with a `GutterIconRenderer` at `position - 1` /
+      `originalPosition - 1` (0-indexed editor line). Click → a
+      `JBPopupFactory` popup showing author + body. All stable, public
+      Platform API — no `collaboration-tools` dependency.
+- [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
+      succeed (searchable-options skipped in this build only because it
+      conflicts with a concurrently-running manual-test `runIde` sandbox —
+      not a code issue).
+- [ ] **Not yet manually click-tested** — new extension-point registration,
+      needs a `runIde` restart to pick up (dynamic plugin reload doesn't
+      reliably cover new EP registrations). Test plan: open PR #2 in
+      `plugindev/pr-test` → `README.md` diff. Fixture already has 4 real
+      comments on that PR from earlier position-semantics testing: file-line
+      15 (head side), old-side line 15 (base side), a context-line comment at
+      13, and a deliberately out-of-diff-range one at line 5 — good coverage
+      for confirming icons land on the right lines on both editors.
 
 ## Phase 7 — reply to comment
 - [ ] Reply action on existing comment thread → POST reply (exact endpoint per
