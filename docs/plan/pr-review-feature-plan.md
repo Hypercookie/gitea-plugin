@@ -650,6 +650,82 @@ Both **manually verified by the user in a running sandbox**: branch switch
 with a file open live-updates gutters/boxes and the top banner; editing (or
 committing ahead) on a PR branch surfaces the staleness warning banner.
 
+## UI pass 2 — native IntelliJ look, Gitea branding
+
+User's explicit direction: "research how to build modern nice looking
+intellij idea uis and rework the uis of this plugin. I want the gitea icon
+and such. I want modern ui elements. They should look like intellij
+themselves put them there."
+
+Research done first (WebSearch/WebFetch, not guessed):
+- **Gitea logo**: official mark from Gitea's brand assets (mirrored on
+  Wikimedia Commons), **MIT-licensed** — free to use/redistribute, no
+  trademark blocker for a dev tool identifying the service it integrates
+  with. Used as `META-INF/pluginIcon.svg` (full color) and a derived
+  monochrome tool-window icon pair (`icons/gitea.svg` / `gitea_dark.svg`,
+  `#6C707E`/`#AFB1B3` per JetBrains' tool-window icon convention —
+  simplified from the source SVG's two-color (white teabag + green cup)
+  artwork into a single-fill silhouette, dropping the teabag inner-detail
+  path, since it wouldn't read at 16px anyway).
+- **Kotlin UI DSL v2** (`com.intellij.ui.dsl.builder`, `panel {}`): per
+  JetBrains' own docs, explicitly **not** intended for tool-window controls
+  — it's for dialogs/Settings pages with state-bound inputs. Right fit for
+  `GiteaConfigurable` (a Settings page); wrong fit for the tool window/list/
+  detail panels, which should stay on `SimpleToolWindowPanel` +
+  `ActionToolbar` + `ColoredListCellRenderer`/`SimpleColoredComponent` — the
+  same primitives JetBrains' own tool windows (VCS log, Git branches, etc.)
+  are built on.
+- Confirmed via `javap`: `SimpleToolWindowPanel` (toolbar+content shell),
+  `ColoredListCellRenderer<T>`/`SimpleColoredComponent.append(text,
+  SimpleTextAttributes)` (rich, colored, icon-bearing list rows — no more
+  plain `label.text = "..."` renderers), `ActionManager.createActionToolbar`.
+
+Also removed as part of this pass: the unmodified plugin-template scaffold
+(`MyToolWindowFactory`/`MyToolWindow` — an unrelated "shuffle a random
+number" tool window tab — and `MyProjectActivity`, both still present and
+flagged since Phase 4 as "remove in Phase 10 cleanup"; the generic template
+`<description>`). `MyProjectService`/`MyBundle` kept — `MyPluginTest` still
+exercises them directly.
+
+### Phase 21 — Gitea icon [x]
+- [x] `META-INF/pluginIcon.svg` — full-color official Gitea logo.
+- [x] `icons/gitea.svg` + `icons/gitea_dark.svg` — monochrome tool-window
+      variant, `icons/GiteaIcons.kt` holder (`IconLoader.getIcon`).
+- [x] Wired into the tool window (`icon="...GiteaIcons.Gitea"` on
+      `<toolWindow>`) and the `"Gitea"` notification group.
+- [x] Template scaffold removed: `MyToolWindowFactory.kt`,
+      `MyProjectActivity.kt`, their `plugin.xml` entries, generic
+      `<description>` replaced with a real one.
+- [x] Verified: `./gradlew compileKotlin`, `./gradlew test --tests
+      '*MyPluginTest*'` (confirms removing the scaffold didn't break the
+      still-used `MyProjectService`/`MyBundle`) both succeed.
+
+### Phase 22 — tool window shell + PR list [ ]
+- [ ] `PullRequestListPanel`/`GiteaPullRequestsToolWindowFactory` rebuilt on
+      `SimpleToolWindowPanel` with a real `ActionToolbar` (Refresh, View
+      Details — `AnAction`s with icons, not raw `JButton`s).
+- [ ] PR list rows via `ColoredListCellRenderer`: icon per state
+      (`AllIcons.Vcs.Branch` open/draft, `AllIcons.Vcs.Merge` merged,
+      `AllIcons.General.Error`-ish closed), colored state text, number/title/
+      author as separate styled fragments — not one plain concatenated
+      string.
+
+### Phase 23 — detail panel + changed-files list [ ]
+- [ ] `PullRequestDetailPanel`'s changed-files list gets the same
+      `ColoredListCellRenderer` treatment (status icon + colored +N/-N).
+      Overview section restyled with `JBUI`/`JBFont` instead of raw
+      `BoxLayout` + default-font labels.
+
+### Phase 24 — settings page via Kotlin UI DSL [ ]
+- [ ] `GiteaConfigurable` rebuilt with `panel {}`/`row {}` (the intended use
+      case per the research above) instead of manual Swing layout.
+
+### Phase 25 — comment boxes / banners polish [ ]
+- [ ] Gitea icon used where it reads naturally (e.g. the pending-changes top
+      bar); spacing/colors on `CommentBoxPanels`/`PrReviewEditorNotificationProvider`
+      double-checked against `JBUI`/`JBColor` conventions rather than ad hoc
+      literals.
+
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.
 - ~~Whether Gitea models inline comments as part of the review object or a
