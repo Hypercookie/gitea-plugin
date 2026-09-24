@@ -136,13 +136,13 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
       error.
 - [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
       succeed.
-- [ ] **Not manually click-tested in a running IDE** — no GUI interaction
-      available from this environment. To verify: `./gradlew runIde`, add a
-      Gitea account in Settings pointing at `http://localhost:3000` with a
-      token (see docs/local-gitea-dev-instance.md), open a local clone of the
-      `plugindev/pr-test` fixture repo (Phase 2) as a project so its git
-      remote matches, then open the "Gitea Pull Requests" tool window and
-      confirm PR #1 shows up.
+- [x] **Manually verified by the user in a running IDE**: added an account,
+      PR list loaded correctly for `~/dev-infra/pr-test`. (One false start:
+      user's first `runIde` session had been started before Phases 1-5
+      existed — stale sandbox process, explains an initial "nothing shows up"
+      report. Restarting `runIde` fixed it. Worth remembering for future
+      manual-test rounds: if a `runIde` session has been open across several
+      rebuilds, restart it before trusting a "doesn't work" report.)
 
 ## Pre-Phase-5 hardening pass [x]
 
@@ -244,17 +244,12 @@ verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
       for the manual `runIde` test below.
 - [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
       succeed.
-- [ ] **Not manually click-tested in a running IDE** — same limitation as
-      Phase 4, no GUI interaction available from this environment. This is
-      the point the hardening-pass advisor review flagged as the real forcing
-      function: Phases 6-8 stack more UI on this same diff viewer, so this is
-      the moment to get a human to actually run `./gradlew runIde`, add a
-      Gitea account (`http://localhost:3000` + a token, see
-      docs/local-gitea-dev-instance.md), open `~/dev-infra/pr-test` as the
-      project, open the "Gitea Pull Requests" tool window, and confirm: the
-      PR list loads, double-clicking PR #1 or #2 opens a detail tab, and
-      double-clicking a changed file shows a real diff. **Do this before
-      Phase 6.**
+- [x] **Manually verified by the user in a running IDE**: PR list loads,
+      double-clicking a PR opens a detail tab, double-clicking a changed file
+      shows a real diff in the Platform diff viewer. Confirmed working
+      end-to-end. User noted the UI is "very rough" — expected, plain Swing
+      scaffolding with no styling pass; polish is Phase 10, deliberately not
+      done yet.
 
 ## Phase 6 — inline comments, read-only
 - [ ] Fetch existing review comments for PR (file+line keyed — confirmed to be
