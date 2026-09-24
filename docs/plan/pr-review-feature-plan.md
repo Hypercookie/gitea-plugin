@@ -646,6 +646,10 @@ Follow-up round after the UI pass fix:
       branches resolve today. Lower priority (needs a second account/fork to
       even test); left as a known limitation.
 
+Both **manually verified by the user in a running sandbox**: branch switch
+with a file open live-updates gutters/boxes and the top banner; editing (or
+committing ahead) on a PR branch surfaces the staleness warning banner.
+
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.
 - ~~Whether Gitea models inline comments as part of the review object or a
