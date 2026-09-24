@@ -579,25 +579,26 @@ public class has a same-file top-level helper function, prefer it over the
 lower-level primitive — it's very likely load-bearing, not just sugar.
 
 ### Phase 18 — inline comment/new-comment boxes (replace popups) [x]
-- [ ] `pullrequest/comments/InlineComponentHost.kt`: thin helper wrapping
-      `editor.inlayModel.addBlockElement(offset, InlayProperties, ComponentInlayRenderer(component, ComponentInlayAlignment.STRETCH_TO_CONTENT_WIDTH))`,
-      returns the `Inlay` (itself a `Disposable`) so `CommentGutterController`
-      can track/dispose/`.update()` (for resize on expand/collapse) per line.
-- [ ] `pullrequest/comments/CommentThreadBoxPanel.kt`: collapsed by default
+- [x] `pullrequest/comments/InlineComponentHost.kt`: helper wrapping
+      `com.intellij.openapi.editor.addComponentInlay(...)` (not the lower-level
+      `addBlockElement` — see root-cause note above), returns the `Inlay`
+      (itself a `Disposable`) so `CommentGutterController` can track/dispose/
+      [`relayout`] (for resize on expand/collapse) per line.
+- [x] `pullrequest/comments/CommentThreadBoxPanel.kt`: collapsed by default
       (avatar + author + first-line snippet + "+N more" if a thread), click
       anywhere expands to the full conversation (every comment, avatar +
       author + body) with a reply box at the bottom — replaces
       `showThreadPopup`. Styled with `RoundedLineBorder`, `JBColor`,
       `JBUI.Borders`/`JBFont` — "modern IntelliJ native" look, not raw Swing
       defaults.
-- [ ] `pullrequest/comments/NewCommentBoxPanel.kt`: text area + Add/Cancel,
+- [x] `pullrequest/comments/NewCommentBoxPanel.kt`: text area + Add/Cancel,
       same visual language — replaces `showAddCommentPopup`. Gutter "+" stays
       as the launcher (cheap, discoverable, matches the user's own framing
       "when I press plus on the gutter").
-- [ ] `pullrequest/comments/PendingCommentBoxPanel.kt`: pending (not yet
+- [x] `pullrequest/comments/PendingCommentBoxPanel.kt`: pending (not yet
       submitted) comment shown inline with a Discard action — replaces
       `showPendingPopup`.
-- [ ] `CommentGutterController` rewritten: keeps the "+" `GutterIconRenderer`
+- [x] `CommentGutterController` rewritten: keeps the "+" `GutterIconRenderer`
       per line as the click target, but on click/render now installs the
       matching inline box (thread/pending/new) instead of a `JBPopup`. Adds a
       background-color `RangeHighlighter` (`TextAttributes.backgroundColor`,
@@ -608,15 +609,15 @@ lower-level primitive — it's very likely load-bearing, not just sugar.
       opens a matching compose box.
 
 ### Phase 19 — avatars [x]
-- [ ] `GiteaUser.avatarUrl` (`avatar_url`) added to the DTO — Gitea already
+- [x] `GiteaUser.avatarUrl` (`avatar_url`) added to the DTO — Gitea already
       resolves this server-side (uploaded avatar or federated Gravatar), no
       need to hash emails ourselves.
-- [ ] `pullrequest/comments/AvatarService.kt`: async-loads + circularly-clips
+- [x] `pullrequest/comments/AvatarService.kt`: async-loads + circularly-clips
       + caches (by URL+size) avatar `Icon`s, used inside
       `CommentThreadBoxPanel`.
 
 ### Phase 20 — pending-changes top bar [x]
-- [ ] `pullrequest/PrReviewEditorNotificationProvider.kt`, implements
+- [x] `pullrequest/PrReviewEditorNotificationProvider.kt`, implements
       `EditorNotificationProvider` (`EP_NAME`, registered in `plugin.xml`).
       Shows a banner above the editor — reusing `ReviewActionsPanel` — when
       the open file's branch resolves to a PR **and** that PR's
@@ -626,21 +627,24 @@ lower-level primitive — it's very likely load-bearing, not just sugar.
       whenever any store it hands out changes, so the banner reacts live
       without needing the file reopened.
 
-Remaining open items from this pivot, not yet done:
-- Staleness indicator (Phase 14) — local HEAD vs `pr.head.sha` / modified-doc
-  check, not yet surfaced on the gutter.
-- Fork-based PR checkout (Phase 16) — only same-repo branches resolve today.
-- Branch-change live refresh (Phase 13) — editors opened before a branch
-  switch don't re-resolve; only newly-opened ones do.
-
-### Phase 16 — checkout on double-click [ ]
-- [ ] `PullRequestListPanel` double-click: use `GitBrancher.getInstance(project)
-      .checkout(...)` (handles dirty-tree prompts, VFS refresh) to check out
-      `pr.head.ref` locally, instead of opening the detail tab. Confirm
-      before checkout if the working tree is dirty — this is a hard-to-reverse
-      action on the user's tree. Detail tab remains reachable via a separate
-      action/click target (e.g. a explicit "View" button or single-click
-      selection + a toolbar action), not removed.
+Follow-up round after the UI pass fix:
+- [x] **Staleness indicator** (Phase 14): `PrReviewEditorNotificationProvider`
+      now also shows a lighter warning half of its banner (independent of
+      the pending-comments half) when local repo `HEAD` != `pr.head.sha` or
+      `FileDocumentManager.isFileModified(file)` — "comment positions may be
+      inaccurate," per the "accept + warn" decision.
+- [x] **Branch-change live refresh** (Phase 13): `WorkingCopyCommentEditorListener`
+      now also implements `GitRepositoryChangeListener` (registered against
+      both topics via `<projectListeners>` — confirmed the platform shares
+      one instance per project across every topic a class is registered
+      for). On `repositoryChanged`, invalidates the branch→PR cache,
+      triggers `EditorNotifications.updateAllNotifications()`, and
+      re-resolves every currently open editor (not just newly-opened ones)
+      against the new branch. `GiteaBranchChangeListener` (the old,
+      cache-invalidation-only class) deleted — merged in here.
+- [ ] **Fork-based PR checkout** (Phase 16) still open — only same-repo
+      branches resolve today. Lower priority (needs a second account/fork to
+      even test); left as a known limitation.
 
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.

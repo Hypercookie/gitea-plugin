@@ -31,7 +31,7 @@
     <projectListeners>
         <listener class="com.github.hypercookie.giteaplugin.pullrequest.comments.WorkingCopyCommentEditorListener"
                   topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
-        <listener class="com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchChangeListener"
+        <listener class="com.github.hypercookie.giteaplugin.pullrequest.comments.WorkingCopyCommentEditorListener"
                   topic="git4idea.repo.GitRepositoryChangeListener"/>
     </projectListeners>
 </idea-plugin>

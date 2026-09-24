@@ -3,6 +3,8 @@ package com.github.hypercookie.giteaplugin.pullrequest
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -11,22 +13,33 @@ import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
+import git4idea.repo.GitRepositoryManager
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.util.function.Function
 import javax.swing.JComponent
 
 /**
- * "Pending changes in a top bar where I can push them" — a banner above the
- * editor (the same mechanism used for e.g. VCS/Maven "reload" banners) shown
- * whenever the open file's branch resolves to an open PR **and** that PR has
- * queued-but-not-submitted comments. Reuses [ReviewActionsPanel] so pushing
- * from here goes through the same submit path as everywhere else. See
- * docs/plan/pr-review-feature-plan.md, "UI pass," Phase 20.
+ * Top-of-editor banner (the same mechanism used for e.g. VCS/Maven "reload"
+ * banners) covering two cases, either or both at once:
+ *
+ * - **Pending changes** — "in a top bar where I can push them": shown when
+ *   the open file's branch resolves to an open PR with queued-but-not-
+ *   submitted comments. Reuses [ReviewActionsPanel] so pushing from here
+ *   goes through the same submit path as everywhere else.
+ * - **Staleness** — the local file may have drifted from the PR's reviewed
+ *   commit (local commits ahead of `pr.head.sha`, or an unsaved edit), which
+ *   the "accept + warn" line-drift decision (see
+ *   docs/plan/pr-review-feature-plan.md, "Architecture pivot") said should
+ *   surface as a warning rather than a real head-blob↔working-copy line
+ *   mapping.
+ *
+ * See docs/plan/pr-review-feature-plan.md, "UI pass," Phase 20 and Phase 14.
  *
  * `PendingReviewStoreService` calls
  * `EditorNotifications.updateAllNotifications()` on every store change, so
- * this banner appears/disappears live without needing the file reopened.
+ * the pending-changes half of this banner appears/disappears live without
+ * needing the file reopened.
  */
 class PrReviewEditorNotificationProvider : EditorNotificationProvider {
 
@@ -46,25 +59,56 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
         val pr = resolver.peekCachedPr(branch) ?: return null
 
         val store = PendingReviewStoreService.getInstance(project).storeFor(repoContext.owner, repoContext.repo, pr.number)
-        if (store.pendingComments.isEmpty()) return null
+        val hasPending = store.pendingComments.isNotEmpty()
+
+        val repo = GitRepositoryManager.getInstance(project).repositories.firstOrNull()
+        val isStale = (repo?.currentRevision != null && repo.currentRevision != pr.head.sha) ||
+            FileDocumentManager.getInstance().isFileModified(file)
+
+        if (!hasPending && !isStale) return null
 
         return Function {
-            val token = GiteaAccountManager.getInstance().getToken(repoContext.account)
-            if (token.isNullOrBlank()) return@Function null
-            val client = GiteaApiClient(repoContext.account.serverUrl, token)
-
-            JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
                 background = JBColor.namedColor("EditorTooltip.background", JBColor(0xF5F5F5, 0x4B4D51))
                 border = JBUI.Borders.customLineBottom(JBColor.border())
-                add(
-                    JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
-                        isOpaque = false
-                        add(JBLabel("PR #${pr.number}: ${pr.title}"))
-                    },
-                    BorderLayout.WEST,
-                )
-                add(ReviewActionsPanel(project, client, repoContext.owner, repoContext.repo, pr.number, pr.head.sha, store).component, BorderLayout.CENTER)
             }
+
+            if (isStale) {
+                panel.add(
+                    JBLabel(
+                        "Local file differs from PR #${pr.number}'s reviewed commit — comment positions may be inaccurate.",
+                        AllIcons.General.Warning,
+                        JBLabel.LEFT,
+                    ).apply { border = JBUI.Borders.empty(2, 8) },
+                    BorderLayout.NORTH,
+                )
+            }
+
+            if (hasPending) {
+                val token = GiteaAccountManager.getInstance().getToken(repoContext.account)
+                if (!token.isNullOrBlank()) {
+                    val client = GiteaApiClient(repoContext.account.serverUrl, token)
+                    panel.add(
+                        JBPanel<JBPanel<*>>(BorderLayout()).apply {
+                            isOpaque = false
+                            add(
+                                JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
+                                    isOpaque = false
+                                    add(JBLabel("PR #${pr.number}: ${pr.title}"))
+                                },
+                                BorderLayout.WEST,
+                            )
+                            add(
+                                ReviewActionsPanel(project, client, repoContext.owner, repoContext.repo, pr.number, pr.head.sha, store).component,
+                                BorderLayout.CENTER,
+                            )
+                        },
+                        BorderLayout.CENTER,
+                    )
+                }
+            }
+
+            if (panel.componentCount == 0) null else panel
         }
     }
 }
