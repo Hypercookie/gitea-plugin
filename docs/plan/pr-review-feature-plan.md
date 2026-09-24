@@ -521,8 +521,18 @@ Advisor-identified build order (dependency order, not user-facing order):
       exists locally or as `origin/<ref>`) — fork-based PRs not handled.
 - [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 
-All of Phases 11-17 (the architecture-pivot work) built; **none of it has
-been manually tested in a running sandbox yet** — next step.
+All of Phases 11-17 (the architecture-pivot work) built and **manually
+verified by the user in a running sandbox**: checkout-on-double-click,
+"View Details" fallback, working-copy editor gutters (comment-anywhere),
+tool window's current-branch review panel, shared pending store across
+detail-tab and working-copy editor — confirmed working.
+
+Remaining open items from this pivot, not yet done:
+- Staleness indicator (Phase 14) — local HEAD vs `pr.head.sha` / modified-doc
+  check, not yet surfaced on the gutter.
+- Fork-based PR checkout (Phase 16) — only same-repo branches resolve today.
+- Branch-change live refresh (Phase 13) — editors opened before a branch
+  switch don't re-resolve; only newly-opened ones do.
 
 ### Phase 16 — checkout on double-click [ ]
 - [ ] `PullRequestListPanel` double-click: use `GitBrancher.getInstance(project)
