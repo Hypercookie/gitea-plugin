@@ -4,8 +4,7 @@
     <name>gitea-plugin</name>
     <vendor>hypercookie</vendor>
     <description><![CDATA[
-        <p><b>gitea-plugin</b> is a repository that provides a pure template to make it easier to create a new plugin project.</p>
-        <p>The main goal of this template is to speed up the setup phase of plugin development for both new and experienced developers by preconfiguring the project scaffold and CI, linking to the proper documentation pages, and keeping everything organized.</p>
+        <p>Gitea integration: browse pull requests, read and reply to review comments right in the editor, and submit reviews (approve, comment, request changes) — without leaving IntelliJ.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -14,13 +13,11 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.hypercookie.giteaplugin.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
         <toolWindow factoryClass="com.github.hypercookie.giteaplugin.pullrequest.GiteaPullRequestsToolWindowFactory"
-                    id="Gitea Pull Requests" anchor="right"/>
+                    id="Gitea Pull Requests" anchor="right" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <diff.DiffExtension implementation="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaCommentDiffExtension"/>
         <editorNotificationProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider"/>
-        <notificationGroup id="Gitea" displayType="BALLOON"/>
-        <postStartupActivity implementation="com.github.hypercookie.giteaplugin.startup.MyProjectActivity" />
+        <notificationGroup id="Gitea" displayType="BALLOON" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <applicationConfigurable
                 parentId="vcs"
                 instance="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
