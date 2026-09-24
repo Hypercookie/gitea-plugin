@@ -76,12 +76,23 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
   - `PullReviewComment` fields: `id, body, path, position (new line),
     original_position (old line), commit_id, diff_hunk, user, created_at,
     updated_at, pull_request_review_id`.
-- [ ] `GiteaApiClient` interface + impl. Endpoints: list PRs, get PR, get PR
-      diff/changed-files, list PR/review comments, create review comment
-      (via review submit), reply to comment, resolve/unresolve.
-- [ ] DTOs matching the schemas captured above (`PullRequest`, `PullReview`,
-      `PullReviewComment`, `CreatePullReviewOptions`, `CreatePullReviewComment`,
-      `CreatePullReviewCommentReplyOptions`).
+- [x] `GiteaApiClient` expanded (`api/GiteaApiClient.kt`): list/get PRs, get
+      changed files, list issue (top-level) comments + post one, list
+      reviews, list a review's inline comments, create/submit a review
+      (with inline comments), reply to a comment, resolve/unresolve.
+- [x] DTOs added under `api/dto/`: `PullRequest`/`PrBranchInfo`,
+      `ChangedFile`, `IssueComment`/`CreateIssueCommentOption`, `PullReview`/
+      `ReviewEvent`/`PullReviewComment`/`CreatePullReviewOptions`/
+      `CreatePullReviewComment`/`CreatePullReviewCommentReplyOptions`.
+- [x] **Verified against real data**, not just compiled: created a live test
+      repo/PR (`plugindev/pr-test` #1, see
+      docs/local-gitea-dev-instance.md "Test fixture" section) and wrote
+      `src/test/kotlin/.../api/GiteaApiClientIntegrationTest.kt` — 7 JUnit
+      tests hitting every new client method against the real local Gitea
+      instance. All 7 pass (`GITEA_DEV_TOKEN=<token> ./gradlew test --tests
+      '*GiteaApiClientIntegrationTest'`). Confirms real JSON responses decode
+      correctly, including the `ReviewEvent` enum and nested `User`/branch
+      objects — not just that the DTOs compile.
 
 ## Phase 3 — repo linking
 - [ ] Enumerate `GitRepositoryManager` repos + remotes (git4idea) on project open.
