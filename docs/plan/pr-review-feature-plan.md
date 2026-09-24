@@ -556,7 +556,29 @@ Also confirmed: `EditorNotificationProvider`/`EditorNotifications` (fully
 stable, not experimental) for the "pending changes top bar" — the same
 mechanism used for e.g. VCS/Maven "reload" banners.
 
-### Phase 18 — inline comment/new-comment boxes (replace popups) [ ]
+**Root cause found for "boxes render but stay empty"**: `editor.inlayModel.addBlockElement(offset, InlayProperties, ComponentInlayRenderer)`
+alone does **not** mount the component — it only registers a custom-painted
+block element, so the hosted `JComponent`'s children never get a real
+Swing layout pass (`component.parent` stayed `null`; forcing
+`setBounds`+`validate()` ourselves didn't help either — confirmed via
+targeted logging, then via `advisor()` after two failed fix attempts). The
+actual fix, found by disassembling JetBrains' own GitHub plugin
+(`EditorComponentInlaysUtilKt.insertComponent`,
+`intellij.platform.collaborationTools.jar`): it doesn't call
+`addBlockElement` directly either — it calls the top-level
+**`com.intellij.openapi.editor.addComponentInlay(editor, offset, properties, component, alignment)`**
+function (same public `ComponentInlay.kt` file as `ComponentInlayRenderer`,
+`app-client.jar`), which delegates to
+`com.intellij.openapi.editor.impl.ComponentInlayManager` — the piece that
+actually mounts the component into the editor's real component hierarchy.
+Switching `InlineComponentHost.install` to this function (instead of
+manually constructing a `ComponentInlayRenderer` + calling
+`addBlockElement`) fixed it immediately — **manually verified by the user**,
+boxes render with real content now. Lesson for next time: when a stable
+public class has a same-file top-level helper function, prefer it over the
+lower-level primitive — it's very likely load-bearing, not just sugar.
+
+### Phase 18 — inline comment/new-comment boxes (replace popups) [x]
 - [ ] `pullrequest/comments/InlineComponentHost.kt`: thin helper wrapping
       `editor.inlayModel.addBlockElement(offset, InlayProperties, ComponentInlayRenderer(component, ComponentInlayAlignment.STRETCH_TO_CONTENT_WIDTH))`,
       returns the `Inlay` (itself a `Disposable`) so `CommentGutterController`
@@ -581,8 +603,11 @@ mechanism used for e.g. VCS/Maven "reload" banners.
       background-color `RangeHighlighter` (`TextAttributes.backgroundColor`,
       not just a gutter icon) on any line with a thread or pending comment —
       "the line they belong to must be highlighted."
+- [x] **Manually verified by the user in a running sandbox**: boxes render
+      with real content (avatar, author, body), expand/collapse works, "+"
+      opens a matching compose box.
 
-### Phase 19 — avatars [ ]
+### Phase 19 — avatars [x]
 - [ ] `GiteaUser.avatarUrl` (`avatar_url`) added to the DTO — Gitea already
       resolves this server-side (uploaded avatar or federated Gravatar), no
       need to hash emails ourselves.
@@ -590,7 +615,7 @@ mechanism used for e.g. VCS/Maven "reload" banners.
       + caches (by URL+size) avatar `Icon`s, used inside
       `CommentThreadBoxPanel`.
 
-### Phase 20 — pending-changes top bar [ ]
+### Phase 20 — pending-changes top bar [x]
 - [ ] `pullrequest/PrReviewEditorNotificationProvider.kt`, implements
       `EditorNotificationProvider` (`EP_NAME`, registered in `plugin.xml`).
       Shows a banner above the editor — reusing `ReviewActionsPanel` — when

@@ -26,6 +26,12 @@ class GiteaBranchPrResolverService(private val project: Project) {
     fun currentBranchName(): String? =
         GitRepositoryManager.getInstance(project).repositories.firstOrNull()?.currentBranch?.name
 
+    /** Non-suspending, no network/credential access — only returns a PR if
+     * [resolveForCurrentBranch] has already cached one for this branch.
+     * Used by [PrReviewEditorNotificationProvider], which must not touch
+     * `PasswordSafe`/the network from inside its read-action context. */
+    fun peekCachedPr(branch: String): PullRequest? = cacheByBranch[branch]
+
     /**
      * The open PR whose head ref matches the current branch, or null if
      * there isn't one. If more than one open PR shares the same head ref
