@@ -9,6 +9,7 @@ import com.github.hypercookie.giteaplugin.api.dto.IssueComment
 import com.github.hypercookie.giteaplugin.api.dto.PullReview
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.PullRequest
+import com.github.hypercookie.giteaplugin.api.dto.RepoContent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -20,6 +21,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
 import java.time.Duration
+import java.util.Base64
 
 class GiteaApiException(val statusCode: Int, message: String) : Exception(message)
 
@@ -54,6 +56,22 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
 
     suspend fun getPullRequestFiles(owner: String, repo: String, index: Long): List<ChangedFile> =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/files")
+
+    /** File text at a given ref, or null if the file doesn't exist there
+     * (added/deleted files have one empty side in a diff). */
+    suspend fun getFileContentOrNull(owner: String, repo: String, path: String, ref: String): String? =
+        try {
+            val file: RepoContent = get(
+                "/api/v1/repos/${enc(owner)}/${enc(repo)}/contents/${encPath(path)}?ref=${enc(ref)}",
+            )
+            when {
+                file.content == null -> null
+                file.encoding == "base64" -> String(Base64.getMimeDecoder().decode(file.content), Charsets.UTF_8)
+                else -> file.content
+            }
+        } catch (e: GiteaApiException) {
+            if (e.statusCode == 404) null else throw e
+        }
 
     // --- Top-level (issue-stream) comments ---------------------------------
 
@@ -94,6 +112,10 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     // --- HTTP plumbing ----------------------------------------------------
 
     private fun enc(segment: String): String = URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20")
+
+    /** Encodes a repo-relative file path segment-by-segment, preserving `/`
+     * as the directory separator Gitea's contents endpoint expects. */
+    private fun encPath(path: String): String = path.split('/').joinToString("/") { enc(it) }
 
     private fun requestBuilder(path: String): HttpRequest.Builder = HttpRequest.newBuilder()
         .uri(URI.create("$baseUrl$path"))

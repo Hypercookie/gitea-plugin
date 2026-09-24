@@ -225,15 +225,36 @@ verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
       specifically, even though Phase 5 (plain diff viewer, no comments yet)
       doesn't strictly need it.
 
-## Phase 5 — PR detail view
-- [ ] Opening a PR from the list → new `Content` tab. Overview (description,
-      base/head branch) + changed-files list.
-- [ ] Diff viewer per changed file via Platform diff API (`DiffContentFactory`,
-      `DiffRequestChain`), not a custom diff view.
-- [ ] Set up a local clone of the `plugindev/pr-test` fixture repo (outside
-      this repo, e.g. `~/dev-infra/`) as part of this phase, so the first
-      `runIde` manual test has something to open immediately instead of
-      discovering the clone is missing at test time.
+## Phase 5 — PR detail view [x]
+- [x] Double-clicking a PR row (`PullRequestListPanel`) opens (or re-selects,
+      keyed by `#<number>` tab name) a `Content` tab in the same tool window —
+      `pullrequest/PullRequestDetailPanel.kt`. Overview (title, head→base
+      branches, state/draft, description) on top, changed-files list below.
+- [x] Diff viewer: double-click a changed file → fetches base/head file text
+      concurrently (`async`/`awaitAll`) via a new `GiteaApiClient.getFileContentOrNull`
+      (Gitea's `contents` endpoint, base64-decoded; 404 → null, so added/removed
+      files show one empty side) → `DiffContentFactory.create` +
+      `SimpleDiffRequest` → `DiffManager.getInstance().showDiff(project, request)`.
+      Platform's own diff viewer, not a custom one — and per the hardening
+      pass, this is the same viewer `com.intellij.diff.DiffExtension` (Phase 6)
+      will hook into.
+- [x] Local clone of the `plugindev/pr-test` fixture set up at `~/dev-infra/pr-test`
+      (all three branches: `main`, `feature`, `feature2`; remote URL stripped
+      of the embedded credentials git needed for the initial clone) — ready
+      for the manual `runIde` test below.
+- [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
+      succeed.
+- [ ] **Not manually click-tested in a running IDE** — same limitation as
+      Phase 4, no GUI interaction available from this environment. This is
+      the point the hardening-pass advisor review flagged as the real forcing
+      function: Phases 6-8 stack more UI on this same diff viewer, so this is
+      the moment to get a human to actually run `./gradlew runIde`, add a
+      Gitea account (`http://localhost:3000` + a token, see
+      docs/local-gitea-dev-instance.md), open `~/dev-infra/pr-test` as the
+      project, open the "Gitea Pull Requests" tool window, and confirm: the
+      PR list loads, double-clicking PR #1 or #2 opens a detail tab, and
+      double-clicking a changed file shows a real diff. **Do this before
+      Phase 6.**
 
 ## Phase 6 — inline comments, read-only
 - [ ] Fetch existing review comments for PR (file+line keyed — confirmed to be

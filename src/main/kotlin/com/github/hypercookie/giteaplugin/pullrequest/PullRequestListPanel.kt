@@ -3,19 +3,24 @@ package com.github.hypercookie.giteaplugin.pullrequest
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.PullRequest
+import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.wm.ToolWindow
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.content.ContentFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.FlowLayout
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JList
@@ -24,15 +29,18 @@ import javax.swing.ListCellRenderer
 /**
  * "Pull Requests" tool window content: list open PRs for whatever Gitea repo
  * [GiteaRepoLinkService] resolves for this project, with a manual refresh.
- * Phase 4 — list only; opening a PR into a detail tab is Phase 5.
+ * Double-clicking a row opens (or re-selects) a detail tab for that PR.
  */
-class PullRequestListPanel(private val project: Project) {
+class PullRequestListPanel(private val project: Project, private val toolWindow: ToolWindow) {
 
     private val listModel = DefaultListModel<PullRequest>()
     private val prList = JBList(listModel).apply {
         cellRenderer = PullRequestCellRenderer()
     }
     private val statusLabel = JBLabel(" ")
+
+    private var lastContext: GiteaRepoContext? = null
+    private var lastClient: GiteaApiClient? = null
 
     val component = JBPanel<JBPanel<*>>(BorderLayout()).apply {
         val toolbar = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
@@ -44,6 +52,11 @@ class PullRequestListPanel(private val project: Project) {
     }
 
     init {
+        prList.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) {
+                if (e.clickCount == 2) prList.selectedValue?.let(::openDetailTab)
+            }
+        })
         refresh()
     }
 
@@ -64,6 +77,8 @@ class PullRequestListPanel(private val project: Project) {
 
         statusLabel.text = "Loading…"
         val client = GiteaApiClient(context.account.serverUrl, token)
+        lastContext = context
+        lastClient = client
         GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
             val result = runCatching { client.listPullRequests(context.owner, context.repo) }
             withContext(Dispatchers.Main) {
@@ -79,6 +94,24 @@ class PullRequestListPanel(private val project: Project) {
                 )
             }
         }
+    }
+
+    private fun openDetailTab(pr: PullRequest) {
+        val context = lastContext ?: return
+        val client = lastClient ?: return
+
+        val contentManager = toolWindow.contentManager
+        val tabName = "#${pr.number}"
+        contentManager.contents.find { it.tabName == tabName }?.let {
+            contentManager.setSelectedContent(it)
+            return
+        }
+
+        val detail = PullRequestDetailPanel(project, context, client, pr)
+        val content = ContentFactory.getInstance().createContent(detail.component, tabName, false)
+        content.isCloseable = true
+        contentManager.addContent(content)
+        contentManager.setSelectedContent(content)
     }
 }
 
