@@ -8,6 +8,7 @@ import com.intellij.diff.DiffExtension
 import com.intellij.diff.FrameDiffTool
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.tools.simple.SimpleDiffViewer
+import com.intellij.diff.tools.util.base.DiffViewerListener
 import com.intellij.diff.util.Side
 import com.intellij.icons.AllIcons
 import com.intellij.notification.NotificationGroupManager
@@ -78,7 +79,32 @@ class GiteaCommentDiffExtension : DiffExtension() {
 
         val controller = DiffCommentGutterController(project, viewer, commentContext)
         controller.updateComments(commentContext.comments)
-        commentContext.pendingStore.addListener { controller.render() }
+
+        // Any pending-store change re-fetches from the server rather than
+        // just re-rendering stale data. Needed for the case where the change
+        // was "a review got submitted elsewhere" (Phase 9's submit clears
+        // the store) — the just-submitted comments are now real server-side
+        // comments, and only a fresh fetch turns their pending markers into
+        // real thread markers instead of them just vanishing back to "+".
+        commentContext.pendingStore.addListener {
+            GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
+                val fresh = runCatching { commentContext.fetchFreshComments() }.getOrNull()
+                withContext(Dispatchers.Main) {
+                    if (fresh != null) controller.updateComments(fresh) else controller.render()
+                }
+            }
+        }
+
+        // onViewerCreated fires before the diff is actually computed —
+        // viewer.getDiffChanges() is empty at this point, so the "+" add
+        // affordance (which depends on it) wouldn't appear until some other
+        // trigger caused a re-render. Existing comment/pending icons are
+        // unaffected (they don't depend on diff computation), which is why
+        // this only broke the "+" icons specifically. Re-render once the
+        // real diff is in.
+        viewer.addListener(object : DiffViewerListener() {
+            override fun onAfterRediff() = controller.render()
+        })
     }
 }
 

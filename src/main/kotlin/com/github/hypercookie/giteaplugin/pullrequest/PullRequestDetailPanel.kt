@@ -13,6 +13,8 @@ import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBLabel
@@ -116,13 +118,26 @@ class PullRequestDetailPanel(
                     onSuccess = {
                         pendingReviewStore.clear()
                         reviewStatusLabel.text = "Review submitted (${event.name.lowercase()})."
+                        notify("Review submitted.", NotificationType.INFORMATION)
                     },
                     onFailure = { error ->
+                        // Inline label alone was easy to miss during manual
+                        // testing (user reported "nothing happened" for a
+                        // real failure — Gitea's self-review restriction).
+                        // Also surface it as a notification.
                         reviewStatusLabel.text = "Failed to submit review: ${error.message}"
+                        notify("Failed to submit review: ${error.message}", NotificationType.ERROR)
                     },
                 )
             }
         }
+    }
+
+    private fun notify(text: String, type: NotificationType) {
+        NotificationGroupManager.getInstance()
+            .getNotificationGroup("Gitea")
+            .createNotification(text, type)
+            .notify(project)
     }
 
     private fun buildOverviewPanel(): Component {
