@@ -401,6 +401,117 @@ verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
 - [ ] Manual test pass against local Gitea instance: create a real PR with
       comments, exercise full flow end to end.
 
+## Architecture pivot (after Phase 9) — working-copy comments
+
+User feedback after manual-testing Phases 6-9: diff-viewer-only comments are
+"building this wrong." Real want: (1) comments addable on **any** line, not
+just `SimpleDiffChange` ranges; (2) PR list double-click **checks out the
+branch** instead of opening a detail tab; (3) once on a branch with an open
+PR — however you got there — comments show as gutter icons **in the regular
+editor**, not only inside an explicit diff popup; (4) review actions
+reachable from a persistent tool window regardless of which file is open.
+Gutter icons OK for now; fully embedded inline UI (GitHub-plugin style) is
+future work, not v1.
+
+Decisions (confirmed with user via `AskUserQuestion`):
+- **Diff tab stays** as a secondary "see the whole changeset" view — not
+  replaced. Working-copy editor comments become primary for reading/adding.
+- **Automatic activation**: any file opened on a branch with a matching open
+  PR gets comment gutters, no explicit "start review" toggle.
+- **Line drift v1 = accept + warn**: anchor comments by position at install
+  time (`RangeMarker`-backed highlighter, same as today), show a staleness
+  indicator when local `HEAD` != `pr.head.sha` or the document is modified,
+  rather than building a real head-blob↔working-copy line mapping now
+  (that's the `collaboration-tools`-dependent problem our stable-API-only
+  decision was avoiding — see Phase 6 note. Revisit only if staleness proves
+  unacceptable in practice).
+
+Advisor-identified build order (dependency order, not user-facing order):
+
+### Phase 11 — drop the changed-lines-only restriction [x]
+- [x] Removed `addableLines`/`getDiffChanges()` gating — "+" on every line.
+      Also removed the `onAfterRediff` listener (it existed only to fix a
+      race in computing `addableLines`, which no longer exists) — render now
+      happens immediately in `onViewerCreated`, no waiting on rediff.
+
+### Phase 12 — extract gutter controller off `SimpleDiffViewer` [x]
+- [x] New `pullrequest/comments/CommentGutterController.kt` — takes a plain
+      `EditorEx` + `GiteaDiffCommentContext` + `useOriginalPosition: Boolean`
+      instead of a `SimpleDiffViewer`/`Side`. `GiteaCommentDiffExtension` now
+      just constructs two instances (base/head editor) and wires the
+      pending-store refresh listener; all rendering/popup code moved to the
+      shared controller. Verified: `./gradlew compileKotlin` succeeds.
+
+### Phase 13 — branch → PR resolution [x]
+- [x] `pullrequest/GiteaBranchPrResolverService.kt` (project-level `@Service`):
+      `currentBranchName()` via `GitRepositoryManager...repositories.first().currentBranch?.name`;
+      `resolveForCurrentBranch()` fetches `listPullRequests` and filters by
+      `head.ref == branch`, picking the most-recently-`updatedAt` on a
+      multi-match. Cached per branch name (including a cached "no match"),
+      cleared by `invalidate()`.
+- [x] `pullrequest/GiteaBranchChangeListener.kt`, implements git4idea's
+      `GitRepositoryChangeListener`, calls `invalidate()` on every repo
+      change. Registered declaratively via `<projectListeners>` in
+      `plugin.xml` against topic `git4idea.repo.GitRepositoryChangeListener`
+      — no manual `MessageBusConnection` needed.
+      **Known v1 limitation**: doesn't refresh gutters already installed in
+      editors opened before the branch switch, only newly-opened ones.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+
+### Phase 14 — comments in the regular editor [x]
+- [x] `pullrequest/comments/WorkingCopyCommentEditorListener.kt`, implements
+      `FileEditorManagerListener.fileOpened`, registered via
+      `<projectListeners>` against topic
+      `com.intellij.openapi.fileEditor.FileEditorManagerListener` (fires
+      automatically on every file open — the "automatic activation"
+      decision above, no explicit toggle). Resolves repo context → PR for
+      current branch (Phase 13) → fetches that path's comments → installs a
+      Phase 12 `CommentGutterController` on the real `EditorEx`, always with
+      `useOriginalPosition = false` (working copy is the PR's head side, so
+      only the `position`/`new_position` field applies — never
+      `originalPosition`). Tracks installed editors in a map to avoid
+      double-installing on repeat `fileOpened` events, swept on
+      dispose/`fileClosed`.
+- [ ] **Staleness indicator not yet built** — deferred, not blocking v1 per
+      the "accept + warn" decision; still needs a comparison of local `HEAD`
+      vs `pr.head.sha` (and/or document-modified check) surfaced on the
+      gutter icon/tooltip. Do this once the base flow is manually verified.
+- [x] Add-comment popup reuses the same `PendingReviewStore`, now sourced
+      from Phase 15's project-level `PendingReviewStoreService` so it's
+      shared with the detail tab's diff view for the same PR.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed
+      (including the `buildSearchableOptions`/plugin-verify pass, confirming
+      both new `<projectListeners>` entries are structurally valid).
+
+### Phase 15 — project-level pending store [x]
+- [x] `pullrequest/PendingReviewStoreService.kt` (project-level `@Service`):
+      one `PendingReviewStore` per `"$owner/$repo#$prNumber"` key.
+      `PullRequestDetailPanel` now calls `storeFor(...)` instead of
+      constructing its own `PendingReviewStore()` — same instance a
+      working-copy editor for that PR uses.
+- [ ] **Tool-window review-action buttons not yet moved** — Approve/Comment/
+      Request Changes still live only in `PullRequestDetailPanel`, not
+      reachable from the tool window while just browsing a file on a PR
+      branch (no detail tab open). This was bundled into Phase 15 in the
+      original plan but is being split out — see Phase 17 below.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+
+### Phase 17 — tool window review actions (was part of Phase 15) [ ]
+- [ ] A panel in the "Gitea Pull Requests" tool window bound to "the PR for
+      the current branch" (Phase 13) with its own Approve/Comment/Request
+      Changes buttons + pending-count label, reading/writing the same
+      per-PR `PendingReviewStoreService` store — reachable while editing any
+      file, without needing a detail tab open.
+
+### Phase 16 — checkout on double-click [ ]
+- [ ] `PullRequestListPanel` double-click: use `GitBrancher.getInstance(project)
+      .checkout(...)` (handles dirty-tree prompts, VFS refresh) to check out
+      `pr.head.ref` locally, instead of opening the detail tab. Confirm
+      before checkout if the working tree is dirty — this is a hard-to-reverse
+      action on the user's tree. Detail tab remains reachable via a separate
+      action/click target (e.g. a explicit "View" button or single-click
+      selection + a toolbar action), not removed.
+
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.
 - ~~Whether Gitea models inline comments as part of the review object or a

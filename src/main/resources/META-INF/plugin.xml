@@ -26,4 +26,11 @@
                 id="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
                 displayName="Gitea"/>
     </extensions>
+
+    <projectListeners>
+        <listener class="com.github.hypercookie.giteaplugin.pullrequest.comments.WorkingCopyCommentEditorListener"
+                  topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+        <listener class="com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchChangeListener"
+                  topic="git4idea.repo.GitRepositoryChangeListener"/>
+    </projectListeners>
 </idea-plugin>

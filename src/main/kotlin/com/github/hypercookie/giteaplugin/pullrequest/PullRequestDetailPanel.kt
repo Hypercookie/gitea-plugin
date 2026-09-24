@@ -51,7 +51,10 @@ class PullRequestDetailPanel(
     private val pr: PullRequest,
 ) {
 
-    private val pendingReviewStore = PendingReviewStore()
+    // Project-level, keyed by PR — shared with any working-copy editor
+    // showing comments for this same PR (see PendingReviewStoreService).
+    private val pendingReviewStore =
+        PendingReviewStoreService.getInstance(project).storeFor(context.owner, context.repo, pr.number)
 
     private val filesModel = DefaultListModel<ChangedFile>()
     private val filesList = JBList(filesModel).apply {
