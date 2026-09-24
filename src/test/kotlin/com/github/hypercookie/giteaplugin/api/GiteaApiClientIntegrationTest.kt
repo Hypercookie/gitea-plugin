@@ -44,22 +44,30 @@ class GiteaApiClientIntegrationTest {
         assertTrue(files.any { it.filename == "README.md" })
     }
 
+    // Fixed comment left by the repo setup (docs/local-gitea-dev-instance.md
+    // "Test fixture" section), not by any test in this class — used as a
+    // stable anchor since PR #1 accumulates more reviews/comments across
+    // repeated test runs and `.first()`/index-based lookups would be
+    // order-dependent and flaky.
+    private val fixtureCommentBody = "nit: consider rewording this line"
+
     @Test
     fun `lists reviews and their inline comments`() = runBlocking {
         val reviews = client.listReviews("plugindev", "pr-test", 1)
-        val review = reviews.first()
-        assertEquals(ReviewEvent.COMMENT, review.state)
+        assertTrue(reviews.any { it.state == ReviewEvent.COMMENT })
 
-        val comments = client.listReviewComments("plugindev", "pr-test", 1, review.id)
-        val comment = comments.first()
+        val comment = reviews
+            .flatMap { client.listReviewComments("plugindev", "pr-test", 1, it.id) }
+            .first { it.body == fixtureCommentBody }
         assertEquals("README.md", comment.path)
-        assertEquals("nit: consider rewording this line", comment.body)
     }
 
     @Test
     fun `replies to an inline review comment`() = runBlocking {
         val reviews = client.listReviews("plugindev", "pr-test", 1)
-        val comment = client.listReviewComments("plugindev", "pr-test", 1, reviews.first().id).first()
+        val comment = reviews
+            .flatMap { client.listReviewComments("plugindev", "pr-test", 1, it.id) }
+            .first { it.body == fixtureCommentBody }
 
         val reply = client.replyToComment("plugindev", "pr-test", 1, comment.id, "Sounds good, will fix.")
         assertEquals("Sounds good, will fix.", reply.body)
@@ -78,11 +86,21 @@ class GiteaApiClientIntegrationTest {
         // PR for those states ("approve your own pull is not allowed"),
         // which this account is, since it authored pr-test#1. COMMENT is
         // unaffected and already exercised via curl during the Phase 2 spike.
+        //
+        // commitId is set to the PR's current head SHA — the pattern Phase 9
+        // production code should follow, so a review doesn't show as `stale`
+        // the moment the PR gets a new commit (see CreatePullReviewOptions doc).
+        val pr = client.getPullRequest("plugindev", "pr-test", 1)
         val review = client.createReview(
             "plugindev", "pr-test", 1,
-            CreatePullReviewOptions(event = ReviewEvent.COMMENT, body = "Another comment from integration test"),
+            CreatePullReviewOptions(
+                event = ReviewEvent.COMMENT,
+                body = "Another comment from integration test",
+                commitId = pr.head.sha,
+            ),
         )
         assertEquals(ReviewEvent.COMMENT, review.state)
+        assertEquals(pr.head.sha, review.commitId)
     }
 
     companion object {

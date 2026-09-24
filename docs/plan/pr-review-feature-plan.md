@@ -144,16 +144,103 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
       remote matches, then open the "Gitea Pull Requests" tool window and
       confirm PR #1 shows up.
 
+## Pre-Phase-5 hardening pass [x]
+
+Before writing any UI-heavy code, resolved the two design-blocking unknowns
+and fixed several correctness/leak issues flagged in review. All done and
+verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
+
+- [x] **Position semantics, empirically confirmed**: `position`/`new_position`/
+      `old_position` in Gitea's review-comment API are **real file line
+      numbers**, not GitHub-style diff-hunk offsets. Proven by constructing a
+      PR where file-line and hunk-offset would give different numbers
+      (`@@ -9,10 +9,10 @@` hunk, edit at file line 15 = hunk-offset 9), posting
+      a comment with `new_position: 15`, and inspecting the server-generated
+      `diff_hunk` in the response: `@@ -13,3 +13,3 @@` — Gitea centered a
+      fresh 3-line-context hunk exactly on file line 15, which is only
+      possible if it read `15` as a real line number. Confirms the
+      `NewLineNum`/`OldLineNum`/`LineNum` Go field names (§ Phase 2 spike) were
+      the right signal. Practical effect: Phase 6 gutter placement maps
+      directly to editor line numbers, no diff-offset translation needed.
+      Also confirmed empirically: Gitea does **not** server-validate
+      position against the actual diff — old-side, context-line, and
+      completely out-of-diff positions were all accepted (HTTP 200). The
+      plugin must self-restrict where the gutter "+" appears; the server
+      won't catch a bad line.
+- [x] **Diff-viewer extension point, confirmed to exist**: `com.intellij.diff.DiffExtension`
+      (`onViewerCreated(FrameDiffTool.DiffViewer, DiffContext, DiffRequest)`),
+      registered as `<diff.DiffExtension implementation="..."/>`, is a real,
+      public, `dynamic="true"` extension point declared in the platform's own
+      `PlatformExtensionPoints.xml` (confirmed by inspecting the bundled
+      `app-client.jar`) and used internally by
+      `ShowBlankDiffWindowDiffExtension`. This is the stable, documented way
+      to reach a diff viewer's editors and attach gutter/inlay UI — not the
+      internal `collaboration-tools` module GitHub/GitLab likely use (see
+      Phase 5/6 §1 caveat). Phase 5's diff viewer and Phase 6's gutter
+      comments should both build on this from the start.
+- [x] **Shared `HttpClient`**: `GiteaApiClient` was building a new
+      `java.net.http.HttpClient` (selector thread + executor) per instance,
+      and a fresh instance is constructed on every UI action. Moved to a
+      companion-object singleton shared across all `GiteaApiClient`s.
+- [x] **Project/app `CoroutineScope` services introduced now, not deferred to
+      Phase 10**: `util/GiteaCoroutineScopes.kt` — `GiteaAppCoroutineScope`
+      (app-level, for the account Settings UI which has no project) and
+      `GiteaProjectCoroutineScope` (project-level, for tool-window UI),
+      both using the Platform's constructor-injected `CoroutineScope`
+      light-service pattern (lifecycle-managed, no manual `Disposable`).
+      `GiteaConfigurable.verifyConnection()` and `PullRequestListPanel.refresh()`
+      both switched from raw `Thread { runBlocking { ... } }` +
+      `SwingUtilities.invokeLater` to `scope.launch { ... withContext(Dispatchers.Main) { ... } }`.
+      `Dispatchers.Main` resolves to the IDE's EDT dispatcher via the
+      platform's own `MainDispatcherFactory` registration (confirmed present:
+      `com.intellij.openapi.application.impl.EdtCoroutineDispatcher$Main.class`
+      in `app-client.jar`) — no extra import needed.
+      **Not yet manually verified in a running IDE** that EDT routing actually
+      works end to end (only compiles); first `runIde` manual test should
+      watch for this.
+- [x] **`GiteaConfigurable.isModified()`/`apply()` were both inert**
+      (hardcoded `false` / no-op), meaning Settings' OK/Apply buttons stayed
+      disabled regardless of real pending edits, and clicking OK would
+      silently drop an unsaved field edit if "Save selected account" wasn't
+      clicked first. Added a `dirty` flag (set by field `DocumentListener`s
+      and Add/Remove), `isModified()` returns it, `apply()` now commits a
+      pending edit via `saveSelected()`.
+- [x] **`CreatePullReviewOptions.commitId` guidance documented + demonstrated**:
+      doc comment on the DTO explains it should be the PR's head SHA
+      (`PullRequest.head.sha`) to avoid `PullReview.stale` becoming true as
+      soon as the PR gets a new commit; the integration test's review-submit
+      case now passes it, as the pattern Phase 9 production code should
+      follow.
+- [x] **Integration test brittleness fixed**: `lists reviews and their inline
+      comments` / `replies to an inline review comment` previously used
+      `.first()` on reviews/comments, which is order-dependent and breaks as
+      the shared fixture PR accumulates more test-run data over time. Now
+      anchor on a fixed, known comment body from the original fixture setup
+      instead of positional indexing.
+- [ ] **Not done, deliberately out of scope for this pass**: reading
+      `JpMand/gitea-idea-integration`'s open PR ("Implement Gitea Pull Request
+      Tool with UI and Review Features") — still the single highest-value
+      unread prior art, specifically for *how* it attaches comments to the
+      diff viewer. Worth a fork/read before Phase 6 (gutter rendering)
+      specifically, even though Phase 5 (plain diff viewer, no comments yet)
+      doesn't strictly need it.
+
 ## Phase 5 — PR detail view
 - [ ] Opening a PR from the list → new `Content` tab. Overview (description,
       base/head branch) + changed-files list.
 - [ ] Diff viewer per changed file via Platform diff API (`DiffContentFactory`,
       `DiffRequestChain`), not a custom diff view.
+- [ ] Set up a local clone of the `plugindev/pr-test` fixture repo (outside
+      this repo, e.g. `~/dev-infra/`) as part of this phase, so the first
+      `runIde` manual test has something to open immediately instead of
+      discovering the clone is missing at test time.
 
 ## Phase 6 — inline comments, read-only
-- [ ] Fetch existing review comments for PR (file+line keyed).
-- [ ] Render as gutter icons/inlay in the diff viewer at file+line (Review Mode
-      pattern). Click → popup/panel showing comment thread.
+- [ ] Fetch existing review comments for PR (file+line keyed — confirmed to be
+      real line numbers, not diff-offsets, see hardening pass above).
+- [ ] Render as gutter icons/inlay in the diff viewer via `com.intellij.diff.DiffExtension`
+      (`onViewerCreated`, confirmed available — see hardening pass above),
+      keyed by file+line. Click → popup/panel showing comment thread.
 
 ## Phase 7 — reply to comment
 - [ ] Reply action on existing comment thread → POST reply (exact endpoint per
