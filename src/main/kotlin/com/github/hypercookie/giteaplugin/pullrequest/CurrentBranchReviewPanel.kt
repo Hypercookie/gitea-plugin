@@ -2,17 +2,20 @@ package com.github.hypercookie.giteaplugin.pullrequest
 
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
+import com.github.hypercookie.giteaplugin.icons.GiteaIcons
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
+import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
+import com.intellij.util.ui.JBUI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.FlowLayout
-import javax.swing.JButton
 
 /**
  * Tool window panel bound to "the PR for whatever branch is currently
@@ -23,14 +26,16 @@ import javax.swing.JButton
  */
 class CurrentBranchReviewPanel(private val project: Project) {
 
-    private val statusLabel = JBLabel(" ")
+    private val statusLabel = JBLabel(" ", GiteaIcons.Gitea, JBLabel.LEFT)
     private val actionsContainer = JBPanel<JBPanel<*>>(BorderLayout())
 
     val component = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+        border = JBUI.Borders.customLineBottom(com.intellij.ui.JBColor.border())
         add(
             JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
-                add(JButton("Refresh current-branch PR").apply { addActionListener { refresh() } })
+                border = JBUI.Borders.empty(2, 8)
                 add(statusLabel)
+                add(ActionLink("Refresh") { refresh() }.apply { icon = AllIcons.Actions.Refresh })
             },
             BorderLayout.NORTH,
         )

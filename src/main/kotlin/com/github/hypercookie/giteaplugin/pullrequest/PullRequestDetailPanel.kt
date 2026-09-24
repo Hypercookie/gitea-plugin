@@ -11,13 +11,21 @@ import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
+import com.intellij.ui.ColorUtil
+import com.intellij.ui.ColoredListCellRenderer
+import com.intellij.ui.JBColor
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
+import com.intellij.util.ui.JBFont
+import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -27,9 +35,10 @@ import java.awt.Component
 import java.awt.Dimension
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import javax.swing.Box
+import javax.swing.BoxLayout
 import javax.swing.DefaultListModel
 import javax.swing.JList
-import javax.swing.ListCellRenderer
 
 /**
  * One opened PR's detail tab: overview (title/branches/description) +
@@ -53,8 +62,9 @@ class PullRequestDetailPanel(
     private val filesModel = DefaultListModel<ChangedFile>()
     private val filesList = JBList(filesModel).apply {
         cellRenderer = ChangedFileCellRenderer()
+        emptyText.text = "No changed files"
     }
-    private val statusLabel = JBLabel("Loading changed files…")
+    private val statusLabel = JBLabel("Loading changed files…").apply { border = JBUI.Borders.empty(4, 8) }
 
     private val reviewActionsPanel =
         ReviewActionsPanel(project, client, context.owner, context.repo, pr.number, pr.head.sha, pendingReviewStore)
@@ -82,21 +92,37 @@ class PullRequestDetailPanel(
     }
 
     private fun buildOverviewPanel(): Component {
-        val title = JBLabel("#${pr.number}  ${pr.title}").apply {
-            font = font.deriveFont(font.size2D + 2f)
+        val title = JBLabel("#${pr.number}  ${pr.title}", if (pr.merged) AllIcons.Vcs.Merge else AllIcons.Vcs.Branch, JBLabel.LEFT).apply {
+            font = JBFont.h2()
         }
-        val branches = JBLabel("${pr.head.ref} → ${pr.base.ref}  (${pr.state}${if (pr.draft) ", draft" else ""})")
+        val stateColor = when {
+            pr.merged -> JBColor(0x8250DF, 0xA371F7)
+            pr.state == "closed" -> JBColor(0xCF222E, 0xF85149)
+            pr.draft -> JBColor.GRAY
+            else -> JBColor(0x1A7F37, 0x3FB950)
+        }
+        val stateText = when {
+            pr.merged -> "merged"
+            pr.state == "closed" -> "closed"
+            pr.draft -> "draft"
+            else -> "open"
+        }
+        val branches = JBLabel("<html><b style='color:#${ColorUtil.toHex(stateColor)}'>$stateText</b>&nbsp;&nbsp;${pr.head.ref} → ${pr.base.ref}</html>")
         val description = JBTextArea(pr.body?.takeIf { it.isNotBlank() } ?: "(no description)").apply {
             isEditable = false
             lineWrap = true
             wrapStyleWord = true
             preferredSize = Dimension(600, 100)
+            background = UIUtil.getPanelBackground()
         }
 
         val panel = JBPanel<JBPanel<*>>()
-        panel.layout = javax.swing.BoxLayout(panel, javax.swing.BoxLayout.Y_AXIS)
+        panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
+        panel.border = JBUI.Borders.empty(8)
         panel.add(title)
+        panel.add(Box.createVerticalStrut(4))
         panel.add(branches)
+        panel.add(Box.createVerticalStrut(8))
         panel.add(JBScrollPane(description))
         return panel
     }
@@ -176,20 +202,32 @@ class PullRequestDetailPanel(
     }
 }
 
-private class ChangedFileCellRenderer : ListCellRenderer<ChangedFile> {
-    private val label = JBLabel()
-
-    override fun getListCellRendererComponent(
+private class ChangedFileCellRenderer : ColoredListCellRenderer<ChangedFile>() {
+    override fun customizeCellRenderer(
         list: JList<out ChangedFile>,
         value: ChangedFile?,
         index: Int,
-        isSelected: Boolean,
-        cellHasFocus: Boolean,
-    ): Component {
-        label.text = value?.let { "[${it.status}]  ${it.filename}  (+${it.additions}/-${it.deletions})" } ?: ""
-        label.isOpaque = true
-        label.background = if (isSelected) list.selectionBackground else list.background
-        label.foreground = if (isSelected) list.selectionForeground else list.foreground
-        return label
+        selected: Boolean,
+        hasFocus: Boolean,
+    ) {
+        val file = value ?: return
+        icon = when (file.status) {
+            "added" -> AllIcons.General.Add
+            "removed", "deleted" -> AllIcons.General.Remove
+            "renamed" -> AllIcons.Actions.MoveTo2
+            else -> AllIcons.Actions.Edit
+        }
+        ipad = JBUI.insets(2, 8)
+
+        append(file.filename, SimpleTextAttributes.REGULAR_ATTRIBUTES)
+        append("  ")
+        append("+${file.additions}", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, ADD_COLOR))
+        append(" ")
+        append("-${file.deletions}", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, DEL_COLOR))
+    }
+
+    companion object {
+        private val ADD_COLOR = JBColor(0x1A7F37, 0x3FB950)
+        private val DEL_COLOR = JBColor(0xCF222E, 0xF85149)
     }
 }

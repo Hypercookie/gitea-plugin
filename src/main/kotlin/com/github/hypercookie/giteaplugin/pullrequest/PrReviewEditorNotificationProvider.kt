@@ -2,6 +2,7 @@ package com.github.hypercookie.giteaplugin.pullrequest
 
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
+import com.github.hypercookie.giteaplugin.icons.GiteaIcons
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -94,7 +95,7 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
                             add(
                                 JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
                                     isOpaque = false
-                                    add(JBLabel("PR #${pr.number}: ${pr.title}"))
+                                    add(JBLabel("PR #${pr.number}: ${pr.title}", GiteaIcons.Gitea, JBLabel.LEFT))
                                 },
                                 BorderLayout.WEST,
                             )
