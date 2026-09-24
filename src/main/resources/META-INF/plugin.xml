@@ -15,5 +15,10 @@
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow factoryClass="com.github.hypercookie.giteaplugin.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
         <postStartupActivity implementation="com.github.hypercookie.giteaplugin.startup.MyProjectActivity" />
+        <applicationConfigurable
+                parentId="vcs"
+                instance="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
+                id="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
+                displayName="Gitea"/>
     </extensions>
 </idea-plugin>
