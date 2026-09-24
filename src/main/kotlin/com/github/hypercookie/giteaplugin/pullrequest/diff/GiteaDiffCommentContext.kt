@@ -18,6 +18,11 @@ data class GiteaDiffCommentContext(
     val client: GiteaApiClient,
     val filename: String,
     val comments: List<PullReviewComment>,
-)
+) {
+    /** Re-fetches this file's comments — used after posting a reply so the
+     * gutter can re-render without the user having to reopen the diff. */
+    suspend fun fetchFreshComments(): List<PullReviewComment> =
+        client.getAllReviewComments(owner, repo, prNumber).filter { it.path == filename }
+}
 
 val GITEA_DIFF_COMMENT_CONTEXT_KEY: Key<GiteaDiffCommentContext> = Key.create("Gitea.DiffCommentContext")

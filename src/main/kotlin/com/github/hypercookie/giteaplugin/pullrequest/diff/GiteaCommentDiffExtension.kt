@@ -15,6 +15,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.editor.markup.HighlighterLayer
+import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
@@ -28,12 +29,20 @@ import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import javax.swing.BoxLayout
 import javax.swing.Icon
 import javax.swing.JButton
+import javax.swing.JSeparator
 
 /**
  * Renders existing Gitea review comments as gutter icons in the diff viewer,
- * on both the base and head editors, and lets the user reply to one.
+ * on both the base and head editors, grouped into threads by line (Gitea
+ * itself threads review comments by matching path+position, not an explicit
+ * parent-comment id — so grouping by line is the correct thread boundary,
+ * not just a display convenience). Lets the user reply, and re-renders the
+ * gutter with fresh data afterward so the new reply shows without reopening
+ * the diff.
+ *
  * Registered as `<diff.DiffExtension>` — a real, public, `dynamic="true"`
  * platform extension point (confirmed by inspecting the bundled platform
  * jar's own `PlatformExtensionPoints.xml`; see
@@ -59,31 +68,57 @@ class GiteaCommentDiffExtension : DiffExtension() {
         if (viewer !is TwosideTextDiffViewer) return
         val project = diffContext.project ?: return
 
-        installCommentGutter(project, viewer.getEditor1(), commentContext, useOriginalPosition = true)
-        installCommentGutter(project, viewer.getEditor2(), commentContext, useOriginalPosition = false)
+        val controller = DiffCommentGutterController(project, viewer.getEditor1(), viewer.getEditor2(), commentContext)
+        controller.render(commentContext.comments)
+    }
+}
+
+private class DiffCommentGutterController(
+    private val project: Project,
+    private val baseEditor: EditorEx,
+    private val headEditor: EditorEx,
+    private val commentContext: GiteaDiffCommentContext,
+) {
+    private val baseHighlighters = mutableListOf<RangeHighlighter>()
+    private val headHighlighters = mutableListOf<RangeHighlighter>()
+
+    fun render(comments: List<PullReviewComment>) {
+        baseHighlighters.forEach { baseEditor.markupModel.removeHighlighter(it) }
+        baseHighlighters.clear()
+        headHighlighters.forEach { headEditor.markupModel.removeHighlighter(it) }
+        headHighlighters.clear()
+
+        installThreads(baseEditor, baseHighlighters, comments, useOriginalPosition = true)
+        installThreads(headEditor, headHighlighters, comments, useOriginalPosition = false)
     }
 
-    private fun installCommentGutter(
-        project: Project,
+    private fun installThreads(
         editor: EditorEx,
-        commentContext: GiteaDiffCommentContext,
+        tracked: MutableList<RangeHighlighter>,
+        comments: List<PullReviewComment>,
         useOriginalPosition: Boolean,
     ) {
-        for (comment in commentContext.comments) {
-            val position = if (useOriginalPosition) comment.originalPosition else comment.position
-            if (position == null || position <= 0) continue
+        val threadsByLine = comments
+            .mapNotNull { comment ->
+                val position = if (useOriginalPosition) comment.originalPosition else comment.position
+                if (position != null && position > 0) position to comment else null
+            }
+            .groupBy({ it.first }, { it.second })
 
+        for ((position, thread) in threadsByLine) {
             val lineIndex = (position - 1).toInt()
             if (lineIndex < 0 || lineIndex >= editor.document.lineCount) continue
 
+            val sortedThread = thread.sortedBy { it.createdAt ?: "" }
             val highlighter = editor.markupModel.addLineHighlighter(null, lineIndex, HighlighterLayer.ADDITIONAL_SYNTAX)
-            highlighter.gutterIconRenderer = CommentGutterIconRenderer(comment) {
-                showCommentPopup(project, editor, commentContext, comment)
+            highlighter.gutterIconRenderer = CommentGutterIconRenderer(sortedThread) {
+                showThreadPopup(editor, sortedThread)
             }
+            tracked += highlighter
         }
     }
 
-    private fun showCommentPopup(project: Project, editor: EditorEx, commentContext: GiteaDiffCommentContext, comment: PullReviewComment) {
+    private fun showThreadPopup(editor: EditorEx, thread: List<PullReviewComment>) {
         lateinit var popup: JBPopup
 
         val statusLabel = JBLabel(" ")
@@ -93,16 +128,24 @@ class GiteaCommentDiffExtension : DiffExtension() {
         }
         val replyButton = JButton("Reply")
 
-        val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-            preferredSize = Dimension(360, 220)
-            add(JBLabel(comment.user?.login ?: "unknown"), BorderLayout.NORTH)
-
-            val body = JBTextArea(comment.body).apply {
-                isEditable = false
-                lineWrap = true
-                wrapStyleWord = true
+        val threadPanel = JBPanel<JBPanel<*>>().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            thread.forEachIndexed { index, comment ->
+                if (index > 0) add(JSeparator())
+                add(JBLabel(comment.user?.login ?: "unknown"))
+                add(
+                    JBTextArea(comment.body).apply {
+                        isEditable = false
+                        lineWrap = true
+                        wrapStyleWord = true
+                    },
+                )
             }
-            add(JBScrollPane(body), BorderLayout.CENTER)
+        }
+
+        val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            preferredSize = Dimension(380, 260)
+            add(JBScrollPane(threadPanel), BorderLayout.CENTER)
 
             val replyPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
                 add(JBScrollPane(replyField), BorderLayout.CENTER)
@@ -118,17 +161,22 @@ class GiteaCommentDiffExtension : DiffExtension() {
         replyButton.addActionListener {
             val text = replyField.text.trim()
             if (text.isEmpty()) return@addActionListener
+            val anchorComment = thread.first()
             replyButton.isEnabled = false
             statusLabel.text = "Sending…"
             GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
                 val result = runCatching {
-                    commentContext.client.replyToComment(commentContext.owner, commentContext.repo, commentContext.prNumber, comment.id, text)
+                    commentContext.client.replyToComment(
+                        commentContext.owner, commentContext.repo, commentContext.prNumber, anchorComment.id, text,
+                    )
+                    commentContext.fetchFreshComments()
                 }
                 withContext(Dispatchers.Main) {
                     result.fold(
-                        onSuccess = {
+                        onSuccess = { freshComments ->
                             popup.cancel()
-                            notify(project, "Reply posted.", NotificationType.INFORMATION)
+                            render(freshComments)
+                            notify("Reply posted.", NotificationType.INFORMATION)
                         },
                         onFailure = { error ->
                             replyButton.isEnabled = true
@@ -148,7 +196,7 @@ class GiteaCommentDiffExtension : DiffExtension() {
         popup.showInBestPositionFor(editor)
     }
 
-    private fun notify(project: Project, text: String, type: NotificationType) {
+    private fun notify(text: String, type: NotificationType) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup("Gitea")
             .createNotification(text, type)
@@ -157,19 +205,24 @@ class GiteaCommentDiffExtension : DiffExtension() {
 }
 
 private class CommentGutterIconRenderer(
-    private val comment: PullReviewComment,
+    private val thread: List<PullReviewComment>,
     private val onClick: () -> Unit,
 ) : GutterIconRenderer() {
 
     override fun getIcon(): Icon = AllIcons.General.Balloon
 
-    override fun getTooltipText(): String =
-        "${comment.user?.login ?: "unknown"}: ${comment.body.take(80)}"
+    override fun getTooltipText(): String {
+        val first = thread.first()
+        val suffix = if (thread.size > 1) " (+${thread.size - 1} more)" else ""
+        return "${first.user?.login ?: "unknown"}: ${first.body.take(80)}$suffix"
+    }
 
     override fun getClickAction(): AnAction = object : AnAction() {
         override fun actionPerformed(e: AnActionEvent) = onClick()
     }
 
-    override fun equals(other: Any?): Boolean = other is CommentGutterIconRenderer && other.comment.id == comment.id
-    override fun hashCode(): Int = comment.id.hashCode()
+    override fun equals(other: Any?): Boolean =
+        other is CommentGutterIconRenderer && other.thread.map { it.id } == thread.map { it.id }
+
+    override fun hashCode(): Int = thread.map { it.id }.hashCode()
 }
