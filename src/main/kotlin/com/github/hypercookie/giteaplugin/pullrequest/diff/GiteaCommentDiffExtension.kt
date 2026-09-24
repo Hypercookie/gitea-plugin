@@ -1,12 +1,14 @@
 package com.github.hypercookie.giteaplugin.pullrequest.diff
 
+import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.diff.DiffContext
 import com.intellij.diff.DiffExtension
 import com.intellij.diff.FrameDiffTool
 import com.intellij.diff.requests.DiffRequest
-import com.intellij.diff.tools.util.side.TwosideTextDiffViewer
+import com.intellij.diff.tools.simple.SimpleDiffViewer
+import com.intellij.diff.util.Side
 import com.intellij.icons.AllIcons
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -35,13 +37,12 @@ import javax.swing.JButton
 import javax.swing.JSeparator
 
 /**
- * Renders existing Gitea review comments as gutter icons in the diff viewer,
- * on both the base and head editors, grouped into threads by line (Gitea
- * itself threads review comments by matching path+position, not an explicit
- * parent-comment id — so grouping by line is the correct thread boundary,
- * not just a display convenience). Lets the user reply, and re-renders the
- * gutter with fresh data afterward so the new reply shows without reopening
- * the diff.
+ * Renders Gitea PR review comments as gutter icons in the diff viewer, on
+ * both the base and head editors — one icon per line, representing either
+ * an existing comment thread, a locally-queued pending comment (Phase 8,
+ * not yet submitted), or an "add comment" affordance on lines that are part
+ * of the diff but have neither yet. Also handles replying to an existing
+ * thread (Phase 7).
  *
  * Registered as `<diff.DiffExtension>` — a real, public, `dynamic="true"`
  * platform extension point (confirmed by inspecting the bundled platform
@@ -60,62 +61,164 @@ import javax.swing.JSeparator
  * (empirically, and independently corroborated by the same third-party
  * plugin's code) to be 1-indexed real file line numbers, not diff-hunk
  * offsets — so `line - 1` is the entire conversion to a 0-indexed editor line.
+ *
+ * "Addable" lines (where the "+" affordance shows) are restricted to lines
+ * actually part of a `SimpleDiffChange` on that side — Gitea's own API does
+ * NOT validate this server-side (confirmed during the Phase 2 hardening
+ * pass: it accepted comments on context lines and even completely
+ * out-of-diff lines without error), so this plugin enforces it client-side
+ * instead, matching GitHub/GitLab's UX.
  */
 class GiteaCommentDiffExtension : DiffExtension() {
 
     override fun onViewerCreated(viewer: FrameDiffTool.DiffViewer, diffContext: DiffContext, request: DiffRequest) {
         val commentContext = request.getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY) ?: return
-        if (viewer !is TwosideTextDiffViewer) return
+        if (viewer !is SimpleDiffViewer) return
         val project = diffContext.project ?: return
 
-        val controller = DiffCommentGutterController(project, viewer.getEditor1(), viewer.getEditor2(), commentContext)
-        controller.render(commentContext.comments)
+        val controller = DiffCommentGutterController(project, viewer, commentContext)
+        controller.updateComments(commentContext.comments)
+        commentContext.pendingStore.addListener { controller.render() }
     }
 }
 
 private class DiffCommentGutterController(
     private val project: Project,
-    private val baseEditor: EditorEx,
-    private val headEditor: EditorEx,
+    private val viewer: SimpleDiffViewer,
     private val commentContext: GiteaDiffCommentContext,
 ) {
+    private val baseEditor get() = viewer.getEditor1()
+    private val headEditor get() = viewer.getEditor2()
     private val baseHighlighters = mutableListOf<RangeHighlighter>()
     private val headHighlighters = mutableListOf<RangeHighlighter>()
 
-    fun render(comments: List<PullReviewComment>) {
-        baseHighlighters.forEach { baseEditor.markupModel.removeHighlighter(it) }
-        baseHighlighters.clear()
-        headHighlighters.forEach { headEditor.markupModel.removeHighlighter(it) }
-        headHighlighters.clear()
+    private var currentComments: List<PullReviewComment> = emptyList()
 
-        installThreads(baseEditor, baseHighlighters, comments, useOriginalPosition = true)
-        installThreads(headEditor, headHighlighters, comments, useOriginalPosition = false)
+    fun updateComments(comments: List<PullReviewComment>) {
+        currentComments = comments
+        render()
     }
 
-    private fun installThreads(
-        editor: EditorEx,
-        tracked: MutableList<RangeHighlighter>,
-        comments: List<PullReviewComment>,
-        useOriginalPosition: Boolean,
-    ) {
-        val threadsByLine = comments
+    fun render() {
+        clear(baseEditor, baseHighlighters)
+        clear(headEditor, headHighlighters)
+        installLine(baseEditor, baseHighlighters, Side.LEFT, useOriginalPosition = true)
+        installLine(headEditor, headHighlighters, Side.RIGHT, useOriginalPosition = false)
+    }
+
+    private fun clear(editor: EditorEx, tracked: MutableList<RangeHighlighter>) {
+        tracked.forEach { editor.markupModel.removeHighlighter(it) }
+        tracked.clear()
+    }
+
+    private fun installLine(editor: EditorEx, tracked: MutableList<RangeHighlighter>, side: Side, useOriginalPosition: Boolean) {
+        val threadsByLine = currentComments
             .mapNotNull { comment ->
                 val position = if (useOriginalPosition) comment.originalPosition else comment.position
-                if (position != null && position > 0) position to comment else null
+                if (position != null && position > 0) (position - 1).toInt() to comment else null
             }
             .groupBy({ it.first }, { it.second })
+            .mapValues { (_, thread) -> thread.sortedBy { it.createdAt ?: "" } }
 
-        for ((position, thread) in threadsByLine) {
-            val lineIndex = (position - 1).toInt()
+        val pendingByLine = commentContext.pendingStore.pendingComments
+            .filter { it.path == commentContext.filename }
+            .mapNotNull { pending ->
+                val position = if (useOriginalPosition) pending.oldPosition else pending.newPosition
+                if (position > 0) (position - 1).toInt() to pending else null
+            }
+            .toMap()
+
+        val addableLines = mutableSetOf<Int>()
+        for (change in viewer.getDiffChanges()) {
+            for (line in change.getStartLine(side) until change.getEndLine(side)) addableLines += line
+        }
+
+        val allLines = threadsByLine.keys + pendingByLine.keys + addableLines
+        for (lineIndex in allLines) {
             if (lineIndex < 0 || lineIndex >= editor.document.lineCount) continue
 
-            val sortedThread = thread.sortedBy { it.createdAt ?: "" }
-            val highlighter = editor.markupModel.addLineHighlighter(null, lineIndex, HighlighterLayer.ADDITIONAL_SYNTAX)
-            highlighter.gutterIconRenderer = CommentGutterIconRenderer(sortedThread) {
-                showThreadPopup(editor, sortedThread)
+            val pending = pendingByLine[lineIndex]
+            val thread = threadsByLine[lineIndex]
+            val renderer = when {
+                pending != null -> PendingCommentGutterIconRenderer(pending) { showPendingPopup(editor, pending) }
+                thread != null -> CommentGutterIconRenderer(thread) { showThreadPopup(editor, thread) }
+                else -> AddCommentGutterIconRenderer { showAddCommentPopup(editor, side, lineIndex) }
             }
+
+            val highlighter = editor.markupModel.addLineHighlighter(null, lineIndex, HighlighterLayer.ADDITIONAL_SYNTAX)
+            highlighter.gutterIconRenderer = renderer
             tracked += highlighter
         }
+    }
+
+    private fun showAddCommentPopup(editor: EditorEx, side: Side, lineIndex: Int) {
+        lateinit var popup: JBPopup
+        val textField = JBTextArea(3, 30).apply {
+            lineWrap = true
+            wrapStyleWord = true
+        }
+        val addButton = JButton("Add")
+        addButton.addActionListener {
+            val text = textField.text.trim()
+            if (text.isEmpty()) return@addActionListener
+            val position = (lineIndex + 1).toLong()
+            val comment = CreatePullReviewComment(
+                body = text,
+                path = commentContext.filename,
+                newPosition = if (side == Side.RIGHT) position else 0,
+                oldPosition = if (side == Side.LEFT) position else 0,
+            )
+            commentContext.pendingStore.addComment(comment)
+            popup.cancel()
+        }
+
+        val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            preferredSize = Dimension(340, 140)
+            add(JBLabel("New comment (queued until you submit the review)"), BorderLayout.NORTH)
+            add(JBScrollPane(textField), BorderLayout.CENTER)
+            add(JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT)).apply { add(addButton) }, BorderLayout.SOUTH)
+        }
+
+        popup = JBPopupFactory.getInstance()
+            .createComponentPopupBuilder(panel, textField)
+            .setResizable(true)
+            .setMovable(true)
+            .setRequestFocus(true)
+            .createPopup()
+        popup.showInBestPositionFor(editor)
+    }
+
+    private fun showPendingPopup(editor: EditorEx, pending: CreatePullReviewComment) {
+        val discardButton = JButton("Discard")
+        lateinit var popup: JBPopup
+        discardButton.addActionListener {
+            commentContext.pendingStore.removeComment(pending)
+            popup.cancel()
+        }
+
+        val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            preferredSize = Dimension(340, 140)
+            add(JBLabel("Pending — not yet submitted"), BorderLayout.NORTH)
+            add(
+                JBScrollPane(
+                    JBTextArea(pending.body).apply {
+                        isEditable = false
+                        lineWrap = true
+                        wrapStyleWord = true
+                    },
+                ),
+                BorderLayout.CENTER,
+            )
+            add(JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT)).apply { add(discardButton) }, BorderLayout.SOUTH)
+        }
+
+        popup = JBPopupFactory.getInstance()
+            .createComponentPopupBuilder(panel, null)
+            .setResizable(true)
+            .setMovable(true)
+            .setRequestFocus(true)
+            .createPopup()
+        popup.showInBestPositionFor(editor)
     }
 
     private fun showThreadPopup(editor: EditorEx, thread: List<PullReviewComment>) {
@@ -175,7 +278,7 @@ private class DiffCommentGutterController(
                     result.fold(
                         onSuccess = { freshComments ->
                             popup.cancel()
-                            render(freshComments)
+                            updateComments(freshComments)
                             notify("Reply posted.", NotificationType.INFORMATION)
                         },
                         onFailure = { error ->
@@ -225,4 +328,35 @@ private class CommentGutterIconRenderer(
         other is CommentGutterIconRenderer && other.thread.map { it.id } == thread.map { it.id }
 
     override fun hashCode(): Int = thread.map { it.id }.hashCode()
+}
+
+private class PendingCommentGutterIconRenderer(
+    private val pending: CreatePullReviewComment,
+    private val onClick: () -> Unit,
+) : GutterIconRenderer() {
+
+    override fun getIcon(): Icon = AllIcons.General.Modified
+
+    override fun getTooltipText(): String = "Pending: ${pending.body.take(80)}"
+
+    override fun getClickAction(): AnAction = object : AnAction() {
+        override fun actionPerformed(e: AnActionEvent) = onClick()
+    }
+
+    override fun equals(other: Any?): Boolean = other is PendingCommentGutterIconRenderer && other.pending === pending
+    override fun hashCode(): Int = System.identityHashCode(pending)
+}
+
+private class AddCommentGutterIconRenderer(private val onClick: () -> Unit) : GutterIconRenderer() {
+
+    override fun getIcon(): Icon = AllIcons.General.Add
+
+    override fun getTooltipText(): String = "Add a review comment on this line"
+
+    override fun getClickAction(): AnAction = object : AnAction() {
+        override fun actionPerformed(e: AnActionEvent) = onClick()
+    }
+
+    override fun equals(other: Any?): Boolean = other is AddCommentGutterIconRenderer
+    override fun hashCode(): Int = AddCommentGutterIconRenderer::class.hashCode()
 }

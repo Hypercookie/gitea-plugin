@@ -2,6 +2,7 @@ package com.github.hypercookie.giteaplugin.pullrequest.diff
 
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
+import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStore
 import com.intellij.openapi.util.Key
 
 /**
@@ -18,6 +19,7 @@ data class GiteaDiffCommentContext(
     val client: GiteaApiClient,
     val filename: String,
     val comments: List<PullReviewComment>,
+    val pendingStore: PendingReviewStore,
 ) {
     /** Re-fetches this file's comments — used after posting a reply so the
      * gutter can re-render without the user having to reopen the diff. */
