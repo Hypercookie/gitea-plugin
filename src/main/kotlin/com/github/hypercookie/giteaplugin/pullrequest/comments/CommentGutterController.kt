@@ -9,41 +9,34 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.RangeHighlighter
+import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.popup.JBPopup
-import com.intellij.openapi.ui.popup.JBPopupFactory
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBPanel
-import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.components.JBTextArea
+import com.intellij.ui.JBColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.awt.BorderLayout
-import java.awt.Dimension
-import java.awt.FlowLayout
-import javax.swing.BoxLayout
+import java.awt.Color
 import javax.swing.Icon
-import javax.swing.JButton
-import javax.swing.JSeparator
 
 /**
- * Renders one editor's worth of Gitea PR review-comment gutter icons — one
- * icon per line, either an existing comment thread, a locally-queued
- * pending comment (not yet submitted), or an "add comment" affordance.
- * Shared between the diff-viewer path (`GiteaCommentDiffExtension`, one
- * instance per side) and the working-copy-editor path (Phase 14) — both
- * just need *an* `EditorEx` and which position field (`position` vs
- * `originalPosition`) that editor's document corresponds to.
+ * Renders one editor's worth of Gitea PR review comments as real embedded
+ * boxes (via [InlineComponentHost]) rather than gutter-icon-triggered
+ * popups — per the user's explicit UI direction (see
+ * docs/plan/pr-review-feature-plan.md, "UI pass"). The gutter "+" affordance
+ * stays (cheap, discoverable launcher for a new comment on any line — every
+ * line is addable, see the "Architecture pivot" section); clicking it, an
+ * existing thread, or a pending comment now opens an inline box instead of
+ * a [com.intellij.openapi.ui.popup.JBPopup]. The line a thread/pending
+ * comment belongs to gets a background highlight.
  *
- * "+" is now offered on every line, not just ones inside a diff hunk (see
- * docs/plan/pr-review-feature-plan.md, "Architecture pivot" — Gitea itself
- * never validated this server-side, so it was always a client-side-only
- * restriction, and the user explicitly wants to comment on any line).
+ * Shared between the diff-viewer path (`GiteaCommentDiffExtension`, one
+ * instance per side) and the working-copy-editor path
+ * (`WorkingCopyCommentEditorListener`).
  */
 class CommentGutterController(
     private val project: Project,
@@ -51,7 +44,12 @@ class CommentGutterController(
     private val commentContext: GiteaDiffCommentContext,
     private val useOriginalPosition: Boolean,
 ) {
-    private val highlighters = mutableListOf<RangeHighlighter>()
+    private val addGutterHighlighters = mutableListOf<RangeHighlighter>()
+    private val lineBackgroundHighlighters = mutableListOf<RangeHighlighter>()
+    private val threadInlays = mutableMapOf<Int, Inlay<*>>()
+    private val pendingInlays = mutableMapOf<Int, Inlay<*>>()
+    private var newCommentBox: Pair<Int, Inlay<*>>? = null
+
     private var currentComments: List<PullReviewComment> = emptyList()
 
     fun updateComments(comments: List<PullReviewComment>) {
@@ -60,8 +58,14 @@ class CommentGutterController(
     }
 
     fun render() {
-        highlighters.forEach { editor.markupModel.removeHighlighter(it) }
-        highlighters.clear()
+        addGutterHighlighters.forEach { editor.markupModel.removeHighlighter(it) }
+        addGutterHighlighters.clear()
+        lineBackgroundHighlighters.forEach { editor.markupModel.removeHighlighter(it) }
+        lineBackgroundHighlighters.clear()
+        threadInlays.values.forEach { if (it.isValid) it.dispose() }
+        threadInlays.clear()
+        pendingInlays.values.forEach { if (it.isValid) it.dispose() }
+        pendingInlays.clear()
 
         val threadsByLine = currentComments
             .mapNotNull { comment ->
@@ -79,170 +83,115 @@ class CommentGutterController(
             }
             .toMap()
 
-        val allLines = threadsByLine.keys + pendingByLine.keys + (0 until editor.document.lineCount)
-        for (lineIndex in allLines) {
-            if (lineIndex < 0 || lineIndex >= editor.document.lineCount) continue
+        // A pending comment now landing on this line (e.g. just submitted
+        // elsewhere and re-fetched as a real thread) means the compose box
+        // that created it is done — close it.
+        newCommentBox?.let { (line, inlay) ->
+            if (line in threadsByLine.keys || line in pendingByLine.keys) {
+                if (inlay.isValid) inlay.dispose()
+                newCommentBox = null
+            }
+        }
 
+        for (lineIndex in 0 until editor.document.lineCount) {
             val pending = pendingByLine[lineIndex]
             val thread = threadsByLine[lineIndex]
-            val renderer = when {
-                pending != null -> PendingCommentGutterIconRenderer(pending) { showPendingPopup(pending) }
-                thread != null -> CommentGutterIconRenderer(thread) { showThreadPopup(thread) }
-                else -> AddCommentGutterIconRenderer { showAddCommentPopup(lineIndex) }
+
+            when {
+                pending != null -> {
+                    installLineHighlight(lineIndex)
+                    pendingInlays[lineIndex] = InlineComponentHost.install(
+                        editor, lineIndex,
+                        PendingCommentBoxPanel(
+                            pending = pending,
+                            onDiscard = { commentContext.pendingStore.removeComment(pending) },
+                            onResized = { pendingInlays[lineIndex]?.update() },
+                        ),
+                    ) ?: continue
+                }
+                thread != null -> {
+                    installLineHighlight(lineIndex)
+                    threadInlays[lineIndex] = InlineComponentHost.install(
+                        editor, lineIndex,
+                        CommentThreadBoxPanel(
+                            project, thread,
+                            onReply = { text, onResult -> reply(thread, text, onResult) },
+                            onResized = { threadInlays[lineIndex]?.update() },
+                        ),
+                    ) ?: continue
+                }
+                newCommentBox?.first == lineIndex -> {
+                    // Compose box already open here — leave it, just don't
+                    // add a "+" for this line.
+                }
+                else -> {
+                    val highlighter = editor.markupModel.addLineHighlighter(null, lineIndex, HighlighterLayer.ADDITIONAL_SYNTAX)
+                    highlighter.gutterIconRenderer = AddCommentGutterIconRenderer { toggleNewCommentBox(lineIndex) }
+                    addGutterHighlighters += highlighter
+                }
             }
-
-            val highlighter = editor.markupModel.addLineHighlighter(null, lineIndex, HighlighterLayer.ADDITIONAL_SYNTAX)
-            highlighter.gutterIconRenderer = renderer
-            highlighters += highlighter
         }
     }
 
-    private fun showAddCommentPopup(lineIndex: Int) {
-        lateinit var popup: JBPopup
-        val textField = JBTextArea(3, 30).apply {
-            lineWrap = true
-            wrapStyleWord = true
-        }
-        val addButton = JButton("Add")
-        addButton.addActionListener {
-            val text = textField.text.trim()
-            if (text.isEmpty()) return@addActionListener
-            val position = (lineIndex + 1).toLong()
-            val comment = CreatePullReviewComment(
-                body = text,
-                path = commentContext.filename,
-                newPosition = if (!useOriginalPosition) position else 0,
-                oldPosition = if (useOriginalPosition) position else 0,
-            )
-            commentContext.pendingStore.addComment(comment)
-            popup.cancel()
-        }
-
-        val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-            preferredSize = Dimension(340, 140)
-            add(JBLabel("New comment (queued until you submit the review)"), BorderLayout.NORTH)
-            add(JBScrollPane(textField), BorderLayout.CENTER)
-            add(JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT)).apply { add(addButton) }, BorderLayout.SOUTH)
-        }
-
-        popup = JBPopupFactory.getInstance()
-            .createComponentPopupBuilder(panel, textField)
-            .setResizable(true)
-            .setMovable(true)
-            .setRequestFocus(true)
-            .createPopup()
-        popup.showInBestPositionFor(editor)
+    private fun installLineHighlight(lineIndex: Int) {
+        val attributes = TextAttributes().apply { backgroundColor = COMMENTED_LINE_BACKGROUND }
+        lineBackgroundHighlighters += editor.markupModel.addLineHighlighter(lineIndex, HighlighterLayer.ADDITIONAL_SYNTAX, attributes)
     }
 
-    private fun showPendingPopup(pending: CreatePullReviewComment) {
-        val discardButton = JButton("Discard")
-        lateinit var popup: JBPopup
-        discardButton.addActionListener {
-            commentContext.pendingStore.removeComment(pending)
-            popup.cancel()
+    private fun toggleNewCommentBox(lineIndex: Int) {
+        newCommentBox?.let { (line, inlay) ->
+            if (inlay.isValid) inlay.dispose()
+            newCommentBox = null
+            if (line == lineIndex) {
+                render()
+                return
+            }
         }
 
-        val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-            preferredSize = Dimension(340, 140)
-            add(JBLabel("Pending — not yet submitted"), BorderLayout.NORTH)
-            add(
-                JBScrollPane(
-                    JBTextArea(pending.body).apply {
-                        isEditable = false
-                        lineWrap = true
-                        wrapStyleWord = true
+        val panel = NewCommentBoxPanel(
+            onAdd = { text ->
+                val position = (lineIndex + 1).toLong()
+                val comment = CreatePullReviewComment(
+                    body = text,
+                    path = commentContext.filename,
+                    newPosition = if (!useOriginalPosition) position else 0,
+                    oldPosition = if (useOriginalPosition) position else 0,
+                )
+                commentContext.pendingStore.addComment(comment)
+            },
+            onCancel = {
+                newCommentBox?.let { (_, inlay) -> if (inlay.isValid) inlay.dispose() }
+                newCommentBox = null
+                render()
+            },
+            onResized = { newCommentBox?.second?.update() },
+        )
+        val inlay = InlineComponentHost.install(editor, lineIndex, panel) ?: return
+        newCommentBox = lineIndex to inlay
+        render()
+        panel.focusInput()
+    }
+
+    private fun reply(thread: List<PullReviewComment>, text: String, onResult: (Result<Unit>) -> Unit) {
+        val anchorComment = thread.first()
+        GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
+            val result = runCatching {
+                commentContext.client.replyToComment(
+                    commentContext.owner, commentContext.repo, commentContext.prNumber, anchorComment.id, text,
+                )
+                commentContext.fetchFreshComments()
+            }
+            withContext(Dispatchers.Main) {
+                result.fold(
+                    onSuccess = { freshComments ->
+                        updateComments(freshComments)
+                        onResult(Result.success(Unit))
+                        notify("Reply posted.", NotificationType.INFORMATION)
                     },
-                ),
-                BorderLayout.CENTER,
-            )
-            add(JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT)).apply { add(discardButton) }, BorderLayout.SOUTH)
-        }
-
-        popup = JBPopupFactory.getInstance()
-            .createComponentPopupBuilder(panel, null)
-            .setResizable(true)
-            .setMovable(true)
-            .setRequestFocus(true)
-            .createPopup()
-        popup.showInBestPositionFor(editor)
-    }
-
-    private fun showThreadPopup(thread: List<PullReviewComment>) {
-        lateinit var popup: JBPopup
-
-        val statusLabel = JBLabel(" ")
-        val replyField = JBTextArea(3, 30).apply {
-            lineWrap = true
-            wrapStyleWord = true
-        }
-        val replyButton = JButton("Reply")
-
-        val threadPanel = JBPanel<JBPanel<*>>().apply {
-            layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            thread.forEachIndexed { index, comment ->
-                if (index > 0) add(JSeparator())
-                add(JBLabel(comment.user?.login ?: "unknown"))
-                add(
-                    JBTextArea(comment.body).apply {
-                        isEditable = false
-                        lineWrap = true
-                        wrapStyleWord = true
-                    },
+                    onFailure = { error -> onResult(Result.failure(error)) },
                 )
             }
         }
-
-        val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-            preferredSize = Dimension(380, 260)
-            add(JBScrollPane(threadPanel), BorderLayout.CENTER)
-
-            val replyPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-                add(JBScrollPane(replyField), BorderLayout.CENTER)
-                val actionsRow = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT)).apply {
-                    add(statusLabel)
-                    add(replyButton)
-                }
-                add(actionsRow, BorderLayout.SOUTH)
-            }
-            add(replyPanel, BorderLayout.SOUTH)
-        }
-
-        replyButton.addActionListener {
-            val text = replyField.text.trim()
-            if (text.isEmpty()) return@addActionListener
-            val anchorComment = thread.first()
-            replyButton.isEnabled = false
-            statusLabel.text = "Sending…"
-            GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
-                val result = runCatching {
-                    commentContext.client.replyToComment(
-                        commentContext.owner, commentContext.repo, commentContext.prNumber, anchorComment.id, text,
-                    )
-                    commentContext.fetchFreshComments()
-                }
-                withContext(Dispatchers.Main) {
-                    result.fold(
-                        onSuccess = { freshComments ->
-                            popup.cancel()
-                            updateComments(freshComments)
-                            notify("Reply posted.", NotificationType.INFORMATION)
-                        },
-                        onFailure = { error ->
-                            replyButton.isEnabled = true
-                            statusLabel.text = "Failed: ${error.message}"
-                        },
-                    )
-                }
-            }
-        }
-
-        popup = JBPopupFactory.getInstance()
-            .createComponentPopupBuilder(panel, replyField)
-            .setResizable(true)
-            .setMovable(true)
-            .setRequestFocus(true)
-            .createPopup()
-        popup.showInBestPositionFor(editor)
     }
 
     private fun notify(text: String, type: NotificationType) {
@@ -251,46 +200,10 @@ class CommentGutterController(
             .createNotification(text, type)
             .notify(project)
     }
-}
 
-private class CommentGutterIconRenderer(
-    private val thread: List<PullReviewComment>,
-    private val onClick: () -> Unit,
-) : GutterIconRenderer() {
-
-    override fun getIcon(): Icon = AllIcons.General.Balloon
-
-    override fun getTooltipText(): String {
-        val first = thread.first()
-        val suffix = if (thread.size > 1) " (+${thread.size - 1} more)" else ""
-        return "${first.user?.login ?: "unknown"}: ${first.body.take(80)}$suffix"
+    companion object {
+        private val COMMENTED_LINE_BACKGROUND = JBColor(Color(0xFF, 0xF6, 0xD5), Color(0x4A, 0x45, 0x2A))
     }
-
-    override fun getClickAction(): AnAction = object : AnAction() {
-        override fun actionPerformed(e: AnActionEvent) = onClick()
-    }
-
-    override fun equals(other: Any?): Boolean =
-        other is CommentGutterIconRenderer && other.thread.map { it.id } == thread.map { it.id }
-
-    override fun hashCode(): Int = thread.map { it.id }.hashCode()
-}
-
-private class PendingCommentGutterIconRenderer(
-    private val pending: CreatePullReviewComment,
-    private val onClick: () -> Unit,
-) : GutterIconRenderer() {
-
-    override fun getIcon(): Icon = AllIcons.General.Modified
-
-    override fun getTooltipText(): String = "Pending: ${pending.body.take(80)}"
-
-    override fun getClickAction(): AnAction = object : AnAction() {
-        override fun actionPerformed(e: AnActionEvent) = onClick()
-    }
-
-    override fun equals(other: Any?): Boolean = other is PendingCommentGutterIconRenderer && other.pending === pending
-    override fun hashCode(): Int = System.identityHashCode(pending)
 }
 
 private class AddCommentGutterIconRenderer(private val onClick: () -> Unit) : GutterIconRenderer() {

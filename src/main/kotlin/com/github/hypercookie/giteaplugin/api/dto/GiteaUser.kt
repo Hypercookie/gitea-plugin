@@ -10,4 +10,5 @@ data class GiteaUser(
     @SerialName("full_name") val fullName: String? = null,
     val email: String? = null,
     @SerialName("is_admin") val isAdmin: Boolean = false,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
 )

@@ -527,6 +527,80 @@ verified by the user in a running sandbox**: checkout-on-double-click,
 tool window's current-branch review panel, shared pending store across
 detail-tab and working-copy editor — confirmed working.
 
+## UI pass — embedded inline comments (modern IntelliJ native)
+
+User's explicit design direction (asked per the "ask before UI styling"
+rule): comments render as real embedded boxes in the editor (not popups),
+expandable to a full conversation; the commented line is highlighted;
+pressing gutter "+" opens an inline box to type a new comment; pending
+comments surface in a top bar with a push/submit action; avatars shown in
+comment boxes.
+
+**Feasibility check done first** (same discipline as the original
+diff-viewer spike): confirmed `com.intellij.openapi.editor.ComponentInlayRenderer`
+(`app-client.jar`) — a **public**, `@ApiStatus.Experimental` (not
+`@ApiStatus.Internal`) class implementing `EditorCustomElementRenderer`,
+constructible with any `java.awt.Component` + `ComponentInlayAlignment`, used
+via `InlayModel.addBlockElement(offset, InlayProperties, renderer)`. This is
+the *base* class JetBrains' own bundled GitHub plugin builds its PR-review
+inline UI on (`GHPRReviewThreadEditorInlayRenderer extends
+com.intellij.collaboration.ui.codereview.editor.CodeReviewComponentInlayRenderer
+extends com.intellij.openapi.editor.ComponentInlayRenderer` — confirmed via
+`javap` on the bundled `vcs-github` + `intellij.platform.collaborationTools`
+jars). We can use `ComponentInlayRenderer` directly and skip the
+`collaboration-tools` layer entirely — real embedded Swing boxes without the
+internal-API risk this plan has avoided from the start. `@ApiStatus.Experimental`
+is a materially smaller risk than fully internal/unannotated classes: it's
+public, documented-as-such API, just not signature-frozen across versions.
+Also confirmed: `EditorNotificationProvider`/`EditorNotifications` (fully
+stable, not experimental) for the "pending changes top bar" — the same
+mechanism used for e.g. VCS/Maven "reload" banners.
+
+### Phase 18 — inline comment/new-comment boxes (replace popups) [ ]
+- [ ] `pullrequest/comments/InlineComponentHost.kt`: thin helper wrapping
+      `editor.inlayModel.addBlockElement(offset, InlayProperties, ComponentInlayRenderer(component, ComponentInlayAlignment.STRETCH_TO_CONTENT_WIDTH))`,
+      returns the `Inlay` (itself a `Disposable`) so `CommentGutterController`
+      can track/dispose/`.update()` (for resize on expand/collapse) per line.
+- [ ] `pullrequest/comments/CommentThreadBoxPanel.kt`: collapsed by default
+      (avatar + author + first-line snippet + "+N more" if a thread), click
+      anywhere expands to the full conversation (every comment, avatar +
+      author + body) with a reply box at the bottom — replaces
+      `showThreadPopup`. Styled with `RoundedLineBorder`, `JBColor`,
+      `JBUI.Borders`/`JBFont` — "modern IntelliJ native" look, not raw Swing
+      defaults.
+- [ ] `pullrequest/comments/NewCommentBoxPanel.kt`: text area + Add/Cancel,
+      same visual language — replaces `showAddCommentPopup`. Gutter "+" stays
+      as the launcher (cheap, discoverable, matches the user's own framing
+      "when I press plus on the gutter").
+- [ ] `pullrequest/comments/PendingCommentBoxPanel.kt`: pending (not yet
+      submitted) comment shown inline with a Discard action — replaces
+      `showPendingPopup`.
+- [ ] `CommentGutterController` rewritten: keeps the "+" `GutterIconRenderer`
+      per line as the click target, but on click/render now installs the
+      matching inline box (thread/pending/new) instead of a `JBPopup`. Adds a
+      background-color `RangeHighlighter` (`TextAttributes.backgroundColor`,
+      not just a gutter icon) on any line with a thread or pending comment —
+      "the line they belong to must be highlighted."
+
+### Phase 19 — avatars [ ]
+- [ ] `GiteaUser.avatarUrl` (`avatar_url`) added to the DTO — Gitea already
+      resolves this server-side (uploaded avatar or federated Gravatar), no
+      need to hash emails ourselves.
+- [ ] `pullrequest/comments/AvatarService.kt`: async-loads + circularly-clips
+      + caches (by URL+size) avatar `Icon`s, used inside
+      `CommentThreadBoxPanel`.
+
+### Phase 20 — pending-changes top bar [ ]
+- [ ] `pullrequest/PrReviewEditorNotificationProvider.kt`, implements
+      `EditorNotificationProvider` (`EP_NAME`, registered in `plugin.xml`).
+      Shows a banner above the editor — reusing `ReviewActionsPanel` — when
+      the open file's branch resolves to a PR **and** that PR's
+      `PendingReviewStore` is non-empty; disappears again once submitted.
+      `PendingReviewStoreService` calls
+      `EditorNotifications.getInstance(project).updateAllNotifications()`
+      whenever any store it hands out changes, so the banner reacts live
+      without needing the file reopened.
+
 Remaining open items from this pivot, not yet done:
 - Staleness indicator (Phase 14) — local HEAD vs `pr.head.sha` / modified-doc
   check, not yet surfaced on the gutter.
