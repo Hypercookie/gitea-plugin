@@ -282,14 +282,10 @@ verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
       succeed (searchable-options skipped in this build only because it
       conflicts with a concurrently-running manual-test `runIde` sandbox —
       not a code issue).
-- [ ] **Not yet manually click-tested** — new extension-point registration,
-      needs a `runIde` restart to pick up (dynamic plugin reload doesn't
-      reliably cover new EP registrations). Test plan: open PR #2 in
-      `plugindev/pr-test` → `README.md` diff. Fixture already has 4 real
-      comments on that PR from earlier position-semantics testing: file-line
-      15 (head side), old-side line 15 (base side), a context-line comment at
-      13, and a deliberately out-of-diff-range one at line 5 — good coverage
-      for confirming icons land on the right lines on both editors.
+- [x] **Manually verified by the user in a running IDE** (fresh `runIde`
+      restart, per the process lesson from Phase 5): gutter icons render
+      correctly on PR #2's `README.md` diff. UI still "rough" per the user —
+      expected, unstyled Swing, Phase 10 territory.
 
 ## Phase 7 — reply to comment
 - [ ] Reply action on existing comment thread → POST reply (exact endpoint per
