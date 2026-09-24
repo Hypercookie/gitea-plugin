@@ -322,7 +322,18 @@ verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
   (new) re-fetches, then `render()` rebuilds both editors' gutters from that
   fresh list — no diff reopen needed.
   Verified: `compileKotlin` + `buildPlugin` succeed.
-  **Not yet manually re-tested** — needs a `runIde` restart.
+  **Manually re-tested, confirmed working**: PR #1's `README.md` (4 comments
+  all on line 1) correctly grouped into one icon showing all 4; PR #2's
+  reply-then-refresh flow confirmed live-updating.
+  One false alarm during this round: user initially reported PR #1 showing
+  *zero* gutter icons. Added temporary diagnostic logging
+  (`thisLogger().warn` in `onViewerCreated`/`installThreads`, since removed)
+  rather than guessing — log showed the highlighter was created successfully
+  at line 0 with no errors. Turned out to be scroll position: PR #1's diff
+  auto-scrolls to its actual changed lines (~12/15), and the comment's line 1
+  was simply off-screen above that. Not a bug — worth remembering as a
+  UX-in-testing gotcha (a comment on an unchanged/scrolled-past line can look
+  like a missing feature).
 
 ## Phase 8 — pending review: add inline comment
 - [ ] Gutter "+" action on any diff line → add comment, buffered locally as
