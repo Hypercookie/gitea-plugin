@@ -700,31 +700,47 @@ exercises them directly.
       '*MyPluginTest*'` (confirms removing the scaffold didn't break the
       still-used `MyProjectService`/`MyBundle`) both succeed.
 
-### Phase 22 — tool window shell + PR list [ ]
-- [ ] `PullRequestListPanel`/`GiteaPullRequestsToolWindowFactory` rebuilt on
-      `SimpleToolWindowPanel` with a real `ActionToolbar` (Refresh, View
-      Details — `AnAction`s with icons, not raw `JButton`s).
-- [ ] PR list rows via `ColoredListCellRenderer`: icon per state
+### Phase 22 — tool window shell + PR list [x]
+- [x] `PullRequestListPanel` rebuilt on `SimpleToolWindowPanel` with a real
+      `ActionToolbar` (Refresh, View Details — `AnAction`s with icons via
+      `getActionUpdateThread() = ActionUpdateThread.EDT`, not raw
+      `JButton`s). `GiteaPullRequestsToolWindowFactory` needed no changes —
+      `SimpleToolWindowPanel` is still just a `JComponent`.
+- [x] PR list rows via `ColoredListCellRenderer`: icon per state
       (`AllIcons.Vcs.Branch` open/draft, `AllIcons.Vcs.Merge` merged,
-      `AllIcons.General.Error`-ish closed), colored state text, number/title/
-      author as separate styled fragments — not one plain concatenated
-      string.
+      `AllIcons.General.Error` closed), colored bold state text (GitHub's
+      familiar green/purple/red/grey convention — recognizable, not
+      reinvented), number/title/author as separate styled fragments instead
+      of one plain concatenated string.
 
-### Phase 23 — detail panel + changed-files list [ ]
-- [ ] `PullRequestDetailPanel`'s changed-files list gets the same
-      `ColoredListCellRenderer` treatment (status icon + colored +N/-N).
-      Overview section restyled with `JBUI`/`JBFont` instead of raw
-      `BoxLayout` + default-font labels.
+### Phase 23 — detail panel + changed-files list [x]
+- [x] `PullRequestDetailPanel`'s changed-files list gets the same
+      `ColoredListCellRenderer` treatment (status icon —
+      Add/Remove/MoveTo2/Edit — + colored +N/-N). Overview section restyled:
+      `JBFont.h2()` title with a branch/merge icon, colored inline state
+      badge (HTML label), `JBUI.Borders` spacing instead of raw `BoxLayout`
+      + default-font labels.
 
-### Phase 24 — settings page via Kotlin UI DSL [ ]
-- [ ] `GiteaConfigurable` rebuilt with `panel {}`/`row {}` (the intended use
-      case per the research above) instead of manual Swing layout.
+### Phase 24 — settings page via Kotlin UI DSL [x]
+- [x] `GiteaConfigurable`'s account list gets a `ColoredListCellRenderer`
+      (Gitea icon + name + greyed server URL, was a bare `toString()`);
+      list/details split moved from raw `BorderLayout` WEST/CENTER to
+      `OnePixelSplitter` (the native resizable master-detail pattern, e.g.
+      Live Templates); `verifyConnection()` now sets a success/failure icon
+      on the status label, not just text. The details form was already
+      `panel {}`-based from Phase 1 (the right call per the Kotlin UI DSL
+      research above) — left as-is.
 
-### Phase 25 — comment boxes / banners polish [ ]
-- [ ] Gitea icon used where it reads naturally (e.g. the pending-changes top
-      bar); spacing/colors on `CommentBoxPanels`/`PrReviewEditorNotificationProvider`
-      double-checked against `JBUI`/`JBColor` conventions rather than ad hoc
-      literals.
+### Phase 25 — comment boxes / banners polish [x]
+- [x] Gitea icon added to the pending-changes top bar's PR label and
+      `CurrentBranchReviewPanel`'s status label; its "Refresh" `JButton`
+      swapped for an `ActionLink` (the lighter, native pattern for an inline
+      banner action). `CommentBoxPanels`/`PrReviewEditorNotificationProvider`
+      were already on `JBUI`/`JBColor` from the prior UI pass — no changes
+      needed there.
+- [x] Verified: `./gradlew compileKotlin`, `./gradlew buildPlugin`, and
+      `./gradlew test --tests '*MyPluginTest*' --tests '*GiteaUrlUtilTest*'`
+      all succeed.
 
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.
