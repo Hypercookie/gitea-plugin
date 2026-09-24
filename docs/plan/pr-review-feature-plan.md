@@ -287,9 +287,28 @@ verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
       correctly on PR #2's `README.md` diff. UI still "rough" per the user —
       expected, unstyled Swing, Phase 10 territory.
 
-## Phase 7 — reply to comment
-- [ ] Reply action on existing comment thread → POST reply (exact endpoint per
-      Phase 2 spike result).
+## Phase 7 — reply to comment [x]
+- [x] `GiteaDiffCommentContext` extended with `owner`/`repo`/`prNumber`/
+      `client` so `GiteaCommentDiffExtension` can make API calls, not just
+      render data — needed for reply (and every later write action).
+- [x] Comment popup (from Phase 6) extended with a reply text area + "Reply"
+      button → `client.replyToComment(...)`
+      (`POST /pulls/{index}/comments/{id}/replies`, confirmed endpoint from
+      Phase 2 spike). On success: closes the popup, shows a notification
+      (new `"Gitea"` notification group registered in `plugin.xml`). On
+      failure: inline status text in the popup, button re-enabled to retry.
+- [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
+      succeed.
+- [ ] **Not yet manually tested** — needs a `runIde` restart (new
+      `notificationGroup` registration). Test plan: open the same PR #2
+      `README.md` diff, click a comment gutter icon, type a reply, submit,
+      confirm it lands on the PR in the Gitea web UI
+      (`http://localhost:3000/plugindev/pr-test/pulls/2`).
+- **Known gap, not fixed here**: after a successful reply, the gutter icon
+  set isn't refreshed — the new reply comment won't show its own icon until
+  the diff is reopened. Acceptable for now (Phase 6/7 scope is "read +
+  reply," not live-refresh); worth a follow-up once Phase 8/9 add more
+  mutation flows that'll want the same refresh anyway.
 
 ## Phase 8 — pending review: add inline comment
 - [ ] Gutter "+" action on any diff line → add comment, buffered locally as

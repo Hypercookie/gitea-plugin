@@ -159,7 +159,10 @@ class PullRequestDetailPanel(
             pr.base.ref,
             pr.head.ref,
         )
-        request.putUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY, GiteaDiffCommentContext(file.filename, comments))
+        request.putUserData(
+            GITEA_DIFF_COMMENT_CONTEXT_KEY,
+            GiteaDiffCommentContext(context.owner, context.repo, pr.number, client, file.filename, comments),
+        )
         DiffManager.getInstance().showDiff(project, request)
     }
 }
