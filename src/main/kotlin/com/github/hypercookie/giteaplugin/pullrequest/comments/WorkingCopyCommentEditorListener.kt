@@ -15,6 +15,9 @@ import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.ui.EditorNotifications
+import git4idea.repo.GitRepository
+import git4idea.repo.GitRepositoryChangeListener
 import git4idea.repo.GitRepositoryManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,21 +32,47 @@ import kotlinx.coroutines.withContext
  * the "Architecture pivot" decision in
  * docs/plan/pr-review-feature-plan.md.
  *
- * Registered via `<projectListeners>` (constructed per-project, one
- * instance, no manual `MessageBusConnection` bookkeeping needed).
+ * Also implements [GitRepositoryChangeListener] so a branch switch
+ * re-resolves every already-open editor instead of only newly-opened ones
+ * (both are registered against this same class via `<projectListeners>` —
+ * the platform reuses one instance per project across every topic it's
+ * registered for).
  *
  * Line-drift caveat: the local file may differ from `pr.head.sha` (dirty
  * edits, local commits ahead) — v1 does not compute a head-blob↔working-copy
  * line mapping, it just anchors at the position Gitea reports and accepts
- * that comments can point at the wrong line when the two diverge. See the
- * plan doc for the (deliberate) reasoning.
+ * that comments can point at the wrong line when the two diverge, surfaced
+ * as a warning banner ([com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider])
+ * rather than corrected. See the plan doc for the (deliberate) reasoning.
  */
-class WorkingCopyCommentEditorListener(private val project: Project) : FileEditorManagerListener {
+class WorkingCopyCommentEditorListener(private val project: Project) : FileEditorManagerListener, GitRepositoryChangeListener {
 
     private val installed = mutableMapOf<Editor, CommentGutterController>()
 
     override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
-        val textEditor = source.getSelectedEditor(file) as? TextEditor ?: return
+        processFile(file)
+    }
+
+    override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
+        installed.keys.removeAll { it.isDisposed }
+    }
+
+    override fun repositoryChanged(repository: GitRepository) {
+        GiteaBranchPrResolverService.getInstance(project).invalidate()
+        EditorNotifications.getInstance(project).updateAllNotifications()
+
+        val fileEditorManager = FileEditorManager.getInstance(project)
+        for (file in fileEditorManager.openFiles) {
+            val textEditor = fileEditorManager.getSelectedEditor(file) as? TextEditor ?: continue
+            val editor = textEditor.editor as? EditorEx ?: continue
+            installed.remove(editor) // force re-resolution against the new branch
+            processFile(file)
+        }
+    }
+
+    private fun processFile(file: VirtualFile) {
+        val fileEditorManager = FileEditorManager.getInstance(project)
+        val textEditor = fileEditorManager.getSelectedEditor(file) as? TextEditor ?: return
         val editor = textEditor.editor as? EditorEx ?: return
         installed.keys.removeAll { it.isDisposed }
         if (installed.containsKey(editor)) return
@@ -98,9 +127,5 @@ class WorkingCopyCommentEditorListener(private val project: Project) : FileEdito
                 }
             }
         }
-    }
-
-    override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
-        installed.keys.removeAll { it.isDisposed }
     }
 }
