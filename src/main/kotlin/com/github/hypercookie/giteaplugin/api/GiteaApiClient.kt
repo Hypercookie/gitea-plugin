@@ -92,6 +92,10 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     suspend fun listReviewComments(owner: String, repo: String, index: Long, reviewId: Long): List<PullReviewComment> =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/reviews/$reviewId/comments")
 
+    /** All inline comments across all reviews on this PR, flattened. */
+    suspend fun getAllReviewComments(owner: String, repo: String, index: Long): List<PullReviewComment> =
+        listReviews(owner, repo, index).flatMap { listReviewComments(owner, repo, index, it.id) }
+
     /** Creates a review; when `options.event` isn't `PENDING`, this also
      * submits it immediately — Gitea does both in one call. */
     suspend fun createReview(owner: String, repo: String, index: Long, options: CreatePullReviewOptions): PullReview =
