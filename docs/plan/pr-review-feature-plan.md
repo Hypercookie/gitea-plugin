@@ -304,11 +304,25 @@ verified (`compileKotlin`, `test`, `buildPlugin` all pass) before Phase 5 below.
       `README.md` diff, click a comment gutter icon, type a reply, submit,
       confirm it lands on the PR in the Gitea web UI
       (`http://localhost:3000/plugindev/pr-test/pulls/2`).
-- **Known gap, not fixed here**: after a successful reply, the gutter icon
-  set isn't refreshed — the new reply comment won't show its own icon until
-  the diff is reopened. Acceptable for now (Phase 6/7 scope is "read +
-  reply," not live-refresh); worth a follow-up once Phase 8/9 add more
-  mutation flows that'll want the same refresh anyway.
+- **Fixed after manual testing found it**: user reported "I do not see my
+  own replies in the UI — just the original comment" after successfully
+  posting a reply. Root cause was two separate bugs, both fixed:
+  1. Comments were never grouped by line — each comment (including replies)
+     got its own gutter icon showing only itself, when Gitea threads review
+     comments by matching path+position (there's no explicit parent-comment
+     id in the API), so a reply and its parent share a line and should share
+     one icon showing the whole thread.
+  2. No refresh after a successful reply — even once grouped, a just-posted
+     reply wouldn't appear until the diff was reopened.
+  `GiteaCommentDiffExtension` rewritten: `DiffCommentGutterController` groups
+  comments by line into threads, tracks its own `RangeHighlighter`s per
+  editor so it can remove and re-add them, and `showThreadPopup` displays
+  every comment in the thread (not just one) with the reply box below all of
+  them. On successful reply: `GiteaDiffCommentContext.fetchFreshComments()`
+  (new) re-fetches, then `render()` rebuilds both editors' gutters from that
+  fresh list — no diff reopen needed.
+  Verified: `compileKotlin` + `buildPlugin` succeed.
+  **Not yet manually re-tested** — needs a `runIde` restart.
 
 ## Phase 8 — pending review: add inline comment
 - [ ] Gutter "+" action on any diff line → add comment, buffered locally as
