@@ -94,12 +94,33 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
       correctly, including the `ReviewEvent` enum and nested `User`/branch
       objects — not just that the DTOs compile.
 
-## Phase 3 — repo linking
-- [ ] Enumerate `GitRepositoryManager` repos + remotes (git4idea) on project open.
-- [ ] Match remote URL against configured account base URLs, subpath-tolerant
-      (not bare-hostname like GitHub plugin — Gitea is always self-hosted, often
-      behind a subpath). Prompt on ambiguity.
-- [ ] Result: `GiteaRepoContext` (account + owner + repo) available per project.
+## Phase 3 — repo linking [x]
+- [x] Added `Git4Idea` as a plugin dependency (`<depends>` in `plugin.xml` +
+      `bundledPlugin("Git4Idea")` in `build.gradle.kts`) — confirmed plugin id
+      by inspecting the bundled `vcs-git` jar's own `plugin.xml`, id is
+      `Git4Idea` (directory name changed, id didn't).
+- [x] `repo/GiteaUrlUtil.kt`: parses both scp-like (`git@host:owner/repo.git`)
+      and scheme-based (`https://`, `ssh://`) remote URLs into host +
+      path-segments; matches a remote against a configured account's server
+      URL by host + path-**prefix** (subpath-tolerant, not bare-hostname —
+      see file header comment for why this differs from GitHub/GitLab).
+      12 unit tests in `GiteaUrlUtilTest.kt`, all passing — https/ssh/scp-like
+      forms, custom ports, subpath servers, case-insensitive host match,
+      non-matching host/subpath, malformed owner/repo shape.
+- [x] `repo/GiteaRepoLinkService.kt` (project-level `@Service`): enumerates
+      `GitRepositoryManager.getInstance(project).repositories` and their
+      remotes, matches each against every configured account, returns
+      `GiteaRepoContext` (account + owner + repo + remote URL).
+      `findAllMatches()` returns everything (for a future disambiguation UI);
+      `resolveDefault()` returns a single unambiguous match, or falls back to
+      the project's configured default account (Phase 1) when there's more
+      than one candidate.
+- [ ] **No disambiguation UI yet** — `resolveDefault()` returns null on an
+      unresolved ambiguity rather than prompting. Add a prompt when Phase 4's
+      tool window needs one (i.e. don't build UI speculatively here).
+- [x] Verified: `./gradlew compileKotlin`, `./gradlew test --tests
+      '*GiteaUrlUtilTest'`, and `./gradlew buildPlugin` all succeed with the
+      new Git4Idea dependency wired in.
 
 ## Phase 4 — PR list tool window
 - [ ] New `ToolWindowFactory` ("Pull Requests"), replacing/extending the
