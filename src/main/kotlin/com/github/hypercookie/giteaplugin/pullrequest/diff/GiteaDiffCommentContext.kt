@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.pullrequest.diff
 
+import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.intellij.openapi.util.Key
 
@@ -11,6 +12,10 @@ import com.intellij.openapi.util.Key
  * exists," so context has to travel on the request itself.
  */
 data class GiteaDiffCommentContext(
+    val owner: String,
+    val repo: String,
+    val prNumber: Long,
+    val client: GiteaApiClient,
     val filename: String,
     val comments: List<PullReviewComment>,
 )

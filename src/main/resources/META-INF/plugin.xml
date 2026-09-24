@@ -18,6 +18,7 @@
         <toolWindow factoryClass="com.github.hypercookie.giteaplugin.pullrequest.GiteaPullRequestsToolWindowFactory"
                     id="Gitea Pull Requests" anchor="right"/>
         <diff.DiffExtension implementation="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaCommentDiffExtension"/>
+        <notificationGroup id="Gitea" displayType="BALLOON"/>
         <postStartupActivity implementation="com.github.hypercookie.giteaplugin.startup.MyProjectActivity" />
         <applicationConfigurable
                 parentId="vcs"
