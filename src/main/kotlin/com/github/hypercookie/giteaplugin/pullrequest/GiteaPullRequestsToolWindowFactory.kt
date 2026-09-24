@@ -8,8 +8,8 @@ import com.intellij.ui.content.ContentFactory
 class GiteaPullRequestsToolWindowFactory : ToolWindowFactory {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = PullRequestListPanel(project)
-        val content = ContentFactory.getInstance().createContent(panel.component, "", false)
+        val panel = PullRequestListPanel(project, toolWindow)
+        val content = ContentFactory.getInstance().createContent(panel.component, "List", false)
         toolWindow.contentManager.addContent(content)
     }
 
