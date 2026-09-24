@@ -4,12 +4,15 @@ import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.PullRequest
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
+import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.FlowLayout
@@ -17,7 +20,6 @@ import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JList
 import javax.swing.ListCellRenderer
-import javax.swing.SwingUtilities
 
 /**
  * "Pull Requests" tool window content: list open PRs for whatever Gitea repo
@@ -62,9 +64,9 @@ class PullRequestListPanel(private val project: Project) {
 
         statusLabel.text = "Loading…"
         val client = GiteaApiClient(context.account.serverUrl, token)
-        Thread({
-            val result = runCatching { runBlocking { client.listPullRequests(context.owner, context.repo) } }
-            SwingUtilities.invokeLater {
+        GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
+            val result = runCatching { client.listPullRequests(context.owner, context.repo) }
+            withContext(Dispatchers.Main) {
                 result.fold(
                     onSuccess = { prs ->
                         listModel.clear()
@@ -76,7 +78,7 @@ class PullRequestListPanel(private val project: Project) {
                     },
                 )
             }
-        }, "GiteaPullRequestListRefresh").start()
+        }
     }
 }
 

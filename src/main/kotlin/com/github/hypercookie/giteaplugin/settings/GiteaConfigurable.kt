@@ -3,11 +3,14 @@ package com.github.hypercookie.giteaplugin.settings
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccount
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
+import com.github.hypercookie.giteaplugin.util.GiteaAppCoroutineScope
 import com.intellij.openapi.options.Configurable
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.components.JBList
 import com.intellij.ui.dsl.builder.panel
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import javax.swing.DefaultListModel
 import javax.swing.JComponent
@@ -15,7 +18,8 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JPasswordField
 import javax.swing.JTextField
-import javax.swing.SwingUtilities
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 
 /**
  * Settings -> Version Control -> Gitea. Add/remove accounts (server URL +
@@ -36,6 +40,11 @@ class GiteaConfigurable : Configurable {
     private val tokenField = JPasswordField()
     private val statusLabel = JLabel(" ")
 
+    /** Set by any field edit / add / remove; cleared by [apply]. Lets the
+     * Settings dialog's OK/Apply buttons reflect real pending state instead
+     * of always being disabled — see [isModified]. */
+    private var dirty = false
+
     override fun getDisplayName(): String = "Gitea"
 
     override fun createComponent(): JComponent {
@@ -52,12 +61,25 @@ class GiteaConfigurable : Configurable {
             }
         }
 
+        val markDirty = object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = mark()
+            override fun removeUpdate(e: DocumentEvent) = mark()
+            override fun changedUpdate(e: DocumentEvent) = mark()
+            private fun mark() {
+                dirty = true
+            }
+        }
+        nameField.document.addDocumentListener(markDirty)
+        serverUrlField.document.addDocumentListener(markDirty)
+        tokenField.document.addDocumentListener(markDirty)
+
         val listPanel = ToolbarDecorator.createDecorator(accountList)
             .setAddAction {
                 val account = GiteaAccount("New account", "https://")
                 manager.addAccount(account, "")
                 listModel.addElement(account)
                 accountList.setSelectedValue(account, true)
+                dirty = true
             }
             .setRemoveAction {
                 val selected = accountList.selectedValue ?: return@setRemoveAction
@@ -66,6 +88,7 @@ class GiteaConfigurable : Configurable {
                 nameField.text = ""
                 serverUrlField.text = ""
                 tokenField.text = ""
+                dirty = true
             }
             .createPanel()
 
@@ -95,6 +118,7 @@ class GiteaConfigurable : Configurable {
         manager.setToken(selected, String(tokenField.password))
         accountList.repaint()
         statusLabel.text = "Saved."
+        dirty = false
     }
 
     private fun verifyConnection() {
@@ -102,22 +126,29 @@ class GiteaConfigurable : Configurable {
         val token = String(tokenField.password)
         statusLabel.text = "Checking..."
         val client = GiteaApiClient(serverUrl, token)
-        Thread({
-            val result = runCatching { runBlocking { client.getCurrentUser() } }
-            SwingUtilities.invokeLater {
+        GiteaAppCoroutineScope.getInstance().coroutineScope.launch {
+            val result = runCatching { client.getCurrentUser() }
+            withContext(Dispatchers.Main) {
                 statusLabel.text = result.fold(
                     onSuccess = { "OK — logged in as ${it.login}" },
                     onFailure = { "Failed: ${it.message}" },
                 )
             }
-        }, "GiteaVerifyConnection").start()
+        }
     }
 
-    override fun isModified(): Boolean = false
+    /** True if a pending field edit / add / remove hasn't been persisted yet
+     * (via "Save selected account", or [apply] below) — without this,
+     * Settings' OK/Apply buttons stay permanently disabled regardless of
+     * actual state, and clicking OK silently drops unsaved field edits. */
+    override fun isModified(): Boolean = dirty
 
     override fun apply() {
-        // Account/token changes are saved immediately by the Add/Remove/Save
-        // actions above rather than batched into apply(), since they touch
-        // PasswordSafe (a separate store from the Configurable's own state).
+        // Persisting is normally immediate (Add/Remove/Save act right away,
+        // since they touch PasswordSafe — a store outside this Configurable's
+        // own state), but a field edit not yet committed via "Save selected
+        // account" would otherwise be silently lost when the user just hits
+        // OK/Apply in the Settings dialog. Commit it here too.
+        if (dirty) saveSelected()
     }
 }

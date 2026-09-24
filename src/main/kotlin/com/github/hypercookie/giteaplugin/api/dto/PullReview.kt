@@ -64,7 +64,12 @@ data class CreatePullReviewComment(
 )
 
 /** Body for `POST /pulls/{index}/reviews` — creates and, unless `event` is
- * `PENDING`, immediately submits a review with its inline comments. */
+ * `PENDING`, immediately submits a review with its inline comments.
+ *
+ * Pass [commitId] as the PR's current head SHA (`PullRequest.head.sha`) —
+ * that's what `PullReview.stale` tracks against, so leaving it null risks
+ * the review (and its comments) showing as stale as soon as the PR gets a
+ * new commit, even though Gitea accepts a null `commit_id` without error. */
 @Serializable
 data class CreatePullReviewOptions(
     val event: ReviewEvent,
