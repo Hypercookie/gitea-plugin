@@ -122,10 +122,27 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
       '*GiteaUrlUtilTest'`, and `./gradlew buildPlugin` all succeed with the
       new Git4Idea dependency wired in.
 
-## Phase 4 — PR list tool window
-- [ ] New `ToolWindowFactory` ("Pull Requests"), replacing/extending the
-      `MyToolWindowFactory` scaffold.
-- [ ] List view: PR number, title, author, state. Manual refresh action.
+## Phase 4 — PR list tool window [x]
+- [x] New `ToolWindowFactory`: `pullrequest/GiteaPullRequestsToolWindowFactory.kt`,
+      registered as tool window id `"Gitea Pull Requests"` (anchored right),
+      **added alongside** the `MyToolWindow` scaffold rather than replacing it
+      — scaffold removal deferred to Phase 10 cleanup, not worth the risk of
+      breaking `MyPluginTest`'s `testProjectService` for a cosmetic change now.
+- [x] `pullrequest/PullRequestListPanel.kt`: list view (PR number, title,
+      author, state via a custom `ListCellRenderer`), manual Refresh button.
+      Resolves the repo via `GiteaRepoLinkService.resolveDefault()` (Phase 3)
+      and the token via `GiteaAccountManager` (Phase 1); shows a clear status
+      message when no repo is linked or no token is saved, instead of a raw
+      error.
+- [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
+      succeed.
+- [ ] **Not manually click-tested in a running IDE** — no GUI interaction
+      available from this environment. To verify: `./gradlew runIde`, add a
+      Gitea account in Settings pointing at `http://localhost:3000` with a
+      token (see docs/local-gitea-dev-instance.md), open a local clone of the
+      `plugindev/pr-test` fixture repo (Phase 2) as a project so its git
+      remote matches, then open the "Gitea Pull Requests" tool window and
+      confirm PR #1 shows up.
 
 ## Phase 5 — PR detail view
 - [ ] Opening a PR from the list → new `Content` tab. Overview (description,
