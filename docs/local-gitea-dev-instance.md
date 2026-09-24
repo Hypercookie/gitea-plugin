@@ -163,6 +163,29 @@ curl -s -u plugindev:'<password>' http://localhost:3000/api/v1/user
 curl -s -H "Authorization: token <token>" http://localhost:3000/api/v1/user
 ```
 
+## Test fixture: `plugindev/pr-test` repo + PR #1
+
+Created during Phase 2 of the PR review feature build
+(`docs/plan/pr-review-feature-plan.md`) to exercise `GiteaApiClient` against
+real data. Left in place for reuse in later phases (tool window, diff view,
+etc) rather than torn down after the integration test ran.
+
+- Repo `plugindev/pr-test`, branches `main` (auto-init) and `feature` (one
+  README.md commit ahead).
+- PR #1: `feature` → `main`, title "Test PR for plugin dev", open.
+- Review #1 on PR #1: state `COMMENT`, one inline comment on `README.md` line
+  1 ("nit: consider rewording this line"), plus reply/top-level comments and
+  a second review added by `GiteaApiClientIntegrationTest`.
+- Recreate the same way if the instance gets wiped — see the `curl` sequence
+  in the Phase 2 section of the plan doc, or just re-run
+  `GiteaApiClientIntegrationTest` after creating a fresh repo/PR (it doesn't
+  create fixtures itself, only reads/writes against existing PR #1).
+
+Run the integration test suite with:
+```bash
+GITEA_DEV_TOKEN=<token> ./gradlew test --tests '*GiteaApiClientIntegrationTest'
+```
+
 ## Generating an API token (for the plugin to use)
 
 Via the API (basic auth to bootstrap the token itself):
