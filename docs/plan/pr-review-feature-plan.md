@@ -930,6 +930,40 @@ new endpoints.
       20's branch→PR resolution + notification-provider refresh hook as the
       trigger).
 
+### Phase 37 — rework "Add Account" into a proper dialog
+User feedback after Phase 26 manual test: the "+" in Settings → Version
+Control → Gitea's account list currently inserts an inert stub row
+(`GiteaAccount("New account", "https://")`, `GiteaConfigurable.kt:87-93`)
+straight into the list with a blank token already saved to `PasswordSafe`,
+then relies on the user noticing the details panel, editing three fields,
+and remembering to click "Save selected account" — no dedicated add flow,
+unlike a native JetBrains account dialog (Git/GitHub Settings → Accounts
+use a modal "Add Account" with inline verification before anything is
+persisted).
+- [ ] Spike: check whether a reusable `DialogWrapper`-based "Add Account"
+      shape exists in the bundled platform/VCS jars worth confirming via
+      `javap` (same discipline as Phase 5/6/18) before freehand design —
+      if nothing reusable turns up, build a plain `DialogWrapper` from
+      scratch, same as every other dialog in this plugin so far.
+- [ ] New `settings/AddGiteaAccountDialog.kt` (`DialogWrapper`): Server URL
+      field, Token field, inline "Verify connection" reusing the existing
+      `GiteaApiClient.getCurrentUser()` check from
+      `GiteaConfigurable.verifyConnection()` (extract shared logic rather
+      than duplicate it). OK stays disabled until verification succeeds —
+      nothing gets written to `PasswordSafe`/`GiteaAccountManager` until a
+      real token against a real server is confirmed. Account name
+      auto-filled from the verified user's login (editable), not a literal
+      "New account" placeholder.
+- [ ] `GiteaConfigurable`'s `ToolbarDecorator.setAddAction` opens this
+      dialog instead of inserting a stub row directly; only calls
+      `manager.addAccount(...)` on a successful OK.
+- [ ] Editing an already-added account stays as-is (inline details panel +
+      "Save selected account") — only the add path changes; that part
+      already matches the native edit-in-place pattern JetBrains' own
+      Settings pages use.
+- [ ] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Manually tested in a running sandbox IDE.
+
 Not planned: the floating code-suggestion mini-toolbar in
 `github_pull_request_review_view_diff.png` — that's the Platform's own
 editor intention-action UI, unrelated to the GitHub PR plugin, out of scope.
