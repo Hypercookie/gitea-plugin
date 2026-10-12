@@ -181,6 +181,32 @@ etc) rather than torn down after the integration test ran.
   `GiteaApiClientIntegrationTest` after creating a fresh repo/PR (it doesn't
   create fixtures itself, only reads/writes against existing PR #1).
 
+### Extra fixture PRs #4-#6 (added for UI-pass-3 manual testing)
+
+Created to give Phase 27+ (timeline tab, submit-review popup, etc.) richer,
+more "lively" data to render than a single-comment PR — multiple commits,
+comment threads with replies, a second author, and all three PR states.
+A second user, `revbot` (password `RevBot759062c05dce!`, email
+`revbot@localhost.test`), was created for this so comments/reviews come from
+more than one login. Branches `feature3`/`feature4`/`feature5` added to
+`plugindev/pr-test`, each off `main`.
+
+- **PR #4** (`feature3` → `main`, **open**) — "Add notes section and tidy
+  README". 3 separate commits. 2 top-level issue comments (one from each
+  user). Two inline review-comment threads on `README.md`: one at line 23
+  with a reply (revbot comments, plugindev replies — comment id 50, reply id
+  54), one standalone at line 24 (plugindev, comment id 52, no reply).
+- **PR #5** (`feature4` → `main`, **merged**) — "Add status section to
+  README". 2 commits. revbot left a top-level comment plus an `APPROVED`
+  review; plugindev replied with a top-level comment and then merged it
+  (plain merge, not squash/rebase).
+- **PR #6** (`feature5` → `main`, **closed, not merged**) — "Experimental
+  deprecated-notes section". 1 commit, 1 top-level comment explaining why,
+  then closed via `PATCH .../issues/6` (`state: closed`) rather than merged.
+
+All three reuse the same trivial README-edit style as PR #1 — the point is
+PR/comment/commit metadata variety for UI testing, not interesting diffs.
+
 Run the integration test suite with:
 ```bash
 GITEA_DEV_TOKEN=<token> ./gradlew test --tests '*GiteaApiClientIntegrationTest'
