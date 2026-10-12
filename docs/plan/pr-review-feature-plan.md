@@ -1124,6 +1124,45 @@ Not planned: the floating code-suggestion mini-toolbar in
 `github_pull_request_review_view_diff.png` — that's the Platform's own
 editor intention-action UI, unrelated to the GitHub PR plugin, out of scope.
 
+### Phase 40 — changed-files tree, not a flat list [x]
+User sent two screenshots side by side: our flat per-file-full-path list
+vs. IntelliJ's native Project tree (nested folders, "N files" counts,
+file-type icons, status-colored names, single-child directory chains
+collapsed onto one row — e.g. `src/main/java/com/example/kvstore` as one
+row, not six). Phase 39's `FileStatus` coloring was real but barely
+noticeable on a flat list of full paths; the actual ask was structural.
+- [x] `filesList` (`JBList<ChangedFile>`) replaced with `filesTree`
+      (`com.intellij.ui.treeStructure.Tree`). New `buildFileTree(repoName,
+      files)` groups Gitea's flat `filename` paths into a
+      `DefaultMutableTreeNode` hierarchy, root labeled with the repo name
+      (no IntelliJ "module" equivalent to show alongside it, so just the
+      repo name). A `DirEntry(name, fileCount)` payload holds each
+      directory row's post-compaction label; computed bottom-up after the
+      tree shape exists.
+- [x] **Chain compaction**, matching "Compact Middle Packages": any
+      directory node with exactly one child directory and no file children
+      of its own gets merged into that child's label (`"a/b/c"` instead of
+      three nested single-child rows) — implemented as a recursive pass
+      after the raw tree is built, not interleaved with construction (simpler
+      to reason about correctness of each pass separately).
+      `TreeUtil.expandAll(filesTree)` after loading, matching the reference
+      screenshot's fully-expanded-by-default state.
+- [x] `FileTreeCellRenderer` (`ColoredTreeCellRenderer`, the tree
+      equivalent of the `ColoredListCellRenderer` pattern already used
+      elsewhere): directory rows get `AllIcons.Nodes.Module` (root) /
+      `AllIcons.Nodes.Folder` + name + gray "N file(s)"; file rows get a
+      real file-type icon (`FileTypeManager.getFileTypeByFileName(name).icon`
+      — the actual per-language icon, e.g. a Java class icon, not a generic
+      file icon) + `FileStatus`-colored name (kept from Phase 39) + the
+      existing green/red `+N`/`-N` badges.
+- [x] Double-click handling moved from list-selection to
+      `tree.getPathForLocation(x, y)` — opens the diff for a file leaf,
+      does nothing special for a directory row (default `JTree` behavior
+      already expands/collapses on double-click without any help needed).
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin`
+      succeed — compiled clean on the first attempt.
+- [ ] Not yet tested in a running sandbox IDE.
+
 ### Phase 39 — embed timeline in detail tab, markdown description, diff-view file colors [x]
 User follow-up to Phase 38: double-click should open the detail tab (not
 checkout — checkout is now a context-menu action anyway, per Phase 38);
