@@ -31,10 +31,12 @@ import javax.swing.SwingConstants
 
 private const val AVATAR_SIZE = 20
 
-private fun escapeHtml(text: String): String =
+/** `internal`, not `private` — reused by `TimelinePanel` (Phase 27) so the
+ * timeline feed's comment rendering matches the gutter comment boxes. */
+internal fun escapeHtml(text: String): String =
     text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-private fun avatarLabel(project: Project, user: GiteaUser?): JBLabel {
+internal fun avatarLabel(project: Project, user: GiteaUser?): JBLabel {
     val label = JBLabel(AllIcons.General.User)
     val url = user?.avatarUrl
     if (!url.isNullOrBlank()) {
@@ -48,7 +50,7 @@ private fun avatarLabel(project: Project, user: GiteaUser?): JBLabel {
     return label
 }
 
-private fun boxPanel(): JBPanel<JBPanel<*>> = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+internal fun boxPanel(): JBPanel<JBPanel<*>> = JBPanel<JBPanel<*>>(BorderLayout()).apply {
     background = JBColor.namedColor("EditorTooltip.background", JBColor(0xF5F5F5, 0x4B4D51))
     border = JBUI.Borders.compound(
         RoundedLineBorder(JBColor.border(), 8, 1),
@@ -56,7 +58,7 @@ private fun boxPanel(): JBPanel<JBPanel<*>> = JBPanel<JBPanel<*>>(BorderLayout()
     )
 }
 
-private fun readOnlyBody(text: String): JComponent =
+internal fun readOnlyBody(text: String): JComponent =
     JBTextArea(text).apply {
         isEditable = false
         lineWrap = true

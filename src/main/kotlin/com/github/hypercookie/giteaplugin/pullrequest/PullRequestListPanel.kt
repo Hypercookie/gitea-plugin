@@ -267,8 +267,29 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
             return
         }
 
-        val detail = PullRequestDetailPanel(project, context, client, pr)
+        val detail = PullRequestDetailPanel(project, context, client, pr) { openTimelineTab(pr) }
         val content = ContentFactory.getInstance().createContent(detail.component, tabName, false)
+        content.isCloseable = true
+        contentManager.addContent(content)
+        contentManager.setSelectedContent(content)
+    }
+
+    /** Opened from the detail tab's "View Timeline" link (Phase 27) — its
+     * own tab rather than a split view inside the detail tab, reusing the
+     * same dedupe-by-tab-name pattern as [openDetailTab]. */
+    private fun openTimelineTab(pr: PullRequest) {
+        val context = lastContext ?: return
+        val client = lastClient ?: return
+
+        val contentManager = toolWindow.contentManager
+        val tabName = "#${pr.number} timeline"
+        contentManager.contents.find { it.tabName == tabName }?.let {
+            contentManager.setSelectedContent(it)
+            return
+        }
+
+        val timeline = TimelinePanel(project, context, client, pr)
+        val content = ContentFactory.getInstance().createContent(timeline.component, tabName, false)
         content.isCloseable = true
         contentManager.addContent(content)
         contentManager.setSelectedContent(content)
