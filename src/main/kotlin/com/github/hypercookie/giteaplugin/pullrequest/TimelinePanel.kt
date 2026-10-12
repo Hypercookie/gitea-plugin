@@ -8,7 +8,6 @@ import com.github.hypercookie.giteaplugin.api.dto.TimelineEvent
 import com.github.hypercookie.giteaplugin.pullrequest.comments.avatarLabel
 import com.github.hypercookie.giteaplugin.pullrequest.comments.boxPanel
 import com.github.hypercookie.giteaplugin.pullrequest.comments.escapeHtml
-import com.github.hypercookie.giteaplugin.pullrequest.comments.readOnlyBody
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.openapi.project.Project
@@ -141,10 +140,27 @@ class TimelinePanel(
             add(JBLabel("<html><b>${event.user?.login ?: "unknown"}</b> <span style='color:gray'>${formatTimestamp(event.createdAt)}</span></html>"))
         }
         content.add(header, BorderLayout.NORTH)
-        content.add(readOnlyBody(event.body ?: ""), BorderLayout.CENTER)
+        content.add(wrappedBody(event.body ?: ""), BorderLayout.CENTER)
         wrapper.add(content, BorderLayout.CENTER)
         wrapper.maximumSize = Dimension(Int.MAX_VALUE, wrapper.maximumSize.height)
         return wrapper
+    }
+
+    /** `readOnlyBody` (a `JBTextArea`) is right for the editor-inlay comment
+     * boxes it was built for — there, [InlineComponentHost] hands the inlay
+     * a known width before layout, so Swing's line-wrap calculation works.
+     * Here, inside a plain `BoxLayout` column in a scroll pane, that same
+     * `JTextArea` never gets a width to wrap against and reports a huge
+     * unwrapped preferred size — the "way too big" box. An HTML `JBLabel`
+     * with an explicit `width` style forces wrapping at a fixed pixel width
+     * regardless of container layout, and uses the UI's normal proportional
+     * font instead of the text area's monospace default. */
+    private fun wrappedBody(text: String): JComponent {
+        val html = escapeHtml(text).replace("\n", "<br>")
+        return JBLabel("<html><body style='width: 480px'>$html</body></html>").apply {
+            border = JBUI.Borders.emptyTop(4)
+            verticalAlignment = JBLabel.TOP
+        }
     }
 
     private fun systemLine(event: TimelineEvent, text: String): JComponent {

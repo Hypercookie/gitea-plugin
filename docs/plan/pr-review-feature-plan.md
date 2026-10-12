@@ -898,7 +898,29 @@ new endpoints.
       rework of an already-working panel).
 - [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
       succeed.
-- [ ] Not yet manually tested in a running sandbox IDE.
+- [x] **Manually tested, bug found and fixed**: user reported timeline
+      comment boxes were "ugly as hell" — flat oversized boxes with a hard
+      black border and monospace text instead of normal prose. Root cause:
+      `commentCard` reused `CommentBoxPanels.kt`'s `readOnlyBody` (a
+      `JBTextArea`), which is correct for the editor-inlay comment boxes
+      it was built for — there `InlineComponentHost` hands the inlay a known
+      width before layout, so the text area's line-wrap math has something
+      to wrap against. Inside `TimelinePanel`'s plain `BoxLayout` column in
+      a scroll pane, nothing constrains that width first, so the text area
+      reports a huge unwrapped preferred size — the oversized box; the
+      border just looked worse stretched that big (same `boxPanel()` style
+      already approved for the gutter comment boxes, not actually changed).
+      Fixed by rendering the body as an HTML `JBLabel` with an explicit
+      `<body style='width: 480px'>` instead — forces wrapping at a fixed
+      pixel width independent of container layout, and uses the UI's normal
+      proportional font instead of the text area's monospace default. Not
+      real Markdown rendering (no bold/code/link parsing) — out of scope
+      for this fix, just "looks like prose, not a code block."
+      Refresh-button report from the same round turned out not to be a bug:
+      confirmed with the user that the current-branch panel's "Refresh"
+      link does refetch (status text flashes), it just no-ops when nothing
+      actually changed — expected, not fixed.
+      Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 
 ### Phase 28 — Submit Review as a popup card
 - [ ] Rework `ReviewActionsPanel`: bottom button becomes
