@@ -1124,6 +1124,42 @@ Not planned: the floating code-suggestion mini-toolbar in
 `github_pull_request_review_view_diff.png` — that's the Platform's own
 editor intention-action UI, unrelated to the GitHub PR plugin, out of scope.
 
+### Phase 39 — embed timeline in detail tab, markdown description, diff-view file colors [x]
+User follow-up to Phase 38: double-click should open the detail tab (not
+checkout — checkout is now a context-menu action anyway, per Phase 38);
+embed the timeline directly in the detail tab instead of a separate tab;
+render the PR description as Markdown too; color changed-files like the
+Platform's native Changes/Commit views.
+
+- [x] **Double-click → detail tab**: `PullRequestListPanel`'s row
+      double-click handler now calls `openDetailTab` instead of
+      `checkoutBranch` — checkout stays reachable via the Phase 38 context
+      menu's "Checkout" action, same underlying method, just not the
+      double-click default anymore.
+- [x] **Timeline embedded, not a separate tab**: `PullRequestDetailPanel`
+      now constructs its own `TimelinePanel` and lays it out in an
+      `OnePixelSplitter(false, 0.45f)` — overview+files+review-actions as
+      `firstComponent`, the timeline as `secondComponent` — matching the
+      reference GitHub-plugin screenshot's actual layout (a master-detail
+      split showing both at once, not a second tab reached via a link).
+      `onViewTimeline` callback and the "View Timeline" `ActionLink` are
+      gone; `PullRequestListPanel.openTimelineTab` (the separate-tab
+      mechanism from Phase 27) deleted outright, not left dead.
+- [x] **PR description renders Markdown**: `buildOverviewPanel`'s
+      description switched from a plain `JBTextArea` to the same shared
+      `markdownLabel` (`CommentBoxPanels.kt`) used by the timeline and the
+      editor-inlay comment boxes — one more surface, same renderer, not a
+      fourth independent implementation.
+- [x] **Changed-files list colored like the native diff view**:
+      `ChangedFileCellRenderer`'s filename text now uses
+      `com.intellij.openapi.vcs.FileStatus` colors (`ADDED`/`DELETED`/
+      `MODIFIED`) instead of plain foreground text — the same palette the
+      Platform's own Changes/Commit tool windows use (blue for modified,
+      etc.), not a one-off color choice. The existing green/red `+N`/`-N`
+      badges kept as-is (already matched that convention).
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Not yet tested in a running sandbox IDE.
+
 ### Phase 38 — PR list redesign (toolbar, avatars, context menu) [x]
 User direction: only one Refresh control in the whole tool window; drop the
 toolbar's "View Details" button (felt out of place); move both View Details
