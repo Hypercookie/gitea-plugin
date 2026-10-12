@@ -276,6 +276,7 @@ class CommentThreadBoxPanel(
  * replaces the old `showAddCommentPopup` JBPopup. Launched from the gutter
  * "+" icon. */
 class NewCommentBoxPanel(
+    private val startLabel: String = "Start Review",
     private val onAdd: (text: String) -> Unit,
     private val onCancel: () -> Unit,
     private val onResized: () -> Unit,
@@ -291,13 +292,15 @@ class NewCommentBoxPanel(
             isOpaque = false
             add(JButton("Cancel").apply { addActionListener { onCancel() } })
             add(
-                // "Start Review" (not "Add"/a split button with "Add Single
-                // Comment") — this always just queues into the pending
-                // review (see PendingReviewStore), there's no separate
-                // immediate-submit path backing a second option, so a real
-                // split button would promise a capability that doesn't
-                // exist. The label describes what actually happens.
-                JButton("Start Review").apply {
+                // "Start Review"/"Add to Review" (caller decides which,
+                // based on whether a review is already pending), not "Add"
+                // or a split button with "Add Single Comment" — this always
+                // just queues into the pending review (see
+                // PendingReviewStore), there's no separate immediate-submit
+                // path backing a second option, so a real split button
+                // would promise a capability that doesn't exist. The label
+                // describes what actually happens.
+                JButton(startLabel).apply {
                     addActionListener {
                         val text = textArea.text.trim()
                         if (text.isNotEmpty()) onAdd(text)

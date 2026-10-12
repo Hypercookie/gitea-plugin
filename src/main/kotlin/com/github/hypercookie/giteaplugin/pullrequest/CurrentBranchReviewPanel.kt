@@ -82,7 +82,7 @@ class CurrentBranchReviewPanel(private val project: Project) {
                 val store = PendingReviewStoreService.getInstance(project)
                     .storeFor(repoContext.owner, repoContext.repo, pr.number)
                 val actions = ReviewActionsPanel(
-                    project, client, repoContext.owner, repoContext.repo, pr.number, pr.head.sha, store,
+                    project, client, repoContext.owner, repoContext.repo, pr.number, pr.head.sha, store, pr.user?.login,
                 )
                 actionsContainer.add(actions.component, BorderLayout.CENTER)
                 actionsContainer.revalidate()

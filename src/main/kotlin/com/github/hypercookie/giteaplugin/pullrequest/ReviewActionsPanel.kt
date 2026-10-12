@@ -46,9 +46,20 @@ class ReviewActionsPanel(
     private val prNumber: Long,
     private val headSha: String,
     private val pendingStore: PendingReviewStore,
+    /** The PR author's login (`pr.user?.login`) — Gitea forbids
+     * Approve/Request Changes on your own PR ("approve your own pull is
+     * not allowed", hit repeatedly during manual testing throughout this
+     * plan), so those two buttons get disabled rather than left to fail
+     * after a submit attempt. */
+    private val authorLogin: String?,
 ) {
     private val statusLabel = JBLabel(" ")
     private val submitButton = JButton("Submit Review…").apply { addActionListener { showSubmitPopup() } }
+
+    /** Fetched once on init; null until it resolves (self-review buttons
+     * just stay enabled for that brief window rather than blocking on it —
+     * Gitea itself is still the real enforcement either way). */
+    private var currentUserLogin: String? = null
 
     val component: JComponent = JBPanel<JBPanel<*>>(BorderLayout()).apply {
         add(
@@ -63,6 +74,9 @@ class ReviewActionsPanel(
     init {
         pendingStore.addListener { updateSubmitButton() }
         updateSubmitButton()
+        GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
+            currentUserLogin = runCatching { client.getCurrentUser().login }.getOrNull()
+        }
     }
 
     private fun updateSubmitButton() {
@@ -81,8 +95,16 @@ class ReviewActionsPanel(
         // Phase 38); `PendingCommentBoxPanel`'s own discard button is the
         // same plain `JButton("Discard")` for the same reason.
         val discardButton = JButton("Discard").apply { isEnabled = count > 0 }
-        val approveButton = JButton("Approve")
-        val requestChangesButton = JButton("Request Changes")
+        val isSelfAuthored = authorLogin != null && authorLogin == currentUserLogin
+        val selfReviewTooltip = "Gitea doesn't allow this on your own pull request"
+        val approveButton = JButton("Approve").apply {
+            isEnabled = !isSelfAuthored
+            if (isSelfAuthored) toolTipText = selfReviewTooltip
+        }
+        val requestChangesButton = JButton("Request Changes").apply {
+            isEnabled = !isSelfAuthored
+            if (isSelfAuthored) toolTipText = selfReviewTooltip
+        }
         val commentButton = JButton("Comment")
 
         val content = JBPanel<JBPanel<*>>(BorderLayout()).apply {
