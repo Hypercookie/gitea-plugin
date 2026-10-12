@@ -921,6 +921,28 @@ new endpoints.
       link does refetch (status text flashes), it just no-ops when nothing
       actually changed — expected, not fixed.
       Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [x] **Second bug found on re-test, screenshot provided**: the width fix
+      above didn't fix it — cards still rendered huge with a large blank
+      gap below the text. Real root cause: every row added to
+      `feedColumn`'s `BoxLayout` (the comment card wrapper, the system-event
+      row, the commit-push column, and the individual commit rows inside
+      it) left its `maximumSize` at the Swing default, which is effectively
+      unbounded. A vertical `BoxLayout` asks each child's `getMaximumSize()`
+      to decide how to divide up leftover space in the scroll viewport, so
+      every row got stretched to fill an equal share of it — hence
+      same-ish-sized giant boxes regardless of actual content length. The
+      earlier width-only fix was real (fixed the font/wrapping) but
+      incomplete — masked by this second bug, which produced the same
+      "huge box" symptom for a different reason. Fixed with a `capHeight()`
+      helper (`maximumSize = Dimension(MAX_VALUE, preferredSize.height)`,
+      called *after* a component's children are added so `preferredSize`
+      reflects real content) applied to every row added to any `BoxLayout`
+      column, nested ones included. Also tightened spacing while in there:
+      `feedColumn` gets outer padding, each entry gets a consistent bottom
+      margin instead of the previous inconsistent per-type padding, commit
+      rows get a touch of their own vertical breathing room.
+      Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Not yet re-tested in a running sandbox IDE after this second fix.
 
 ### Phase 28 — Submit Review as a popup card
 - [ ] Rework `ReviewActionsPanel`: bottom button becomes
