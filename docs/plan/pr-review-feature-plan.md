@@ -1292,7 +1292,29 @@ User-reported round after Phase 28 manual testing:
       gap that's much smaller than the color mismatch was — left as a
       possible future refinement, not attempted this round.
 - [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
-- [ ] Not yet tested in a running sandbox IDE.
+- [x] **Follow-up: "new comment" box still didn't close after Phase 41's
+      fix.** The synchronous-`render()` fix was real but not sufficient —
+      added temporary logging (`thisLogger().warn`, same technique as
+      Phase 7) and confirmed the data/dispose logic was *already* correct:
+      `pendingByLine` picked up the new comment immediately, and
+      `newCommentBox`'s inlay really was disposed
+      (`inlay.dispose()`/`inlay.isValid=true` right before it, confirmed in
+      the log). The bug was a Swing inlay-mounting *timing* issue instead:
+      `render()` disposed the old `NewCommentBoxPanel` inlay and installed
+      the new `PendingCommentBoxPanel` inlay at the *same editor line*
+      within the same call stack, which left the old box's component
+      visually lingering even though the model was already correct — same
+      class of problem as Phase 18's "boxes render but stay empty" root
+      cause, on the removal side instead of the mounting side. Fixed by
+      splitting `render()`: dispose everything synchronously (including
+      `newCommentBox`, now handled in the same pass as every other
+      disposal, not a separate later check), then defer the actual inlay
+      *installation* to the next EDT tick via `SwingUtilities.invokeLater`,
+      giving the inlay manager a full tick to process the disposals before
+      anything new mounts at the same offset. Debug logging removed once
+      confirmed.
+      Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Not yet re-tested in a running sandbox IDE after this fix.
 
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.
