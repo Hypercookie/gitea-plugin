@@ -291,7 +291,13 @@ class NewCommentBoxPanel(
             isOpaque = false
             add(JButton("Cancel").apply { addActionListener { onCancel() } })
             add(
-                JButton("Add").apply {
+                // "Start Review" (not "Add"/a split button with "Add Single
+                // Comment") — this always just queues into the pending
+                // review (see PendingReviewStore), there's no separate
+                // immediate-submit path backing a second option, so a real
+                // split button would promise a capability that doesn't
+                // exist. The label describes what actually happens.
+                JButton("Start Review").apply {
                     addActionListener {
                         val text = textArea.text.trim()
                         if (text.isNotEmpty()) onAdd(text)
