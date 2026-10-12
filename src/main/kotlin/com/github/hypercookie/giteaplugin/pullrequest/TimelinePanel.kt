@@ -48,7 +48,10 @@ class TimelinePanel(
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val feedColumn = JBPanel<JBPanel<*>>().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
+    private val feedColumn = JBPanel<JBPanel<*>>().apply {
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        border = JBUI.Borders.empty(8)
+    }
     private val statusLabel = JBLabel("Loading timeline…").apply { border = JBUI.Borders.empty(4, 8) }
     private val composeField = JBTextArea(3, 40).apply { lineWrap = true; wrapStyleWord = true }
 
@@ -119,9 +122,21 @@ class TimelinePanel(
         statusLabel.text = " "
         feedColumn.removeAll()
         val commitsBySha = commits.associateBy { it.sha }
-        events.forEach { event -> feedColumn.add(renderEvent(event, commitsBySha)) }
+        events.forEach { event -> feedColumn.add(capHeight(renderEvent(event, commitsBySha))) }
         feedColumn.revalidate()
         feedColumn.repaint()
+    }
+
+    /** A `BoxLayout` column asks every child's [JComponent.getMaximumSize] to
+     * decide how to divide up any leftover vertical space in the scroll
+     * viewport. A plain `JPanel` reports a huge default maximum (unbounded),
+     * so without this, `BoxLayout` stretches every row to fill the leftover
+     * space evenly — the "huge boxes with a blank gap at the bottom" bug.
+     * Must run *after* a component's children are added, so its
+     * `preferredSize` reflects real content. */
+    private fun capHeight(component: JComponent): JComponent {
+        component.maximumSize = Dimension(Int.MAX_VALUE, component.preferredSize.height)
+        return component
     }
 
     private fun renderEvent(event: TimelineEvent, commitsBySha: Map<String, GitCommit>): JComponent =
@@ -132,7 +147,7 @@ class TimelinePanel(
         }
 
     private fun commentCard(event: TimelineEvent): JComponent {
-        val wrapper = JBPanel<JBPanel<*>>(BorderLayout()).apply { border = JBUI.Borders.empty(4, 8) }
+        val wrapper = JBPanel<JBPanel<*>>(BorderLayout()).apply { border = JBUI.Borders.emptyBottom(8) }
         val content = boxPanel()
         val header = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
             isOpaque = false
@@ -142,7 +157,6 @@ class TimelinePanel(
         content.add(header, BorderLayout.NORTH)
         content.add(wrappedBody(event.body ?: ""), BorderLayout.CENTER)
         wrapper.add(content, BorderLayout.CENTER)
-        wrapper.maximumSize = Dimension(Int.MAX_VALUE, wrapper.maximumSize.height)
         return wrapper
     }
 
@@ -157,14 +171,14 @@ class TimelinePanel(
      * font instead of the text area's monospace default. */
     private fun wrappedBody(text: String): JComponent {
         val html = escapeHtml(text).replace("\n", "<br>")
-        return JBLabel("<html><body style='width: 480px'>$html</body></html>").apply {
+        return JBLabel("<html><body style='width: 440px'>$html</body></html>").apply {
             border = JBUI.Borders.emptyTop(4)
             verticalAlignment = JBLabel.TOP
         }
     }
 
     private fun systemLine(event: TimelineEvent, text: String): JComponent {
-        val row = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 2)).apply { border = JBUI.Borders.empty(2, 8) }
+        val row = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 2)).apply { border = JBUI.Borders.empty(2, 0, 6, 0) }
         row.add(avatarLabel(project, event.user))
         row.add(JBLabel("<html><b>${event.user?.login ?: "unknown"}</b> $text</html>"))
         return row
@@ -176,13 +190,13 @@ class TimelinePanel(
 
         val column = JBPanel<JBPanel<*>>().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            border = JBUI.Borders.empty(2, 8)
+            border = JBUI.Borders.empty(2, 0, 6, 0)
         }
         val header = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
             add(avatarLabel(project, event.user))
             add(JBLabel("<html><b>${event.user?.login ?: "unknown"}</b> added ${commitIds.size} commit(s) to this pull request</html>"))
         }
-        column.add(header)
+        column.add(capHeight(header))
 
         commitIds.forEach { sha ->
             val commit = commitsBySha[sha]
@@ -195,10 +209,12 @@ class TimelinePanel(
                 "<html><code>${sha.take(7)}</code></html>"
             }
             column.add(
-                JBPanel<JBPanel<*>>(BorderLayout()).apply {
-                    border = JBUI.Borders.emptyLeft(26)
-                    add(JBLabel(line), BorderLayout.CENTER)
-                },
+                capHeight(
+                    JBPanel<JBPanel<*>>(BorderLayout()).apply {
+                        border = JBUI.Borders.empty(1, 30, 1, 0)
+                        add(JBLabel(line), BorderLayout.CENTER)
+                    },
+                ),
             )
         }
         return column
