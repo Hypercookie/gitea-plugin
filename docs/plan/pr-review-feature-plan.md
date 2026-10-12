@@ -979,6 +979,53 @@ new endpoints.
     has no gap to break the line at.
   - Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 - [ ] Not yet re-tested in a running sandbox IDE after this round.
+- [x] **Follow-up round 2**: user asked for one consistent comment-box style
+      everywhere, "look how such a box might look in IntelliJ itself and
+      copy that style." Spiked it the same way this plan has spiked
+      everything else — `javap` on the bundled
+      `intellij.platform.collaborationTools.jar` (confirmed present under
+      the resolved `ideaIU-2025.2.6.2` platform distribution, not a new
+      dependency) to see what JetBrains' own GitHub/GitLab comment box is
+      actually built on: `com.intellij.collaboration.ui.codereview.comment.RoundedPanel`
+      (background+border painted as one filled/stroked round-rect, real
+      rounded corners) and `CodeReviewCommentUIUtil` (a `COMMENT_BUBBLE_BORDER_COLOR`
+      token, an arc-radius constant, small icon-button factories for
+      edit/delete/react). Not taken as a dependency (that's the bundled
+      GitHub plugin's internal module, same reasoning as the original
+      diff-viewer-extension decision to stay off `collaboration-tools`) —
+      used as a reference to build our own equivalent.
+  - Found the actual inconsistency this was about: `CommentBoxPanels.kt`'s
+    `boxPanel()` (the editor-inlay gutter comment boxes, Phase 18) and
+    `TimelinePanel`'s comment cards both called the *same* `boxPanel()`
+    function already, so the box chrome was already shared — but body
+    rendering wasn't: the gutter boxes still used `readOnlyBody` (a plain
+    `JBTextArea`, pre-dating this round's Markdown work), while only the
+    timeline got the commonmark upgrade. Fixed at the root: `boxPanel()`
+    rebuilt on a new `RoundedCardPanel` (our own simple version of the
+    `RoundedPanel` idea above — `fillRoundRect`/`drawRoundRect`, not a
+    square fill behind a separate rounded border), and Markdown rendering
+    centralized into `CommentBoxPanels.kt` as one `MarkdownRendering`
+    object used by two call sites: `markdownLabel(text, widthPx)` (fixed
+    width — timeline, same reason as before) and `markdownView(text)` (a
+    non-editable `JEditorPane`, sized by whatever width its container
+    actually gives it — the editor-inlay boxes, via
+    `InlineComponentHost`/`ComponentInlayAlignment.STRETCH_TO_CONTENT_WIDTH`,
+    which already provides a real width before layout, the same mechanism
+    that made the old `JBTextArea` wrap correctly there — kept that
+    sizing path rather than risk regressing Phase 18's already-approved,
+    previously-fragile inlay rendering, swapped only the widget type to
+    gain HTML/Markdown). `TimelinePanel` now calls the shared
+    `markdownLabel` instead of owning its own commonmark instances.
+  - **Not done**: no Reply button added to timeline comment cards, even
+    though the gutter boxes have one. Not an oversight — Gitea has no
+    reply-to-a-specific-top-level-comment endpoint (only inline review
+    comments support threaded replies, `POST .../comments/{id}/replies`);
+    the timeline's single bottom compose box is the real equivalent
+    already. Edit/delete/react buttons (seen in the `CodeReviewCommentUIUtil`
+    spike above) also not added — no backing API wiring exists yet
+    (Phase 30/31, still queued, need their own spike first).
+  - Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Not yet tested in a running sandbox IDE after this round.
 
 ### Phase 28 — Submit Review as a popup card
 - [ ] Rework `ReviewActionsPanel`: bottom button becomes

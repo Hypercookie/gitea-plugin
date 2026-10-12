@@ -8,6 +8,7 @@ import com.github.hypercookie.giteaplugin.api.dto.TimelineEvent
 import com.github.hypercookie.giteaplugin.pullrequest.comments.avatarLabel
 import com.github.hypercookie.giteaplugin.pullrequest.comments.boxPanel
 import com.github.hypercookie.giteaplugin.pullrequest.comments.escapeHtml
+import com.github.hypercookie.giteaplugin.pullrequest.comments.markdownLabel
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.openapi.project.Project
@@ -22,8 +23,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import org.commonmark.parser.Parser
-import org.commonmark.renderer.html.HtmlRenderer
 import java.awt.BasicStroke
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -53,8 +52,6 @@ class TimelinePanel(
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val markdownParser = Parser.builder().build()
-    private val markdownHtmlRenderer = HtmlRenderer.builder().escapeHtml(true).build()
     private val feedColumn = JBPanel<JBPanel<*>>().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         border = JBUI.Borders.empty(8)
@@ -181,32 +178,14 @@ class TimelinePanel(
             add(JBLabel("<html><b>${event.user?.login ?: "unknown"}</b> <span style='color:gray'>${formatTimestamp(event.createdAt)}</span></html>"))
         }
         content.add(header, BorderLayout.NORTH)
-        content.add(wrappedBody(event.body ?: ""), BorderLayout.CENTER)
+        // Markdown rendering/styling shared with the editor-inlay comment
+        // boxes (CommentBoxPanels.kt) — same look everywhere a Gitea
+        // comment shows up, not an independently-styled lookalike. This
+        // call site needs the fixed-width variant since, unlike an editor
+        // inlay, nothing here hands the label a known width before layout.
+        content.add(markdownLabel(event.body ?: "", widthPx = 440), BorderLayout.CENTER)
         wrapper.add(content, BorderLayout.CENTER)
         return wrapper
-    }
-
-    /** Gitea comment bodies are Markdown source, not plain text — renders
-     * via commonmark-java instead of the old escape-and-`<br>` approach.
-     * `escapeHtml(true)` escapes any literal HTML the author typed (so a
-     * comment can't inject arbitrary markup); `<img>` tags from Markdown
-     * image syntax are stripped afterward — Swing's HTML view fetches
-     * `<img src>` eagerly, and rendering someone else's PR comment shouldn't
-     * make an unprompted network request to whatever URL they wrote.
-     * A small inline stylesheet zeroes `<p>` margins, matching the earlier
-     * fixed-width-body trick this replaces (still needed: wraps text at a
-     * known pixel width regardless of container layout, same reason as
-     * before — see commit history on this file). */
-    private fun wrappedBody(text: String): JComponent {
-        val rendered = markdownHtmlRenderer.render(markdownParser.parse(text))
-            .replace(Regex("<img[^>]*>"), "[image]")
-        val html = "<html><head><style>p{margin:0 0 6px 0}p:last-child{margin-bottom:0}" +
-            "code{font-family:monospace}</style></head>" +
-            "<body style='width: 440px'>$rendered</body></html>"
-        return JBLabel(html).apply {
-            border = JBUI.Borders.emptyTop(4)
-            verticalAlignment = JBLabel.TOP
-        }
     }
 
     private fun systemLine(event: TimelineEvent, text: String): JComponent {
