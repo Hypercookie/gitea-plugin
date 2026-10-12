@@ -742,6 +742,198 @@ exercises them directly.
       `./gradlew test --tests '*MyPluginTest*' --tests '*GiteaUrlUtilTest*'`
       all succeed.
 
+## UI pass 3 — match JetBrains' own GitHub Pull Requests plugin UI
+
+User direction: look at
+https://www.jetbrains.com/help/idea/work-with-github-pull-requests.html,
+download its screenshots, implement this plugin's UI to match. 13 screenshots
+fetched to scratchpad and reviewed (`incoming_pull_requests.png`,
+`pull_request_options.png`, `gh_pending_updates.png`, `view_pull_request.png`,
+`local_branch_from_pr.png`, `disable_review_mode.png`,
+`gh_review_mark_gutter.png`, `github_pull_request_review_view_diff.png`,
+`gh_add_suggestion.png`, `comment_options.png`,
+`approve-requestchanges-comment-gh.png`, `gh_merge_pr.png`,
+`gh_merge_pr_no_review.png`).
+
+**Scope note**: matching *layout, structure, and interaction patterns* —
+master-detail split, filter bar, timeline feed, inline review-comment cards,
+submit-review popup, merge-dropdown. Not pulling JetBrains/GitHub's actual
+icon or avatar image assets into this plugin — those are their branded art,
+and we already have our own (`GiteaIcons`, `AllIcons.*`, Gitea's logo). Same
+approach as UI pass 2.
+
+Gap analysis — current plugin vs the reference UI, by screenshot:
+
+- `incoming_pull_requests.png` (list): search box + filter/sort row (State,
+  Author, Label, Assignee, Review, Sort dropdowns), label tag icon on a row.
+  **We have**: plain list, Refresh/View Details toolbar only, no search, no
+  filters, no labels. Gap: Phase 26.
+- `pull_request_options.png` / `view_pull_request.png` (detail pane):
+  "View Timeline" link, "Changes from N commits ▾" + branch/tag chip row,
+  file tree grouped by directory with per-file comment-count badges,
+  "Missing reviewer" / "Waiting for review from X" status row,
+  "Request Review…" / "Submit Review (N)…" button with `⋮` overflow.
+  **We have**: flat changed-files list (no commit grouping), no timeline, no
+  reviewer-request concept at all, review actions as always-visible buttons
+  not a popup-triggering button. Gaps: Phase 27 (timeline), Phase 28 (submit
+  popup), Phase 32 (reviewer request), Phase 35 (commits/branch chip).
+- `gh_pending_updates.png`: blue-dot badge on the tool window icon for
+  unseen updates. **We have**: no such badge. Gap: Phase 36 (small).
+- `local_branch_from_pr.png`, `disable_review_mode.png`: branch checkout +
+  a popup to toggle review-mode on/off. **We have**: checkout-on-double-click
+  (Phase 16) already covers the checkout half; no explicit review-mode
+  toggle, but our "automatic activation" decision (architecture pivot,
+  after Phase 9) was a deliberate simplification of this — not revisiting
+  unless it causes real friction.
+- `gh_review_mark_gutter.png`: pink/magenta vertical bar on changed lines +
+  gutter speech-bubble icon. **We have**: background-color highlight +
+  gutter icon already (Phase 18) — different color choice only, trivial.
+- `github_pull_request_review_view_diff.png`: unrelated editor
+  intention-action toolbar (code-suggestion popup), not GH-PR-specific —
+  **out of scope**, skip.
+- `gh_add_suggestion.png`: inline compose box with a split button
+  "Start Review ▾" (dropdown: "Add Single Comment"). **We have**: single
+  "Add" button only (`NewCommentBoxPanel`, Phase 18), no start-review/
+  single-comment distinction — minor, folds into Phase 28.
+- `comment_options.png`: hover-reveal edit/delete/react icons on your own
+  comment, 👍 reaction pill with count, Reply/Resolve text links.
+  **We have**: reply box (Phase 7) but **no Resolve button wired in UI**
+  despite `resolveComment`/`unresolveComment` already existing in
+  `GiteaApiClient` since Phase 2/6 hardening — dead capability. No
+  edit/delete, no reactions. Gaps: Phase 29 (resolve — cheap, API already
+  there), Phase 30 (edit/delete — needs an API spike), Phase 31 (reactions —
+  needs an API spike).
+- `approve-requestchanges-comment-gh.png`: "Submit Review" as a popup card
+  (title + pending-comment count + trash/close icons, big textarea, then
+  Approve/Request Changes/Comment as three buttons in the card), opened from
+  a bottom "Submit Review (N)…" button. **We have**: `ReviewActionsPanel`'s
+  three buttons always inline, no popup, no review-body textarea threaded
+  into `createReview`'s `body` field (currently likely empty/unused — verify
+  during Phase 28). Gap: Phase 28.
+- `gh_merge_pr.png` / `gh_merge_pr_no_review.png`: **Merge.../▾ dropdown**
+  (Merge, Squash and Merge, Rebase) + implicit Close. **We have**: no merge
+  or close feature at all — this plugin has never had one. Gap: Phase 34,
+  the biggest net-new feature in this pass, needs its own API spike (Gitea's
+  merge endpoint, allowed-methods per repo setting, close-PR endpoint).
+
+Build order (spike-first for anything not yet confirmed against the Gitea
+API, matching this plan's established discipline — e.g. Phase 2/6/18's
+"confirm before building" pattern). **Local Gitea dev instance was down
+when this plan was written (`curl localhost:3000` failed) — first step of
+every spike-flagged phase is bringing it back up and re-running
+`swagger.v1.json`,** not assuming the Phase 2 findings still cover these
+new endpoints.
+
+### Phase 26 — PR list: search + filter/sort bar [x]
+- [x] **Spike done**: local Gitea instance was up after all (container
+      `gitea-plugin-dev` already running; earlier "DOWN" check in this plan
+      was from a different shell). Re-fetched `/swagger.v1.json` fresh.
+      `GET .../pulls` supports `state` (open/closed/all), `sort` (oldest,
+      recentupdate, recentclose, leastupdate, mostcomment, leastcomment,
+      priority), `poster` (exact author login), `labels` (label **IDs**,
+      not names — needs Phase 33's label decoding first), `milestone`. No
+      `assignee` or review-state query param on this endpoint at all (the
+      richer `q`/`created_by`/`assigned_by` filters live on
+      `/issues?type=pulls` instead, a different response shape than
+      `PullRequest` — not worth switching the data source just for this).
+      Decision: **State and Sort are server-side** (`listPullRequests` now
+      takes `sort`/`poster` params); **search text and Author filter
+      client-side** against the already-loaded page — simpler, no extra
+      round trip, and Gitea's `poster` needs an exact login the Author
+      dropdown already derives from loaded data for free. Label/Assignee
+      dropdowns deferred to Phase 33.
+- [x] `PullRequestListPanel`: search field (live, `DocumentListener`) +
+      State/Author/Sort `JComboBox`es above the list, `CurrentBranchReviewPanel`
+      kept above the new filter bar (was already there).
+      **Bug caught before testing**: first draft added both
+      `currentBranchReviewPanel.component` and the new filter-bar panel at
+      `BorderLayout.NORTH` on the same parent — `BorderLayout` silently
+      drops the first on a duplicate-region add, which would have made the
+      current-branch panel disappear. Fixed by nesting them in one NORTH
+      sub-panel before `compileKotlin` was run, so it never reached a build.
+- [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
+      succeed.
+- [ ] Not yet manually tested in a running sandbox IDE.
+
+### Phase 27 — Timeline tab
+- [ ] Spike: Gitea's issue-timeline endpoint
+      (`GET .../issues/{index}/timeline` — confirm it exists and its event
+      shape: comments, commits-added, label/assignee/reviewer-request
+      events) vs. assembling our own timeline client-side from
+      `listIssueComments` + `listReviews` + PR commit list (fallback if no
+      single timeline endpoint).
+- [ ] New `pullrequest/TimelinePanel.kt`: chronological feed — avatar +
+      bold author + relative timestamp per entry, commits rendered as a
+      compact hash+message+author+time list grouped under one "added N
+      commits" event, system events (labels/assignees/reviewers) as plain
+      text lines, bottom compose box (reuse `NewCommentBoxPanel`'s styling)
+      for a top-level PR comment.
+- [ ] Wire a "View Timeline" link into `PullRequestDetailPanel`'s overview
+      section, opening/switching to this tab.
+
+### Phase 28 — Submit Review as a popup card
+- [ ] Rework `ReviewActionsPanel`: bottom button becomes
+      "Submit Review (N)…", opens a `JBPopup`-hosted card: title + pending
+      count + discard(trash)/close icons, a review-body `JBTextArea` (wire
+      into `CreatePullReviewOptions.body`, currently unused), then
+      Approve/Request Changes/Comment buttons inside the card.
+- [ ] `NewCommentBoxPanel`'s single "Add" button becomes a split button
+      ("Start Review ▾" / "Add Single Comment") — cosmetic relabeling only,
+      no new backend behavior (both already just add to
+      `PendingReviewStore`).
+
+### Phase 29 — wire up Resolve/Unresolve [cheap]
+- [ ] `CommentThreadBoxPanel`: add Reply/Resolve text links under each
+      comment (API already exists: `resolveComment`/`unresolveComment`,
+      unused since Phase 2/6). Resolved threads get a visibly different
+      (dimmed/collapsed) state.
+
+### Phase 30 — edit/delete own comments
+- [ ] Spike: confirm Gitea's `PATCH`/`DELETE` endpoints for a review
+      comment and for a top-level issue comment (not yet in our client).
+- [ ] Add `editComment`/`deleteComment` to `GiteaApiClient`; hover-reveal
+      pencil/trash icons on a comment authored by the current user in
+      `CommentThreadBoxPanel`.
+
+### Phase 31 — reactions
+- [ ] Spike: confirm Gitea's reaction endpoints for issue/review comments
+      (`POST/DELETE .../reactions`) and response shape (who reacted, which
+      emoji, counts).
+- [ ] Reaction pill row (👍 + count, add-reaction affordance) in
+      `CommentThreadBoxPanel`.
+
+### Phase 32 — reviewer request + status row
+- [ ] Spike: confirm Gitea's request-reviewers endpoint
+      (`POST .../requested_reviewers`) and whether `PullRequest` already
+      carries a requested-reviewers list we're not decoding yet.
+- [ ] "Missing reviewer" / "Waiting for review from X" status row +
+      "Request Review…" action in `PullRequestDetailPanel`.
+
+### Phase 33 — labels/assignee chips
+- [ ] Label tag icon + colored chip in list rows and detail overview
+      (Gitea's label color is already in its API, DTO not yet decoding it).
+      Feeds Phase 26's label filter.
+
+### Phase 34 — merge / close
+- [ ] Spike: Gitea's merge endpoint (`POST .../merge`, `Do` field for
+      merge/squash/rebase strategy — confirm which are enabled by default
+      and how a disabled strategy is reported) and close endpoint
+      (`PATCH .../issues/{index}` state=closed, PRs are issues).
+- [ ] "Merge…" split button + dropdown (strategy choices) and close action
+      in `PullRequestDetailPanel`/`ReviewActionsPanel` area, confirmation
+      dialog before merge (hard-to-reverse, matches the checkout
+      confirmation precedent from Phase 16).
+
+### Phase 36 — tool window unseen-update badge [small, do last]
+- [ ] Blue-dot overlay icon on the tool window icon when a background
+      refresh finds new activity on the current branch's PR (reuse Phase 13/
+      20's branch→PR resolution + notification-provider refresh hook as the
+      trigger).
+
+Not planned: the floating code-suggestion mini-toolbar in
+`github_pull_request_review_view_diff.png` — that's the Platform's own
+editor intention-action UI, unrelated to the GitHub PR plugin, out of scope.
+
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.
 - ~~Whether Gitea models inline comments as part of the review object or a
