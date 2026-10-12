@@ -942,7 +942,43 @@ new endpoints.
       margin instead of the previous inconsistent per-type padding, commit
       rows get a touch of their own vertical breathing room.
       Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
-- [ ] Not yet re-tested in a running sandbox IDE after this second fix.
+- [x] **Follow-up round, user happy with the sizing fix but asked for two
+      more things**: (1) real Markdown rendering — comment bodies were
+      still plain-text-escaped, not parsed; (2) "make it look more like a
+      timeline," specifically a connecting line down the left edge with a
+      dot per event (referencing a generic timeline-infographic screenshot
+      for the *shape* only — single left-side line+dots, not that image's
+      colors/branding, which aren't part of this codebase).
+  - Added `org.commonmark:commonmark:0.21.0` (`build.gradle.kts`) — small,
+    pure-Java, no transitive deps, same "avoid classloader conflicts with
+    the IJ Platform" reasoning Phase 0 used for picking the HTTP client.
+    `wrappedBody` now parses real Markdown (`Parser`/`HtmlRenderer`,
+    `escapeHtml(true)` so literal HTML a commenter typed can't inject
+    markup) instead of escape-and-`<br>`. `<img>` tags stripped from the
+    rendered HTML afterward — Swing's `JLabel` HTML view fetches `<img
+    src>` eagerly and unconditionally, so a PR comment's Markdown image
+    syntax would otherwise make the IDE fetch an arbitrary attacker-chosen
+    URL just from opening the timeline. Kept the fixed-width `<body
+    style='width:...'>` wrapping trick from the previous fix (still needed
+    for the same reason: forces wrap at a known pixel width regardless of
+    container layout) plus a tiny inline stylesheet zeroing `<p>` margins
+    (commonmark wraps every block in `<p>`, which carries default Swing
+    HTML margins that would have reintroduced extra vertical gaps).
+  - New `TimelineGutter` (private `JComponent`, custom-painted): a vertical
+    line + colored dot per row, `drawAbove`/`drawBelow` flags skip the line
+    past the first/last event. Dot color varies by event type, reusing
+    existing palette values already used elsewhere in this codebase rather
+    than inventing new ones (comment = blue, review = the same purple as
+    "merged" state, commit push = the same green as diff additions, other
+    = gray). Each row is now `BorderLayout(WEST=gutter, CENTER=content)`;
+    the gutter paints for the row's *entire* height (via `BorderLayout`
+    stretch, not its own small `preferredSize`), so consecutive rows'
+    segments align into one unbroken line even though each is a separate
+    component — the trick is putting all of a row's spacing/margin inside
+    its `CENTER` content, never on the row wrapper itself, so the gutter
+    has no gap to break the line at.
+  - Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Not yet re-tested in a running sandbox IDE after this round.
 
 ### Phase 28 — Submit Review as a popup card
 - [ ] Rework `ReviewActionsPanel`: bottom button becomes

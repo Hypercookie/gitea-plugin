@@ -22,10 +22,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import org.commonmark.parser.Parser
+import org.commonmark.renderer.html.HtmlRenderer
+import java.awt.BasicStroke
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
-import javax.swing.Box
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.RenderingHints
 import javax.swing.BoxLayout
 import javax.swing.JButton
 import javax.swing.JComponent
@@ -48,6 +53,8 @@ class TimelinePanel(
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val markdownParser = Parser.builder().build()
+    private val markdownHtmlRenderer = HtmlRenderer.builder().escapeHtml(true).build()
     private val feedColumn = JBPanel<JBPanel<*>>().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         border = JBUI.Borders.empty(8)
@@ -122,10 +129,28 @@ class TimelinePanel(
         statusLabel.text = " "
         feedColumn.removeAll()
         val commitsBySha = commits.associateBy { it.sha }
-        events.forEach { event -> feedColumn.add(capHeight(renderEvent(event, commitsBySha))) }
+        events.forEachIndexed { index, event ->
+            val spec = renderEvent(event, commitsBySha)
+            val row = timelineRow(spec.dotColor, drawAbove = index > 0, drawBelow = index < events.lastIndex, spec.content)
+            feedColumn.add(capHeight(row))
+        }
         feedColumn.revalidate()
         feedColumn.repaint()
     }
+
+    /** One row = a small left "rail" (connecting line + a colored dot,
+     * [TimelineGutter]) plus the event's own content to the right — the
+     * "look like a timeline" request. The line is drawn per-row rather than
+     * as one continuous shape spanning the whole feed, but since each row's
+     * gutter is painted for that row's *full* height (including whatever
+     * bottom margin the content itself carries) and rows sit flush against
+     * each other in `feedColumn`'s `BoxLayout`, consecutive segments line up
+     * into what reads as one unbroken line. */
+    private fun timelineRow(dotColor: JBColor, drawAbove: Boolean, drawBelow: Boolean, content: JComponent): JComponent =
+        JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            add(TimelineGutter(dotColor, drawAbove, drawBelow), BorderLayout.WEST)
+            add(content, BorderLayout.CENTER)
+        }
 
     /** A `BoxLayout` column asks every child's [JComponent.getMaximumSize] to
      * decide how to divide up any leftover vertical space in the scroll
@@ -139,15 +164,16 @@ class TimelinePanel(
         return component
     }
 
-    private fun renderEvent(event: TimelineEvent, commitsBySha: Map<String, GitCommit>): JComponent =
+    private fun renderEvent(event: TimelineEvent, commitsBySha: Map<String, GitCommit>): RowSpec =
         when (event.type) {
-            "comment", "review" -> if (!event.body.isNullOrBlank()) commentCard(event) else systemLine(event, "reviewed this pull request")
-            "pull_push" -> pushCard(event, commitsBySha)
-            else -> systemLine(event, event.type.replace('_', ' '))
+            "comment" -> if (!event.body.isNullOrBlank()) RowSpec(commentCard(event), COMMENT_DOT) else RowSpec(systemLine(event, "commented"), OTHER_DOT)
+            "review" -> if (!event.body.isNullOrBlank()) RowSpec(commentCard(event), REVIEW_DOT) else RowSpec(systemLine(event, "reviewed this pull request"), REVIEW_DOT)
+            "pull_push" -> RowSpec(pushCard(event, commitsBySha), PUSH_DOT)
+            else -> RowSpec(systemLine(event, event.type.replace('_', ' ')), OTHER_DOT)
         }
 
     private fun commentCard(event: TimelineEvent): JComponent {
-        val wrapper = JBPanel<JBPanel<*>>(BorderLayout()).apply { border = JBUI.Borders.emptyBottom(8) }
+        val wrapper = JBPanel<JBPanel<*>>(BorderLayout()).apply { border = JBUI.Borders.empty(0, 8, 10, 0) }
         val content = boxPanel()
         val header = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
             isOpaque = false
@@ -160,25 +186,31 @@ class TimelinePanel(
         return wrapper
     }
 
-    /** `readOnlyBody` (a `JBTextArea`) is right for the editor-inlay comment
-     * boxes it was built for — there, [InlineComponentHost] hands the inlay
-     * a known width before layout, so Swing's line-wrap calculation works.
-     * Here, inside a plain `BoxLayout` column in a scroll pane, that same
-     * `JTextArea` never gets a width to wrap against and reports a huge
-     * unwrapped preferred size — the "way too big" box. An HTML `JBLabel`
-     * with an explicit `width` style forces wrapping at a fixed pixel width
-     * regardless of container layout, and uses the UI's normal proportional
-     * font instead of the text area's monospace default. */
+    /** Gitea comment bodies are Markdown source, not plain text — renders
+     * via commonmark-java instead of the old escape-and-`<br>` approach.
+     * `escapeHtml(true)` escapes any literal HTML the author typed (so a
+     * comment can't inject arbitrary markup); `<img>` tags from Markdown
+     * image syntax are stripped afterward — Swing's HTML view fetches
+     * `<img src>` eagerly, and rendering someone else's PR comment shouldn't
+     * make an unprompted network request to whatever URL they wrote.
+     * A small inline stylesheet zeroes `<p>` margins, matching the earlier
+     * fixed-width-body trick this replaces (still needed: wraps text at a
+     * known pixel width regardless of container layout, same reason as
+     * before — see commit history on this file). */
     private fun wrappedBody(text: String): JComponent {
-        val html = escapeHtml(text).replace("\n", "<br>")
-        return JBLabel("<html><body style='width: 440px'>$html</body></html>").apply {
+        val rendered = markdownHtmlRenderer.render(markdownParser.parse(text))
+            .replace(Regex("<img[^>]*>"), "[image]")
+        val html = "<html><head><style>p{margin:0 0 6px 0}p:last-child{margin-bottom:0}" +
+            "code{font-family:monospace}</style></head>" +
+            "<body style='width: 440px'>$rendered</body></html>"
+        return JBLabel(html).apply {
             border = JBUI.Borders.emptyTop(4)
             verticalAlignment = JBLabel.TOP
         }
     }
 
     private fun systemLine(event: TimelineEvent, text: String): JComponent {
-        val row = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 2)).apply { border = JBUI.Borders.empty(2, 0, 6, 0) }
+        val row = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 2)).apply { border = JBUI.Borders.empty(2, 8, 6, 0) }
         row.add(avatarLabel(project, event.user))
         row.add(JBLabel("<html><b>${event.user?.login ?: "unknown"}</b> $text</html>"))
         return row
@@ -190,7 +222,7 @@ class TimelinePanel(
 
         val column = JBPanel<JBPanel<*>>().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            border = JBUI.Borders.empty(2, 0, 6, 0)
+            border = JBUI.Borders.empty(2, 8, 6, 0)
         }
         val header = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
             add(avatarLabel(project, event.user))
@@ -227,4 +259,52 @@ private fun formatTimestamp(iso: String?): String {
     if (iso.isNullOrBlank()) return ""
     val withoutZone = iso.substringBefore('+').substringBefore('Z')
     return withoutZone.replace('T', ' ').take(16)
+}
+
+private data class RowSpec(val content: JComponent, val dotColor: JBColor)
+
+// Reuses the same color pairs this codebase already uses for "merged"
+// (purple) and diff additions (green) elsewhere — PullRequestListPanel's
+// MERGED_COLOR and PullRequestDetailPanel's ADD_COLOR — rather than
+// inventing a new palette just for this.
+private val COMMENT_DOT = JBColor(0x0969DA, 0x58A6FF)
+private val REVIEW_DOT = JBColor(0x8250DF, 0xA371F7)
+private val PUSH_DOT = JBColor(0x1A7F37, 0x3FB950)
+private val OTHER_DOT = JBColor.GRAY
+
+/** The left "rail" of one timeline row: a colored dot marking this event,
+ * connected to its neighbors by a vertical line. [drawAbove]/[drawBelow]
+ * skip the line past the first/last row so it doesn't overshoot the feed.
+ * Sized by [BorderLayout] to match its row's actual height (its own
+ * `preferredSize` is just a sane minimum) — see [TimelinePanel.timelineRow]. */
+private class TimelineGutter(
+    private val dotColor: JBColor,
+    private val drawAbove: Boolean,
+    private val drawBelow: Boolean,
+) : JComponent() {
+
+    init {
+        isOpaque = false
+        preferredSize = Dimension(WIDTH, DOT_Y + DOT_RADIUS * 2)
+    }
+
+    override fun paintComponent(g: Graphics) {
+        super.paintComponent(g)
+        val g2 = g.create() as Graphics2D
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        val centerX = width / 2
+        g2.color = JBColor.border()
+        g2.stroke = BasicStroke(1.5f)
+        if (drawAbove) g2.drawLine(centerX, 0, centerX, DOT_Y - DOT_RADIUS - 1)
+        if (drawBelow) g2.drawLine(centerX, DOT_Y + DOT_RADIUS + 1, centerX, height)
+        g2.color = dotColor
+        g2.fillOval(centerX - DOT_RADIUS, DOT_Y - DOT_RADIUS, DOT_RADIUS * 2, DOT_RADIUS * 2)
+        g2.dispose()
+    }
+
+    companion object {
+        private const val WIDTH = 20
+        private const val DOT_RADIUS = 4
+        private const val DOT_Y = 14
+    }
 }
