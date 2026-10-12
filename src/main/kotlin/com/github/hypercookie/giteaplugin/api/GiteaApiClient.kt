@@ -48,8 +48,25 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
 
     // --- Pull requests ----------------------------------------------------
 
-    suspend fun listPullRequests(owner: String, repo: String, state: String = "open"): List<PullRequest> =
-        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls?state=${enc(state)}")
+    /** `sort`/`poster` map directly to Gitea's `/pulls` query params (confirmed
+     * against `/swagger.v1.json` for Phase 26 — `sort` enum: oldest,
+     * recentupdate, recentclose, leastupdate, mostcomment, leastcomment,
+     * priority; `poster` filters by PR author login). Both optional/null to
+     * keep existing callers unchanged. */
+    suspend fun listPullRequests(
+        owner: String,
+        repo: String,
+        state: String = "open",
+        sort: String? = null,
+        poster: String? = null,
+    ): List<PullRequest> {
+        val query = buildString {
+            append("state=${enc(state)}")
+            if (!sort.isNullOrBlank()) append("&sort=${enc(sort)}")
+            if (!poster.isNullOrBlank()) append("&poster=${enc(poster)}")
+        }
+        return get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls?$query")
+    }
 
     suspend fun getPullRequest(owner: String, repo: String, index: Long): PullRequest =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index")

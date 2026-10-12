@@ -25,6 +25,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.components.JBTextField
 import com.intellij.ui.content.ContentFactory
 import com.intellij.util.ui.JBUI
 import git4idea.branch.GitBrancher
@@ -33,8 +34,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
+import java.awt.FlowLayout
+import javax.swing.DefaultComboBoxModel
 import javax.swing.DefaultListModel
+import javax.swing.JComboBox
 import javax.swing.JList
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 
 /**
  * "Pull Requests" tool window content: list open PRs for whatever Gitea repo
@@ -62,6 +68,37 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
     }
     private val statusLabel = JBLabel(" ").apply { border = JBUI.Borders.empty(2, 8) }
 
+    // Filter/sort bar (Phase 26) — mirrors the reference UI's search box +
+    // State/Author/Sort dropdowns. State and Sort are server-side (Gitea's
+    // `/pulls` query params, confirmed via /swagger.v1.json); search text and
+    // Author filter the already-loaded page client-side — simpler than a
+    // round trip per keystroke, and Gitea's `poster` param only takes an
+    // exact login anyway, which the Author dropdown already gives us for
+    // free from the loaded data. Label/Assignee dropdowns deferred to
+    // Phase 33 (labels aren't decoded yet).
+    private val searchField = JBTextField()
+    private val stateCombo = JComboBox(arrayOf("Open", "Closed", "All"))
+    private val authorCombo = JComboBox(DefaultComboBoxModel(arrayOf("All")))
+    private val sortCombo = JComboBox(
+        arrayOf(
+            "Newest" to null,
+            "Oldest" to "oldest",
+            "Recently updated" to "recentupdate",
+            "Least updated" to "leastupdate",
+            "Most commented" to "mostcomment",
+            "Least commented" to "leastcomment",
+        ).map { it.first }.toTypedArray(),
+    )
+    private val sortValues = mapOf(
+        "Newest" to null,
+        "Oldest" to "oldest",
+        "Recently updated" to "recentupdate",
+        "Least updated" to "leastupdate",
+        "Most commented" to "mostcomment",
+        "Least commented" to "leastcomment",
+    )
+
+    private var allLoadedPrs: List<PullRequest> = emptyList()
     private var lastContext: GiteaRepoContext? = null
     private var lastClient: GiteaApiClient? = null
 
@@ -75,17 +112,38 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
 
         setContent(
             JBPanel<JBPanel<*>>(BorderLayout()).apply {
-                add(currentBranchReviewPanel.component, BorderLayout.NORTH)
                 add(
                     JBPanel<JBPanel<*>>(BorderLayout()).apply {
-                        add(statusLabel, BorderLayout.NORTH)
-                        add(JBScrollPane(prList), BorderLayout.CENTER)
+                        add(currentBranchReviewPanel.component, BorderLayout.NORTH)
+                        add(buildFilterBar(), BorderLayout.CENTER)
+                        add(statusLabel, BorderLayout.SOUTH)
                     },
-                    BorderLayout.CENTER,
+                    BorderLayout.NORTH,
                 )
+                add(JBScrollPane(prList), BorderLayout.CENTER)
             },
         )
     }
+
+    private fun buildFilterBar(): JBPanel<*> =
+        JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            border = JBUI.Borders.empty(4, 8)
+            add(searchField.apply { emptyText.text = "Search title…" }, BorderLayout.NORTH)
+            add(
+                JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 4)).apply {
+                    add(labeled("State", stateCombo))
+                    add(labeled("Author", authorCombo))
+                    add(labeled("Sort", sortCombo))
+                },
+                BorderLayout.CENTER,
+            )
+        }
+
+    private fun labeled(text: String, combo: JComboBox<String>): JBPanel<*> =
+        JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+            add(JBLabel(text))
+            add(combo)
+        }
 
     init {
         prList.addMouseListener(
@@ -95,6 +153,16 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
                 }
             },
         )
+        searchField.document.addDocumentListener(
+            object : DocumentListener {
+                override fun insertUpdate(e: DocumentEvent) = applyFilters()
+                override fun removeUpdate(e: DocumentEvent) = applyFilters()
+                override fun changedUpdate(e: DocumentEvent) = applyFilters()
+            },
+        )
+        authorCombo.addActionListener { applyFilters() }
+        stateCombo.addActionListener { refresh() }
+        sortCombo.addActionListener { refresh() }
         refresh()
     }
 
@@ -117,14 +185,17 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
         val client = GiteaApiClient(context.account.serverUrl, token)
         lastContext = context
         lastClient = client
+        val state = (stateCombo.selectedItem as? String ?: "Open").lowercase()
+        val sort = sortValues[sortCombo.selectedItem as? String]
         GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
-            val result = runCatching { client.listPullRequests(context.owner, context.repo) }
+            val result = runCatching { client.listPullRequests(context.owner, context.repo, state = state, sort = sort) }
             withContext(Dispatchers.Main) {
                 result.fold(
                     onSuccess = { prs ->
-                        listModel.clear()
-                        prs.forEach(listModel::addElement)
-                        statusLabel.text = "${prs.size} open pull request(s) in ${context.owner}/${context.repo}"
+                        allLoadedPrs = prs
+                        refreshAuthorOptions(prs)
+                        applyFilters()
+                        statusLabel.text = "${prs.size} pull request(s) in ${context.owner}/${context.repo}"
                     },
                     onFailure = { error ->
                         statusLabel.text = "Failed to load pull requests: ${error.message}"
@@ -132,6 +203,25 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
                 )
             }
         }
+    }
+
+    private fun refreshAuthorOptions(prs: List<PullRequest>) {
+        val previouslySelected = authorCombo.selectedItem as? String ?: "All"
+        val authors = prs.mapNotNull { it.user?.login }.distinct().sorted()
+        val model = DefaultComboBoxModel((listOf("All") + authors).toTypedArray())
+        authorCombo.model = model
+        authorCombo.selectedItem = if (authors.contains(previouslySelected)) previouslySelected else "All"
+    }
+
+    private fun applyFilters() {
+        val query = searchField.text.trim()
+        val author = authorCombo.selectedItem as? String ?: "All"
+        val filtered = allLoadedPrs.filter { pr ->
+            (query.isEmpty() || pr.title.contains(query, ignoreCase = true)) &&
+                (author == "All" || pr.user?.login == author)
+        }
+        listModel.clear()
+        filtered.forEach(listModel::addElement)
     }
 
     /** Checks out `pr.head.ref` locally via `GitBrancher` (handles VFS
