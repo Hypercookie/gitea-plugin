@@ -1314,6 +1314,28 @@ User-reported round after Phase 28 manual testing:
       anything new mounts at the same offset. Debug logging removed once
       confirmed.
       Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [x] **Follow-up 2: still not closing, and now every other comment thread
+      duplicated too.** The deferred-install split caused this: `render()`
+      can legitimately fire twice in quick succession (the pending-store
+      listener calls it synchronously, then again once the background
+      refetch resolves a moment later) — each call scheduled its own
+      `invokeLater`, and since the *dispose* step had already run and
+      cleared `threadInlays`/`pendingInlays` by the time either deferred
+      *install* step ran, the second deferred pass added a whole new set of
+      inlays on top of the first pass's, with nothing left in the (already
+      cleared) bookkeeping maps to dispose first. Fixed by merging dispose
+      and install back into one atomic deferred unit (`doRender()`) and
+      guarding scheduling with a `renderGeneration` counter: `render()`
+      bumps it and only actually runs `doRender()` if its own captured
+      generation is still current when the `invokeLater` callback fires —
+      a `render()` superseded by a newer one before its tick arrives is a
+      no-op instead of doing stale, duplicate work. This keeps both
+      properties the two previous attempts needed separately: the
+      dispose+install pair still happens off the originating click
+      handler's call stack (fixes the original visual-lingering bug), and
+      at most one pass's worth of inlays ever gets built (fixes the
+      duplication regression).
+      Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 - [ ] Not yet re-tested in a running sandbox IDE after this fix.
 
 ## Open risks / verify before Phase 9

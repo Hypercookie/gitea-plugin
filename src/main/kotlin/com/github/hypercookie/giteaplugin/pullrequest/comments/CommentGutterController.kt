@@ -55,6 +55,10 @@ class CommentGutterController(
 
     private var currentComments: List<PullReviewComment> = emptyList()
 
+    /** Bumped on every [render] call; a deferred render only actually runs
+     * if it's still the most recent one scheduled — see [render]. */
+    private var renderGeneration = 0
+
     fun updateComments(comments: List<PullReviewComment>) {
         currentComments = comments
         render()
@@ -76,7 +80,37 @@ class CommentGutterController(
         }
         .toMap()
 
+    /** Deferred to the next EDT tick, not run synchronously: a dispose
+     * followed immediately by installing a new inlay at that same editor
+     * line, within the same call stack, left the old component visually
+     * lingering during manual testing even though the dispose itself and
+     * the data model were both already correct (confirmed via temporary
+     * logging) — same class of inlay-mounting timing issue as Phase 18's
+     * "boxes render but stay empty" root cause, on the removal side
+     * instead of the mounting side.
+     *
+     * Guarded by [renderGeneration] rather than just deferring blindly:
+     * [render] can legitimately be called again before a previously
+     * deferred one has run (e.g. the pending-store listener calls it
+     * synchronously, then again moments later once a background refetch
+     * resolves) — without this guard, both deferred passes used to run in
+     * turn, each adding inlays on top of whatever the previous pass had
+     * already installed, without disposing them first, since the dispose
+     * step had already run and cleared its own bookkeeping by the time the
+     * second pass's install ran. Only the most recently scheduled pass
+     * still matching [renderGeneration] when it fires actually disposes
+     * and rebuilds; a superseded one is a no-op. */
     fun render() {
+        renderGeneration++
+        val thisGeneration = renderGeneration
+        SwingUtilities.invokeLater {
+            if (thisGeneration != renderGeneration) return@invokeLater
+            if (editor.isDisposed) return@invokeLater
+            doRender()
+        }
+    }
+
+    private fun doRender() {
         addGutterHighlighters.forEach { editor.markupModel.removeHighlighter(it) }
         addGutterHighlighters.clear()
         lineBackgroundHighlighters.forEach { editor.markupModel.removeHighlighter(it) }
@@ -86,38 +120,18 @@ class CommentGutterController(
         pendingInlays.values.forEach { if (it.isValid) it.dispose() }
         pendingInlays.clear()
 
-        // A pending comment now landing on this line (e.g. just submitted
-        // elsewhere and re-fetched as a real thread) means the compose box
-        // that created it is done — close it, synchronously, in the same
-        // pass as every other disposal above.
         val threadsByLine = threadsByLine()
         val pendingByLine = pendingByLine()
+
+        // A pending comment now landing on this line (e.g. just submitted
+        // elsewhere and re-fetched as a real thread) means the compose box
+        // that created it is done — close it.
         newCommentBox?.let { (line, inlay) ->
             if (line in threadsByLine.keys || line in pendingByLine.keys) {
                 if (inlay.isValid) inlay.dispose()
                 newCommentBox = null
             }
         }
-
-        // Installing a new inlay deferred to the next EDT tick: doing it in
-        // the same call stack as the disposals above — specifically,
-        // installing a `PendingCommentBoxPanel` at the exact line a
-        // `NewCommentBoxPanel` inlay was just disposed from — left the old
-        // box's Swing component visually lingering during manual testing,
-        // even though the dispose itself and the data model were both
-        // correct (confirmed via temporary logging). Same class of
-        // inlay-mounting timing issue as Phase 18's "boxes render but stay
-        // empty" root cause, just on the removal side instead of the
-        // mounting side. Giving the editor's inlay manager a full tick to
-        // process the disposals first fixes it.
-        SwingUtilities.invokeLater {
-            if (!editor.isDisposed) installInlaysAndGutterIcons()
-        }
-    }
-
-    private fun installInlaysAndGutterIcons() {
-        val threadsByLine = threadsByLine()
-        val pendingByLine = pendingByLine()
 
         for (lineIndex in 0 until editor.document.lineCount) {
             val pending = pendingByLine[lineIndex]
