@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import java.awt.Color
 import javax.swing.Icon
 import javax.swing.JComponent
+import javax.swing.SwingUtilities
 
 /**
  * Renders one editor's worth of Gitea PR review comments as real embedded
@@ -59,6 +60,22 @@ class CommentGutterController(
         render()
     }
 
+    private fun threadsByLine(): Map<Int, List<PullReviewComment>> = currentComments
+        .mapNotNull { comment ->
+            val position = if (useOriginalPosition) comment.originalPosition else comment.position
+            if (position != null && position > 0) (position - 1).toInt() to comment else null
+        }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, thread) -> thread.sortedBy { it.createdAt ?: "" } }
+
+    private fun pendingByLine(): Map<Int, CreatePullReviewComment> = commentContext.pendingStore.pendingComments
+        .filter { it.path == commentContext.filename }
+        .mapNotNull { pending ->
+            val position = if (useOriginalPosition) pending.oldPosition else pending.newPosition
+            if (position > 0) (position - 1).toInt() to pending else null
+        }
+        .toMap()
+
     fun render() {
         addGutterHighlighters.forEach { editor.markupModel.removeHighlighter(it) }
         addGutterHighlighters.clear()
@@ -69,31 +86,38 @@ class CommentGutterController(
         pendingInlays.values.forEach { if (it.isValid) it.dispose() }
         pendingInlays.clear()
 
-        val threadsByLine = currentComments
-            .mapNotNull { comment ->
-                val position = if (useOriginalPosition) comment.originalPosition else comment.position
-                if (position != null && position > 0) (position - 1).toInt() to comment else null
-            }
-            .groupBy({ it.first }, { it.second })
-            .mapValues { (_, thread) -> thread.sortedBy { it.createdAt ?: "" } }
-
-        val pendingByLine = commentContext.pendingStore.pendingComments
-            .filter { it.path == commentContext.filename }
-            .mapNotNull { pending ->
-                val position = if (useOriginalPosition) pending.oldPosition else pending.newPosition
-                if (position > 0) (position - 1).toInt() to pending else null
-            }
-            .toMap()
-
         // A pending comment now landing on this line (e.g. just submitted
         // elsewhere and re-fetched as a real thread) means the compose box
-        // that created it is done — close it.
+        // that created it is done — close it, synchronously, in the same
+        // pass as every other disposal above.
+        val threadsByLine = threadsByLine()
+        val pendingByLine = pendingByLine()
         newCommentBox?.let { (line, inlay) ->
             if (line in threadsByLine.keys || line in pendingByLine.keys) {
                 if (inlay.isValid) inlay.dispose()
                 newCommentBox = null
             }
         }
+
+        // Installing a new inlay deferred to the next EDT tick: doing it in
+        // the same call stack as the disposals above — specifically,
+        // installing a `PendingCommentBoxPanel` at the exact line a
+        // `NewCommentBoxPanel` inlay was just disposed from — left the old
+        // box's Swing component visually lingering during manual testing,
+        // even though the dispose itself and the data model were both
+        // correct (confirmed via temporary logging). Same class of
+        // inlay-mounting timing issue as Phase 18's "boxes render but stay
+        // empty" root cause, just on the removal side instead of the
+        // mounting side. Giving the editor's inlay manager a full tick to
+        // process the disposals first fixes it.
+        SwingUtilities.invokeLater {
+            if (!editor.isDisposed) installInlaysAndGutterIcons()
+        }
+    }
+
+    private fun installInlaysAndGutterIcons() {
+        val threadsByLine = threadsByLine()
+        val pendingByLine = pendingByLine()
 
         for (lineIndex in 0 until editor.document.lineCount) {
             val pending = pendingByLine[lineIndex]
