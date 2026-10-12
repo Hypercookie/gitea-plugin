@@ -93,6 +93,11 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
       '*GiteaApiClientIntegrationTest'`). Confirms real JSON responses decode
       correctly, including the `ReviewEvent` enum and nested `User`/branch
       objects — not just that the DTOs compile.
+      **Later removed** (during UI pass 3): this file had no skip/assumption
+      guard, so every one of its 7 tests fired a real HTTP call in CI too,
+      where there's no Gitea instance — `./gradlew check` failed on every
+      push/PR. Deleted; `GiteaApiClient` changes go back to ad-hoc `curl`
+      verification against the live instance, same as this phase's spike.
 
 ## Phase 3 — repo linking [x]
 - [x] Added `Git4Idea` as a plugin dependency (`<depends>` in `plugin.xml` +
