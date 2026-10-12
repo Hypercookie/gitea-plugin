@@ -100,7 +100,7 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
                                 BorderLayout.WEST,
                             )
                             add(
-                                ReviewActionsPanel(project, client, repoContext.owner, repoContext.repo, pr.number, pr.head.sha, store).component,
+                                ReviewActionsPanel(project, client, repoContext.owner, repoContext.repo, pr.number, pr.head.sha, store, pr.user?.login).component,
                                 BorderLayout.CENTER,
                             )
                         },

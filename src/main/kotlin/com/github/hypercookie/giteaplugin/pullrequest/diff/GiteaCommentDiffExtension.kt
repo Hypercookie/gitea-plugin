@@ -51,22 +51,25 @@ class GiteaCommentDiffExtension : DiffExtension() {
         baseController.updateComments(commentContext.comments)
         headController.updateComments(commentContext.comments)
 
-        // Any pending-store change re-fetches from the server rather than
-        // just re-rendering stale data. Needed for the case where the change
-        // was "a review got submitted elsewhere" (submit clears the store) —
-        // the just-submitted comments are now real server-side comments, and
-        // only a fresh fetch turns their pending markers into real thread
-        // markers instead of them just vanishing back to "+".
+        // Render immediately (synchronous, local-only — closes a just-used
+        // "new comment" box right away instead of leaving it open until a
+        // network round trip finishes, which read as "stays open" during
+        // manual testing even though it did eventually close). Then also
+        // re-fetch from the server in the background: needed for the case
+        // where the change was "a review got submitted elsewhere" (submit
+        // clears the store) — the just-submitted comments are now real
+        // server-side comments, and only a fresh fetch turns their pending
+        // markers into real thread markers instead of them just vanishing
+        // back to "+".
         commentContext.pendingStore.addListener {
+            baseController.render()
+            headController.render()
             GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
                 val fresh = runCatching { commentContext.fetchFreshComments() }.getOrNull()
                 withContext(Dispatchers.Main) {
                     if (fresh != null) {
                         baseController.updateComments(fresh)
                         headController.updateComments(fresh)
-                    } else {
-                        baseController.render()
-                        headController.render()
                     }
                 }
             }

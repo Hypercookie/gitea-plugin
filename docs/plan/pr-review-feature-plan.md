@@ -1256,6 +1256,44 @@ screenshots from UI pass 3's research).
 - [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 - [ ] Not yet tested in a running sandbox IDE.
 
+### Phase 41 — self-review disable, gutter box-close bug, gutter styling [x]
+User-reported round after Phase 28 manual testing:
+- [x] **Approve/Request Changes grayed out on your own PR**: Gitea forbids
+      both on a self-authored PR ("approve your own pull is not allowed" —
+      hit repeatedly during earlier integration testing, see the Phase 2
+      hardening-pass notes). `ReviewActionsPanel` now takes the PR author's
+      login, fetches the current user once via `client.getCurrentUser()`
+      on init, and disables Approve/Request Changes (with a tooltip
+      explaining why) when they match — instead of leaving them clickable
+      to fail every time. Comment stays enabled (already confirmed to work
+      for a self-authored PR).
+- [x] **"New comment" box stayed open after adding a comment**: not
+      actually a correctness bug — the box *did* close, just only after
+      `commentContext.fetchFreshComments()` finished a full network round
+      trip, which read as "stuck" during manual testing. Both pending-store
+      listeners (`GiteaCommentDiffExtension`, `WorkingCopyCommentEditorListener`)
+      now call `render()` synchronously first (closes the box immediately
+      using local state — nothing about *adding a pending comment* needs
+      server data) and still do the background refetch afterward for the
+      one case that genuinely needs it (a submit just cleared the store,
+      and the now-real comments need their thread markers).
+- [x] **"Start Review" stayed on the button even mid-review**: `CommentGutterController`
+      now passes `startLabel = "Start Review"` only when
+      `pendingStore.pendingComments` is empty, `"Add to Review"` otherwise —
+      `NewCommentBoxPanel` takes this as a parameter instead of a hardcoded
+      string.
+- [x] **Gutter styling "adapted to the GitHub plugin style"**: scoped down
+      from a full rewrite — the commented-line background highlight color
+      changed from an arbitrary pale yellow to a pink/magenta tint, matching
+      `gh_review_mark_gutter.png`'s review-mode marker color (UI pass 3
+      research). **Not done**: a true vertical gutter *stripe* (as opposed
+      to a full line-background tint) would need a `LineMarkerRenderer`-based
+      approach, a bigger change with more regression risk for a cosmetic
+      gap that's much smaller than the color mismatch was — left as a
+      possible future refinement, not attempted this round.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Not yet tested in a running sandbox IDE.
+
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.
 - ~~Whether Gitea models inline comments as part of the review object or a

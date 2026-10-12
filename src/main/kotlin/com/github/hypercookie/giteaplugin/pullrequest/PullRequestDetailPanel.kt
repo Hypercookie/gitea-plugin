@@ -81,7 +81,7 @@ class PullRequestDetailPanel(
     private val statusLabel = JBLabel("Loading changed files…").apply { border = JBUI.Borders.empty(4, 8) }
 
     private val reviewActionsPanel =
-        ReviewActionsPanel(project, client, context.owner, context.repo, pr.number, pr.head.sha, pendingReviewStore)
+        ReviewActionsPanel(project, client, context.owner, context.repo, pr.number, pr.head.sha, pendingReviewStore, pr.user?.login)
 
     private val timelinePanel = TimelinePanel(project, context, client, pr)
 

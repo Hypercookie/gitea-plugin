@@ -117,11 +117,16 @@ class WorkingCopyCommentEditorListener(private val project: Project) : FileEdito
                 installed[editor] = controller
 
                 store.addListener {
+                    // Synchronous render first — closes a just-used "new
+                    // comment" box immediately instead of waiting on the
+                    // network round trip below (see the matching comment in
+                    // GiteaCommentDiffExtension).
+                    controller.render()
                     GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
                         val fresh = runCatching { commentContext.fetchFreshComments() }.getOrNull()
                         withContext(Dispatchers.Main) {
                             if (editor.isDisposed) return@withContext
-                            if (fresh != null) controller.updateComments(fresh) else controller.render()
+                            if (fresh != null) controller.updateComments(fresh)
                         }
                     }
                 }

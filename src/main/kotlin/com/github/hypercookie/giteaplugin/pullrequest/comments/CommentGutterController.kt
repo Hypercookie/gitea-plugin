@@ -151,6 +151,10 @@ class CommentGutterController(
         }
 
         val panel = NewCommentBoxPanel(
+            // "Start Review" only when this is the first queued comment —
+            // once a review is already in progress, saying "Start Review"
+            // again on the second/third comment was misleading.
+            startLabel = if (commentContext.pendingStore.pendingComments.isEmpty()) "Start Review" else "Add to Review",
             onAdd = { text ->
                 val position = (lineIndex + 1).toLong()
                 val comment = CreatePullReviewComment(
@@ -204,7 +208,11 @@ class CommentGutterController(
     }
 
     companion object {
-        private val COMMENTED_LINE_BACKGROUND = JBColor(Color(0xFF, 0xF6, 0xD5), Color(0x4A, 0x45, 0x2A))
+        // A pink/magenta tint, not yellow — matching the reference
+        // GitHub-plugin review-mode gutter marker
+        // (gh_review_mark_gutter.png, docs/plan/pr-review-feature-plan.md
+        // UI pass 3) rather than our original arbitrary color choice.
+        private val COMMENTED_LINE_BACKGROUND = JBColor(Color(0xFC, 0xE8, 0xF3), Color(0x4A, 0x2A, 0x3A))
     }
 }
 
