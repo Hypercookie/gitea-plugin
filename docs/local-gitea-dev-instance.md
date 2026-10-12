@@ -168,18 +168,16 @@ curl -s -H "Authorization: token <token>" http://localhost:3000/api/v1/user
 Created during Phase 2 of the PR review feature build
 (`docs/plan/pr-review-feature-plan.md`) to exercise `GiteaApiClient` against
 real data. Left in place for reuse in later phases (tool window, diff view,
-etc) rather than torn down after the integration test ran.
+etc) rather than torn down after the original spike.
 
 - Repo `plugindev/pr-test`, branches `main` (auto-init) and `feature` (one
   README.md commit ahead).
 - PR #1: `feature` → `main`, title "Test PR for plugin dev", open.
 - Review #1 on PR #1: state `COMMENT`, one inline comment on `README.md` line
   1 ("nit: consider rewording this line"), plus reply/top-level comments and
-  a second review added by `GiteaApiClientIntegrationTest`.
+  a second review added during that spike.
 - Recreate the same way if the instance gets wiped — see the `curl` sequence
-  in the Phase 2 section of the plan doc, or just re-run
-  `GiteaApiClientIntegrationTest` after creating a fresh repo/PR (it doesn't
-  create fixtures itself, only reads/writes against existing PR #1).
+  in the Phase 2 section of the plan doc.
 
 ### Extra fixture PRs #4-#6 (added for UI-pass-3 manual testing)
 
@@ -207,10 +205,13 @@ more than one login. Branches `feature3`/`feature4`/`feature5` added to
 All three reuse the same trivial README-edit style as PR #1 — the point is
 PR/comment/commit metadata variety for UI testing, not interesting diffs.
 
-Run the integration test suite with:
-```bash
-GITEA_DEV_TOKEN=<token> ./gradlew test --tests '*GiteaApiClientIntegrationTest'
-```
+`GiteaApiClientIntegrationTest` (the suite this fixture was originally built
+for) has been removed — it ran real HTTP calls against this instance, but
+`.github/workflows/build.yml`'s `test` job runs plain `./gradlew check` with
+no Gitea instance available, so every one of its tests failed on every CI
+run despite its own doc comment claiming otherwise. Verify `GiteaApiClient`
+changes against this instance with ad-hoc `curl` calls instead (same as the
+original Phase 2 spike) rather than a committed automated suite.
 
 ## Generating an API token (for the plugin to use)
 
