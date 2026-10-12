@@ -18,6 +18,7 @@ import com.intellij.ui.ColorUtil
 import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.JBColor
 import com.intellij.ui.SimpleTextAttributes
+import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanel
@@ -52,6 +53,7 @@ class PullRequestDetailPanel(
     private val context: GiteaRepoContext,
     private val client: GiteaApiClient,
     private val pr: PullRequest,
+    private val onViewTimeline: () -> Unit,
 ) {
 
     // Project-level, keyed by PR — shared with any working-copy editor
@@ -108,6 +110,7 @@ class PullRequestDetailPanel(
             else -> "open"
         }
         val branches = JBLabel("<html><b style='color:#${ColorUtil.toHex(stateColor)}'>$stateText</b>&nbsp;&nbsp;${pr.head.ref} → ${pr.base.ref}</html>")
+        val timelineLink = ActionLink("View Timeline") { onViewTimeline() }
         val description = JBTextArea(pr.body?.takeIf { it.isNotBlank() } ?: "(no description)").apply {
             isEditable = false
             lineWrap = true
@@ -122,6 +125,8 @@ class PullRequestDetailPanel(
         panel.add(title)
         panel.add(Box.createVerticalStrut(4))
         panel.add(branches)
+        panel.add(Box.createVerticalStrut(4))
+        panel.add(timelineLink)
         panel.add(Box.createVerticalStrut(8))
         panel.add(JBScrollPane(description))
         return panel

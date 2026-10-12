@@ -4,12 +4,14 @@ import com.github.hypercookie.giteaplugin.api.dto.ChangedFile
 import com.github.hypercookie.giteaplugin.api.dto.CreateIssueCommentOption
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewCommentReplyOptions
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
+import com.github.hypercookie.giteaplugin.api.dto.GitCommit
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.IssueComment
 import com.github.hypercookie.giteaplugin.api.dto.PullReview
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.PullRequest
 import com.github.hypercookie.giteaplugin.api.dto.RepoContent
+import com.github.hypercookie.giteaplugin.api.dto.TimelineEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -73,6 +75,15 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
 
     suspend fun getPullRequestFiles(owner: String, repo: String, index: Long): List<ChangedFile> =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/files")
+
+    suspend fun getPullRequestCommits(owner: String, repo: String, index: Long): List<GitCommit> =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/commits")
+
+    /** PRs are issues in Gitea's model, so the timeline lives under
+     * `/issues/{index}/timeline` — confirmed against a live instance for
+     * Phase 27 (see `TimelineEvent` doc comment). */
+    suspend fun getTimeline(owner: String, repo: String, index: Long): List<TimelineEvent> =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/$index/timeline")
 
     /** File text at a given ref, or null if the file doesn't exist there
      * (added/deleted files have one empty side in a diff). */

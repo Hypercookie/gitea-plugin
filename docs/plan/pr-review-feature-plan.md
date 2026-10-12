@@ -855,21 +855,45 @@ new endpoints.
       succeed.
 - [ ] Not yet manually tested in a running sandbox IDE.
 
-### Phase 27 — Timeline tab
-- [ ] Spike: Gitea's issue-timeline endpoint
-      (`GET .../issues/{index}/timeline` — confirm it exists and its event
-      shape: comments, commits-added, label/assignee/reviewer-request
-      events) vs. assembling our own timeline client-side from
-      `listIssueComments` + `listReviews` + PR commit list (fallback if no
-      single timeline endpoint).
-- [ ] New `pullrequest/TimelinePanel.kt`: chronological feed — avatar +
-      bold author + relative timestamp per entry, commits rendered as a
-      compact hash+message+author+time list grouped under one "added N
-      commits" event, system events (labels/assignees/reviewers) as plain
-      text lines, bottom compose box (reuse `NewCommentBoxPanel`'s styling)
-      for a top-level PR comment.
-- [ ] Wire a "View Timeline" link into `PullRequestDetailPanel`'s overview
-      section, opening/switching to this tab.
+### Phase 27 — Timeline tab [x]
+- [x] **Spike done**: `GET .../issues/{index}/timeline` exists (PRs are
+      issues), confirmed shape via `TimelineComment` in a fresh
+      `/swagger.v1.json` plus real data from `plugindev/pr-test#1`. Real
+      `type` values seen: `pull_push` (body is a JSON string
+      `{"is_force_push":bool,"commit_ids":[...]}`, not a nested object —
+      worth remembering, easy to miss), `review` (body = review summary
+      text, blank when a review has no summary comment), `comment` (plain
+      top-level comment). No `label`/`assignee`/`milestone` events in real
+      data, so those are decoded defensively but not specially rendered —
+      not worth building UI for a shape we haven't verified.
+      Also confirmed a dedicated `GET .../pulls/{index}/commits` endpoint —
+      used instead of trying to reconstruct commit details from
+      `pull_push`'s bare `commit_ids` array.
+- [x] New DTOs: `api/dto/TimelineEvent.kt` (`TimelineEvent`, `TimelineLabel`,
+      `PullPushBody`), `api/dto/GitCommit.kt` (`GitCommit`/`CommitDetail`/
+      `CommitSignature`). `GiteaApiClient.getTimeline`/`getPullRequestCommits`
+      added.
+- [x] New `pullrequest/TimelinePanel.kt`: chronological feed — avatar +
+      bold author + timestamp per entry (`comment`/non-blank `review` as a
+      full comment card reusing `CommentBoxPanels.kt`'s `boxPanel`/
+      `avatarLabel`/`readOnlyBody`/`escapeHtml` helpers, now `internal` instead
+      of file-private so this file can reuse them instead of duplicating);
+      `pull_push` rendered as "`<user>` added N commit(s)…" + an indented
+      hash/message/author/time line per commit (cross-referenced from the
+      `/commits` fetch by SHA); any other `type` falls back to a generic
+      "`<user>` `<type>`" line. Bottom compose box posts a new top-level
+      comment via `createIssueComment`, then reloads the feed.
+- [x] Wired: `PullRequestDetailPanel` takes an `onViewTimeline: () -> Unit`
+      callback, renders it as an `ActionLink("View Timeline")` under the
+      branch/state line (matching the existing `ActionLink` convention from
+      `CurrentBranchReviewPanel`). `PullRequestListPanel.openTimelineTab`
+      opens/reselects a dedicated `"#N timeline"` tool-window tab —
+      same dedupe-by-tab-name pattern as the existing detail tab, not a
+      split view inside the detail tab (simpler, lower risk, no layout
+      rework of an already-working panel).
+- [x] Verified: `./gradlew compileKotlin` and `./gradlew buildPlugin` both
+      succeed.
+- [ ] Not yet manually tested in a running sandbox IDE.
 
 ### Phase 28 — Submit Review as a popup card
 - [ ] Rework `ReviewActionsPanel`: bottom button becomes
