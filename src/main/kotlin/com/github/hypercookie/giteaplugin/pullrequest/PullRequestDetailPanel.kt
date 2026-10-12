@@ -4,6 +4,7 @@ import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.ChangedFile
 import com.github.hypercookie.giteaplugin.api.dto.PullRequest
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
+import com.github.hypercookie.giteaplugin.pullrequest.comments.markdownLabel
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GITEA_DIFF_COMMENT_CONTEXT_KEY
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaDiffCommentContext
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
@@ -14,19 +15,18 @@ import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vcs.FileStatus
 import com.intellij.ui.ColorUtil
 import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.JBColor
+import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.SimpleTextAttributes
-import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -42,18 +42,21 @@ import javax.swing.DefaultListModel
 import javax.swing.JList
 
 /**
- * One opened PR's detail tab: overview (title/branches/description) +
- * changed-files list. Selecting a file opens it in the Platform's own diff
- * viewer (`DiffManager.showDiff`) rather than a custom view — see
- * docs/plan/pr-review-feature-plan.md Phase 5. Comments/review UI land on
- * top of that same diff viewer in Phase 6+ via `com.intellij.diff.DiffExtension`.
+ * One opened PR's detail tab: overview (title/branches/markdown-rendered
+ * description) + changed-files list on the left, the PR's [TimelinePanel]
+ * embedded directly on the right (an `OnePixelSplitter`, not a separate tab
+ * — matches the reference GitHub-plugin layout, see
+ * docs/plan/pr-review-feature-plan.md "UI pass 3" follow-up round 3).
+ * Selecting a file opens it in the Platform's own diff viewer
+ * (`DiffManager.showDiff`) rather than a custom view — see Phase 5.
+ * Comments/review UI land on top of that same diff viewer via
+ * `com.intellij.diff.DiffExtension`.
  */
 class PullRequestDetailPanel(
     private val project: Project,
     private val context: GiteaRepoContext,
     private val client: GiteaApiClient,
     private val pr: PullRequest,
-    private val onViewTimeline: () -> Unit,
 ) {
 
     // Project-level, keyed by PR — shared with any working-copy editor
@@ -71,15 +74,20 @@ class PullRequestDetailPanel(
     private val reviewActionsPanel =
         ReviewActionsPanel(project, client, context.owner, context.repo, pr.number, pr.head.sha, pendingReviewStore)
 
-    val component = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-        add(buildOverviewPanel(), BorderLayout.NORTH)
+    private val timelinePanel = TimelinePanel(project, context, client, pr)
 
-        val filesPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-            add(statusLabel, BorderLayout.NORTH)
-            add(JBScrollPane(filesList), BorderLayout.CENTER)
+    val component = OnePixelSplitter(false, 0.45f).apply {
+        firstComponent = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            add(buildOverviewPanel(), BorderLayout.NORTH)
+
+            val filesPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+                add(statusLabel, BorderLayout.NORTH)
+                add(JBScrollPane(filesList), BorderLayout.CENTER)
+            }
+            add(filesPanel, BorderLayout.CENTER)
+            add(reviewActionsPanel.component, BorderLayout.SOUTH)
         }
-        add(filesPanel, BorderLayout.CENTER)
-        add(reviewActionsPanel.component, BorderLayout.SOUTH)
+        secondComponent = timelinePanel.component
     }
 
     init {
@@ -110,13 +118,11 @@ class PullRequestDetailPanel(
             else -> "open"
         }
         val branches = JBLabel("<html><b style='color:#${ColorUtil.toHex(stateColor)}'>$stateText</b>&nbsp;&nbsp;${pr.head.ref} → ${pr.base.ref}</html>")
-        val timelineLink = ActionLink("View Timeline") { onViewTimeline() }
-        val description = JBTextArea(pr.body?.takeIf { it.isNotBlank() } ?: "(no description)").apply {
-            isEditable = false
-            lineWrap = true
-            wrapStyleWord = true
-            preferredSize = Dimension(600, 100)
-            background = UIUtil.getPanelBackground()
+        // Same Markdown rendering as everywhere else a Gitea body shows up
+        // (CommentBoxPanels.kt's shared markdownLabel/markdownView) — the PR
+        // description is Markdown source too, not plain text.
+        val description = JBScrollPane(markdownLabel(pr.body?.takeIf { it.isNotBlank() } ?: "_(no description)_", widthPx = 460)).apply {
+            preferredSize = Dimension(600, 120)
         }
 
         val panel = JBPanel<JBPanel<*>>()
@@ -125,10 +131,8 @@ class PullRequestDetailPanel(
         panel.add(title)
         panel.add(Box.createVerticalStrut(4))
         panel.add(branches)
-        panel.add(Box.createVerticalStrut(4))
-        panel.add(timelineLink)
         panel.add(Box.createVerticalStrut(8))
-        panel.add(JBScrollPane(description))
+        panel.add(description)
         return panel
     }
 
@@ -224,7 +228,15 @@ private class ChangedFileCellRenderer : ColoredListCellRenderer<ChangedFile>() {
         }
         ipad = JBUI.insets(2, 8)
 
-        append(file.filename, SimpleTextAttributes.REGULAR_ATTRIBUTES)
+        // Same file-status colors as the Platform's own Changes/Commit tool
+        // windows (com.intellij.openapi.vcs.FileStatus) — "looks like the
+        // native git diff view" per the user's ask, not a one-off palette.
+        val fileStatusColor = when (file.status) {
+            "added" -> FileStatus.ADDED.color
+            "removed", "deleted" -> FileStatus.DELETED.color
+            else -> FileStatus.MODIFIED.color
+        }
+        append(file.filename, SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, fileStatusColor))
         append("  ")
         append("+${file.additions}", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, ADD_COLOR))
         append(" ")
