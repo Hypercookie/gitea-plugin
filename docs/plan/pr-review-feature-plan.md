@@ -1124,6 +1124,48 @@ Not planned: the floating code-suggestion mini-toolbar in
 `github_pull_request_review_view_diff.png` — that's the Platform's own
 editor intention-action UI, unrelated to the GitHub PR plugin, out of scope.
 
+### Phase 38 — PR list redesign (toolbar, avatars, context menu) [x]
+User direction: only one Refresh control in the whole tool window; drop the
+toolbar's "View Details" button (felt out of place); move both View Details
+and Checkout into a right-click context menu on the row instead; add author
+avatars to each row; "orient yourself on the GitHub plugin again" (re-looked
+at the same `incoming_pull_requests.png`/`pull_request_options.png`
+screenshots from UI pass 3's research).
+
+- [x] **Only one Refresh**: `CurrentBranchReviewPanel`'s own `ActionLink`
+      "Refresh" removed (its `refresh()` stays public). The tool window's
+      top-toolbar `RefreshAction` now calls both `refresh()` (the PR list)
+      and `currentBranchReviewPanel.refresh()` — one button, refreshes
+      everything, instead of two separately-triggered refreshes that
+      confused manual testing earlier this session.
+- [x] **Toolbar down to one action**: `ViewDetailsAction` removed from the
+      `ActionToolbar`'s action group (now just `RefreshAction`).
+- [x] **Row context menu**: `PopupHandler.installPopupMenu(prList,
+      DefaultActionGroup(ViewDetailsAction(), CheckoutAction()), ...)` — the
+      standard IntelliJ-native way to attach a right-click menu to a list
+      (not a hand-rolled `JPopupMenu`). New `CheckoutAction` just calls the
+      existing `checkoutBranch()` (same one double-click already used — no
+      behavior change there, just a second way to reach it). `ViewDetailsAction`
+      moved here unchanged from the old toolbar.
+- [x] **Row redesign**: `PullRequestCellRenderer` rewritten from
+      `ColoredListCellRenderer` (single-line `SimpleColoredComponent` text
+      run) to a plain `ListCellRenderer<PullRequest>` building a real
+      composed `JPanel` — needed for a second text line and a
+      right-aligned avatar, matching the reference screenshot's row shape:
+      bold title, gray "#N · created DATE, by AUTHOR" subtitle below it,
+      trailing state text + comment count + author avatar
+      (`comments.avatarLabel`, the same helper used everywhere else a
+      Gitea user's avatar shows up — Phase 19).
+- [x] Avoided two unverified-API guesses rather than compile-and-pray: a
+      `JBFont` convenience method for the smaller subtitle font (used
+      `title.font.deriveFont(size - 1f)` instead, since `Font.deriveFont`
+      is guaranteed-stable JDK API) and an `AllIcons.General.Balloon`-style
+      "comment" icon that isn't confirmed to exist (plain "`N` comments"
+      text instead). Matches this plan's standing rule of confirming
+      platform API before relying on it, not guessing icon/method names.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Not yet tested in a running sandbox IDE.
+
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.
 - ~~Whether Gitea models inline comments as part of the review object or a

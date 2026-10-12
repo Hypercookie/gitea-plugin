@@ -3,6 +3,7 @@ package com.github.hypercookie.giteaplugin.pullrequest
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.PullRequest
+import com.github.hypercookie.giteaplugin.pullrequest.comments.avatarLabel
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
@@ -18,9 +19,8 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.wm.ToolWindow
-import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.JBColor
-import com.intellij.ui.SimpleTextAttributes
+import com.intellij.ui.PopupHandler
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanel
@@ -34,11 +34,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
+import java.awt.Component
 import java.awt.FlowLayout
+import javax.swing.BoxLayout
 import javax.swing.DefaultComboBoxModel
 import javax.swing.DefaultListModel
 import javax.swing.JComboBox
 import javax.swing.JList
+import javax.swing.ListCellRenderer
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
@@ -63,7 +66,7 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
 
     private val listModel = DefaultListModel<PullRequest>()
     private val prList = JBList(listModel).apply {
-        cellRenderer = PullRequestCellRenderer()
+        cellRenderer = PullRequestCellRenderer(project)
         emptyText.text = "No pull requests"
     }
     private val statusLabel = JBLabel(" ").apply { border = JBUI.Borders.empty(2, 8) }
@@ -105,10 +108,16 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
     private val currentBranchReviewPanel = CurrentBranchReviewPanel(project)
 
     val component = SimpleToolWindowPanel(true, true).apply {
-        val actionGroup = DefaultActionGroup(RefreshAction(), ViewDetailsAction())
-        val actionToolbar = ActionManager.getInstance().createActionToolbar(ActionPlaces.TOOLWINDOW_CONTENT, actionGroup, true)
+        // Only one Refresh control in the whole tool window (it refreshes
+        // the list AND the current-branch panel, see RefreshAction) — View
+        // Details and Checkout live in the row context menu instead, not a
+        // second/third toolbar button.
+        val actionToolbar = ActionManager.getInstance()
+            .createActionToolbar(ActionPlaces.TOOLWINDOW_CONTENT, DefaultActionGroup(RefreshAction()), true)
         actionToolbar.targetComponent = prList
         toolbar = actionToolbar.component
+
+        PopupHandler.installPopupMenu(prList, DefaultActionGroup(ViewDetailsAction(), CheckoutAction()), "GiteaPullRequestListPopup")
 
         setContent(
             JBPanel<JBPanel<*>>(BorderLayout()).apply {
@@ -296,7 +305,10 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
     }
 
     private inner class RefreshAction : AnAction("Refresh", "Reload pull requests", AllIcons.Actions.Refresh) {
-        override fun actionPerformed(e: AnActionEvent) = refresh()
+        override fun actionPerformed(e: AnActionEvent) {
+            refresh()
+            currentBranchReviewPanel.refresh()
+        }
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
     }
 
@@ -311,37 +323,81 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
 
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
     }
+
+    private inner class CheckoutAction : AnAction("Checkout", "Check out this pull request's branch locally", AllIcons.Vcs.Branch) {
+        override fun actionPerformed(e: AnActionEvent) {
+            prList.selectedValue?.let(::checkoutBranch)
+        }
+
+        override fun update(e: AnActionEvent) {
+            e.presentation.isEnabled = prList.selectedValue != null
+        }
+
+        override fun getActionUpdateThread() = ActionUpdateThread.EDT
+    }
 }
 
-private class PullRequestCellRenderer : ColoredListCellRenderer<PullRequest>() {
-    override fun customizeCellRenderer(
+/**
+ * Two-line row (title bold, "#N · created DATE, by AUTHOR" subtitle below)
+ * with a trailing state badge + author avatar — mirrors the reference
+ * GitHub-plugin list row (`incoming_pull_requests.png` /
+ * `pull_request_options.png`, see docs/plan/pr-review-feature-plan.md).
+ * A plain `ListCellRenderer` building a real composed `JPanel`, not
+ * `ColoredListCellRenderer` (single-line `SimpleColoredComponent` text) —
+ * needed room for a second text line and a right-aligned avatar, neither of
+ * which `ColoredListCellRenderer`'s single leading-icon-plus-text-run model
+ * supports.
+ */
+private class PullRequestCellRenderer(private val project: Project) : ListCellRenderer<PullRequest> {
+    override fun getListCellRendererComponent(
         list: JList<out PullRequest>,
-        value: PullRequest?,
+        value: PullRequest,
         index: Int,
-        selected: Boolean,
-        hasFocus: Boolean,
-    ) {
-        val pr = value ?: return
-
-        icon = when {
-            pr.merged -> AllIcons.Vcs.Merge
-            pr.state == "closed" -> AllIcons.General.Error
-            else -> AllIcons.Vcs.Branch
+        isSelected: Boolean,
+        cellHasFocus: Boolean,
+    ): Component {
+        val row = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            border = JBUI.Borders.empty(6, 10)
+            isOpaque = true
+            background = if (isSelected) list.selectionBackground else list.background
         }
-        ipad = JBUI.insets(4, 8)
+        val fg = if (isSelected) list.selectionForeground else list.foreground
 
-        append("#${pr.number}  ", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-        append(pr.title, SimpleTextAttributes.REGULAR_ATTRIBUTES)
-        append("   ")
+        val title = JBLabel(value.title).apply { foreground = fg }
+        val subtitle = JBLabel("#${value.number} · created ${formatShortDate(value.createdAt)}, by ${value.user?.login ?: "unknown"}").apply {
+            foreground = if (isSelected) fg else JBColor.GRAY
+            font = title.font.deriveFont(title.font.size2D - 1f)
+        }
+        val textColumn = JBPanel<JBPanel<*>>().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+            add(title)
+            add(subtitle)
+        }
+        row.add(textColumn, BorderLayout.CENTER)
 
         val (stateText, stateColor) = when {
-            pr.merged -> "merged" to MERGED_COLOR
-            pr.state == "closed" -> "closed" to CLOSED_COLOR
-            pr.draft -> "draft" to DRAFT_COLOR
+            value.merged -> "merged" to MERGED_COLOR
+            value.state == "closed" -> "closed" to CLOSED_COLOR
+            value.draft -> "draft" to DRAFT_COLOR
             else -> "open" to OPEN_COLOR
         }
-        append(stateText, SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, stateColor))
-        append("  ${pr.user?.login ?: "unknown"}", SimpleTextAttributes.GRAYED_ITALIC_ATTRIBUTES)
+        val stateLabel = JBLabel(stateText).apply {
+            foreground = if (isSelected) fg else stateColor
+            font = title.font.deriveFont(java.awt.Font.BOLD)
+        }
+        val commentCount = (value.comments ?: 0) + (value.reviewComments ?: 0)
+        val trailing = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT, 8, 0)).apply {
+            isOpaque = false
+            add(stateLabel)
+            if (commentCount > 0) {
+                add(JBLabel("$commentCount comments").apply { foreground = if (isSelected) fg else JBColor.GRAY })
+            }
+            add(avatarLabel(project, value.user))
+        }
+        row.add(trailing, BorderLayout.EAST)
+
+        return row
     }
 
     companion object {
@@ -350,4 +406,10 @@ private class PullRequestCellRenderer : ColoredListCellRenderer<PullRequest>() {
         private val CLOSED_COLOR = JBColor(0xCF222E, 0xF85149)
         private val DRAFT_COLOR = JBColor.GRAY
     }
+}
+
+/** `2026-09-24T08:51:40+02:00` -> `2026-09-24`. */
+private fun formatShortDate(iso: String?): String {
+    if (iso.isNullOrBlank()) return "?"
+    return iso.substringBefore('T')
 }

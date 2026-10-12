@@ -5,9 +5,7 @@ import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.icons.GiteaIcons
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
-import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
@@ -29,13 +27,15 @@ class CurrentBranchReviewPanel(private val project: Project) {
     private val statusLabel = JBLabel(" ", GiteaIcons.Gitea, JBLabel.LEFT)
     private val actionsContainer = JBPanel<JBPanel<*>>(BorderLayout())
 
+    // No own "Refresh" control — the tool window's single top-toolbar
+    // Refresh action (PullRequestListPanel.RefreshAction) drives this too,
+    // per the "only one refresh" direction. [refresh] stays public for that.
     val component = JBPanel<JBPanel<*>>(BorderLayout()).apply {
         border = JBUI.Borders.customLineBottom(com.intellij.ui.JBColor.border())
         add(
             JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
                 border = JBUI.Borders.empty(2, 8)
                 add(statusLabel)
-                add(ActionLink("Refresh") { refresh() }.apply { icon = AllIcons.Actions.Refresh })
             },
             BorderLayout.NORTH,
         )
