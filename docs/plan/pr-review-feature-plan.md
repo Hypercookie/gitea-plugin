@@ -1027,16 +1027,31 @@ new endpoints.
   - Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 - [ ] Not yet tested in a running sandbox IDE after this round.
 
-### Phase 28 — Submit Review as a popup card
-- [ ] Rework `ReviewActionsPanel`: bottom button becomes
-      "Submit Review (N)…", opens a `JBPopup`-hosted card: title + pending
-      count + discard(trash)/close icons, a review-body `JBTextArea` (wire
-      into `CreatePullReviewOptions.body`, currently unused), then
-      Approve/Request Changes/Comment buttons inside the card.
-- [ ] `NewCommentBoxPanel`'s single "Add" button becomes a split button
-      ("Start Review ▾" / "Add Single Comment") — cosmetic relabeling only,
-      no new backend behavior (both already just add to
-      `PendingReviewStore`).
+### Phase 28 — Submit Review as a popup card [x]
+- [x] `ReviewActionsPanel` reworked: the three always-visible Approve/
+      Comment/Request Changes buttons replaced with a single
+      "Submit Review (N)…" button. Clicking it opens a `JBPopup`
+      (`JBPopupFactory.createComponentPopupBuilder`, shown underneath the
+      button) containing: a bold title line (+ pending count when > 0), a
+      "Discard" button (clears `PendingReviewStore`, text not an icon —
+      same reasoning as Phase 38's icon-guessing caution), a review-body
+      `JBTextArea` now actually wired into `CreatePullReviewOptions.body`
+      (previously always sent empty, even though the DTO always had the
+      field), then Approve/Request Changes/Comment buttons that submit and
+      close the popup.
+- [x] `NewCommentBoxPanel`'s "Add" button renamed to "Start Review" —
+      **not** a split button with a second "Add Single Comment" option as
+      originally planned. Scoped down on reflection: both options would
+      have called the exact same `onAdd` callback (just queues into
+      `PendingReviewStore`), since there's no separate immediate-submit
+      code path backing a real "post this one comment right now, skip the
+      pending queue" capability. A split button implies that capability
+      exists; it doesn't, so building one would mislead rather than just
+      relabel. "Start Review" alone accurately describes the one real
+      behavior.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin`
+      succeed, both on the first attempt.
+- [ ] Not yet tested in a running sandbox IDE.
 
 ### Phase 29 — wire up Resolve/Unresolve [cheap]
 - [ ] `CommentThreadBoxPanel`: add Reply/Resolve text links under each
