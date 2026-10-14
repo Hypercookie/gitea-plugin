@@ -19,7 +19,6 @@ import com.intellij.testFramework.LightVirtualFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import java.beans.PropertyChangeListener
-import java.util.concurrent.ConcurrentHashMap
 import javax.swing.Icon
 import javax.swing.JComponent
 
@@ -31,12 +30,17 @@ import javax.swing.JComponent
  * (migration ledger I15).
  */
 object GiteaTimelineEditor {
-    private val files = ConcurrentHashMap<String, GiteaTimelineVirtualFile>()
 
+    /** Focuses the pull request's open timeline tab, or opens a new one. The
+     * open tabs are the only registry: a static map of files would keep each
+     * pull request's data, and with it the project, alive after its tab is
+     * closed. */
     fun open(data: GiteaPullRequestReviewData) {
-        val key = "${data.repo.account.serverUrl}/${data.owner}/${data.repoName}#${data.number}"
-        val file = files.compute(key) { _, existing -> existing?.takeIf { it.data.cs.isActiveScope() } ?: GiteaTimelineVirtualFile(data) }!!
-        FileEditorManager.getInstance(data.project).openFile(file, true)
+        val manager = FileEditorManager.getInstance(data.project)
+        val file = manager.openFiles.filterIsInstance<GiteaTimelineVirtualFile>().firstOrNull {
+            it.data.repo == data.repo && it.data.number == data.number && it.data.cs.isActiveScope()
+        } ?: GiteaTimelineVirtualFile(data)
+        manager.openFile(file, true)
     }
 
     private fun kotlinx.coroutines.CoroutineScope.isActiveScope() = coroutineContext[kotlinx.coroutines.Job]?.isActive != false
