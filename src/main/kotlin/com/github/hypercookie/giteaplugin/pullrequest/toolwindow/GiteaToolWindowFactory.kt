@@ -1,6 +1,9 @@
 package com.github.hypercookie.giteaplugin.pullrequest.toolwindow
 
-import com.github.hypercookie.giteaplugin.pullrequest.PullRequestDetailPanel
+import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStoreService
+import com.github.hypercookie.giteaplugin.pullrequest.details.GiteaPullRequestDetailsComponent
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestListComponent
 import com.github.hypercookie.giteaplugin.settings.GiteaConfigurable
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
@@ -75,8 +78,6 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
             projectVm: GiteaProjectViewModel,
             tabVm: GiteaPullRequestTabViewModel,
         ): JComponent {
-            // Detail content is migrated in M6; until then the existing panel
-            // is loaded into the tab.
             val wrapper = JBPanelWithEmptyText(BorderLayout()).withEmptyText("Loading pull request…")
             cs.launch {
                 val pr = runCatching {
@@ -84,7 +85,15 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
                 }
                 withContext(Dispatchers.Main) {
                     pr.onSuccess {
-                        wrapper.add(PullRequestDetailPanel(projectVm.project, projectVm.repo, projectVm.client, it).component, BorderLayout.CENTER)
+                        // Share comments and pending state with open editors
+                        // when this is the current branch's pull request.
+                        val session = GiteaReviewSessionService.getInstance(projectVm.project).session.value
+                        val data = session?.takeIf { s -> s.repo == projectVm.repo && s.number == it.number }
+                            ?: GiteaPullRequestReviewData(
+                                projectVm.project, cs, projectVm.repo, projectVm.client, it,
+                                PendingReviewStoreService.getInstance(projectVm.project).storeFor(projectVm.repo.owner, projectVm.repo.repo, it.number),
+                            )
+                        wrapper.add(GiteaPullRequestDetailsComponent.create(cs, data), BorderLayout.CENTER)
                         wrapper.revalidate()
                     }.onFailure {
                         wrapper.emptyText.text = "Can't load pull request #${tabVm.number}: ${it.message}"

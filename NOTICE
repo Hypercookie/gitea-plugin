@@ -8,6 +8,12 @@ Community Edition (https://github.com/JetBrains/intellij-community, build
 - pullrequest/review/editor/*: modeled on
   plugins/github/github-core/src/org/jetbrains/plugins/github/pullrequest/ui/editor
   and .../pullrequest/ui/comment
+- pullrequest/list/*, pullrequest/toolwindow/*: modeled on
+  plugins/github/github-core/.../pullrequest/ui/list, ui/filters and
+  ui/toolwindow
+- pullrequest/details/*: modeled on .../pullrequest/ui/details
+- util/MigLayoutGaps.kt: mirrors
+  platform/collaboration-tools/.../ui/util/migLayoutUtil.kt
 - pullrequest/review/LineMapping.kt: replaces
   platform/collaboration-tools/.../ui/codereview/editor/ReviewInEditorUtil.kt
 

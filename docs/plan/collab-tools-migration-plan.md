@@ -193,15 +193,35 @@ Done together with M2, so the old controller can be deleted in one commit.
       `DropDownComponentFactory`, `ReviewListQuickFilter`,
       `PersistingReviewListSearchHistoryModel`. Paging.
 
-### M6 - pull request details
-- [ ] `CodeReviewDetailsTitleComponentFactory`, `...DescriptionComponentFactory`,
+### M6 - pull request details [x] (not sandbox-tested)
+- [x] Tab layout follows `GHPRDetailsComponentFactory`: title with
+      "Open on Gitea" and "View Timeline", "Changes from N commits" popup
+      plus branch chip (checkout, branches popup), commit info, changes
+      tree (`CodeReviewChangeListComponentFactory` +
+      `CodeReviewProgressTreeModelFromDetails`, unresolved-thread counts per
+      file), status rows (CI from commit statuses, conflicts, "Waiting for
+      review from X"/"Missing reviewer"), review actions (existing submit
+      panel until M8). Like GitHub, the description moved to the timeline.
+- [x] Per-commit changes: `GET /git/commits/{sha}?files=true`, diffed
+      against the first parent.
+- [x] Diffs open as a chain over all selected files, contents from the
+      API (`GiteaPullRequestDiff`), comments via the diff extension.
+- [x] Removed `PullRequestDetailPanel`, `CommentBoxPanels`, `AvatarService`.
+- [x] `CodeReviewDetailsTitleComponentFactory`, `...DescriptionComponentFactory`,
       `...BranchComponentFactory` (`CodeReviewBranchesViewModel`),
       `...CommitsComponentFactory`, `...StatusComponentFactory`
       (`CodeReviewStatusViewModel`), `...ActionsComponentFactory`;
       changes via `CodeReviewChangeListComponentFactory`.
 
-### M7 - timeline
-- [ ] Timeline as an editor tab; items from `CodeReviewChatItemUIUtil`,
+### M7 - timeline [x] (not sandbox-tested)
+- [x] Editor tab (`LightVirtualFile` + `FileEditorProvider`), opened
+      from "View Timeline". Description first, then comments (FULL chat
+      items), reviews, pushes with commit lists, close/reopen/merge/title/
+      label/assignee/review-request/branch events (FULL_SECONDARY), and a
+      new-comment field (`CodeReviewCommentTextFieldFactory`). Removed
+      `TimelinePanel`.
+- [ ] Review threads with diff hunks (ledger I11) not ported yet.
+- [x] Timeline as an editor tab; items from `CodeReviewChatItemUIUtil`,
       `CodeReviewTimelineUIUtil`, `StatusMessageComponentFactory`.
 
 ### M8 - submit review
@@ -235,7 +255,9 @@ Two kinds of entries:
 | I3 | `ReviewListSearchPanelFactory.create(scope, quickFilterListener)`, `ChooserPopupUtil.showAsyncMultipleChooserPopup` | Only these members are `@Internal` | Use public `create(scope)` and single-choice `showAsyncChooserPopup`; filters are single-select (labels too) | M5 done |
 | I4 | `ListLoader`, `ReloadablePotentiallyInfiniteListLoader`, `ApiPageUtil` | `@Internal` | `GiteaPullRequestListViewModel`: page counter, `StateFlow` of items, loading and error | M5 done |
 | I17 | `PersistingReviewListSearchHistoryModel` backed by a persistent state component | Public, but needs our own state component | Search history kept in memory for the session only | M5 |
-| I5 | `CodeReviewChangeListViewModelBase`, `CodeReviewCommitsChangesStateHandler` | `@Internal` | Own `CodeReviewChangeListViewModel` / `CodeReviewChangesViewModel` implementations | M6 |
+| I5 | `CodeReviewChangeListViewModelBase`, `CodeReviewCommitsChangesStateHandler` | `@Internal` | `GiteaChangeListViewModel`, `GiteaPullRequestChangesViewModel` | M6 done |
+| I18 | MigLayout `CC.gap(Insets)` (`migLayoutUtil.kt`) | `@Internal` | `util/MigLayoutGaps.kt`, same one-liner | M6 done |
+| I19 | GitHub diff requests from local git objects (`GHPRDiffService`, internal diff-processor view models) | Internal to the GitHub plugin / collaboration tools | Diff requests built from API file contents (`GiteaPullRequestDiff`); no local fetch of the PR branch needed | M6 done |
 | I6 | `ReviewInEditorUtil` (review toolbar, `trackDocumentDiffSync`, line transfer, marker color scheme) | `@Internal` | `LineMapping` (`ComparisonManager.compareLines`, debounced on document changes) for line transfer and PR ranges; `CodeReviewEditorGutterChangesRenderer.render` with its default color scheme; review toolbar not built, the editor notification banner stays | M2 done |
 | I7 | `MutableCodeReviewEditorGutterChangesModel` | `@Internal` | Own `CodeReviewEditorGutterActionableChangesModel` implementation | M2 |
 | I8 | `CodeReviewNavigableEditorViewModel` | `@Internal` | Own next/previous comment actions | M2 |
@@ -246,7 +268,7 @@ Two kinds of entries:
 | I13 | `TokenLoginDialog`, `TokenLoginInputPanelFactory` | `@ScheduledForRemoval` | Own `DialogWrapper` over public `TokenLoginPanelModel`/`LoginModel` | M9 |
 | I14 | `CodeReviewCreateReviewUIUtil` | `@Internal` | Only needed for "create pull request", not in this migration's scope | - |
 | I16 | Unified (one-pane) diff viewer support | GitHub handles both viewers through internal diff-viewer model helpers | Only `SimpleDiffViewer` (side by side) gets comments; unified viewer shows none | M3 |
-| I15 | `CodeReviewDiffVirtualFile` | `@Experimental` (allowed) | Used if it fits; otherwise own `LightVirtualFile` + `FileEditorProvider` for the timeline tab | M7 |
+| I15 | GitHub's `ghpr://` virtual file system for timeline/diff tabs | Plugin-internal | `LightVirtualFile` + `FileEditorProvider`; timeline tabs are not restored after an IDE restart | M7 done |
 
 ### No Gitea API
 
@@ -278,3 +300,4 @@ Filled in as phases land, from `verifyPlugin` output.
 
 `verifyPlugin` after M2/M3: compatible, 0 internal, 163 experimental usages.
 After M4/M5: compatible, 0 internal, 301 experimental usages (adds `ui.toolwindow`, `codereview.list`, `codereview.list.search`).
+After M6/M7: compatible, 0 internal, 0 deprecated, 459 experimental usages (adds `codereview.details.*`, `codereview.changes`, `util.RefComparisonChange`/`ChangesSelection`).
