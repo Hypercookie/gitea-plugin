@@ -234,8 +234,23 @@ Done together with M2, so the old controller can be deleted in one commit.
 - [x] "Submit Review (N)…" button in the details tab and the editor
       banner. Removed `ReviewActionsPanel`.
 
-### M9 - accounts and settings
-- [ ] `AccountManagerBase`, `PasswordSafeCredentialsRepository`,
+### M9 - accounts and settings [x] (not sandbox-tested)
+- [x] `GiteaAccount : ServerAccount`, `GiteaAccountManager :
+      AccountManagerBase` with `PasswordSafeCredentialsRepository`,
+      `GiteaPersistentAccounts : AccountsRepository`,
+      `GiteaProjectDefaultAccountHolder : PersistentDefaultAccountHolder`.
+- [x] Existing data keeps working: same password-safe key
+      (`generateServiceName("Gitea", id)`), same accounts XML state/file/
+      bean layout (unit test loads the pre-migration XML), same default
+      account state name/file/field.
+- [x] Settings page is now project-level (the default account is per
+      project): platform `AccountsPanelFactory` list with add / edit token
+      / remove / set default, details (name, avatar, invalid-token state)
+      via `LazyLoadingAccountsDetailsProvider`. Add/edit use the platform
+      `TokenLoginDialog` + `TokenLoginInputPanelFactory` (their
+      non-deprecated constructors) over `GiteaTokenLoginPanelModel`, which
+      checks the token with `GET /api/v1/user` before saving.
+- [x] `AccountManagerBase`, `PasswordSafeCredentialsRepository`,
       `AccountsPanelFactory`, `TokenLoginPanelModel`/`LoginModel`; own
       login dialog (`TokenLoginDialog` is scheduled for removal).
 
@@ -273,7 +288,7 @@ Two kinds of entries:
 | I20 | Green Approve button (`com.intellij.ide.plugins.newui.InstallButton`) | `@Internal` (caught by `verifyPlugin`) | Platform default-button style (blue) via `primaryButton()`. Visible difference from GitHub | M8 done |
 | I11 | `TimelineDiffComponentFactory` | `@Internal` | Own diff-hunk snippet for review threads in the timeline (`diff_hunk` rendered with an editor or `DiffUtil` viewer) | M7 |
 | I12 | (`CollaborationToolsUIUtil.createTagLabel`/`wrapWithLimitedSize` turned out public and are used directly) `CollaborationToolsUIUtil` internal members, `SwingBindingsKt`, `ActionUtilKt` (`swingAction`), `MigLayoutUtilKt`, `ui.Either`, `CoroutineUtilKt`; platform `childScope` (`com.intellij.platform.util.coroutines`, mixed `Internal`/`Experimental` members) | `@Internal` | Small own helpers: child scope (`SupervisorJob` of the parent), flow-to-Swing bindings, `AbstractAction` factory | all |
-| I13 | `TokenLoginDialog`, `TokenLoginInputPanelFactory` | `@ScheduledForRemoval` | Own `DialogWrapper` over public `TokenLoginPanelModel`/`LoginModel` | M9 |
+| I13 | `TokenLoginDialog`, `TokenLoginInputPanelFactory` | Only their old overloads are `@ScheduledForRemoval` | Nothing: the current constructors/`createIn` are used directly | M9 done |
 | I14 | `CodeReviewCreateReviewUIUtil` | `@Internal` | Only needed for "create pull request", not in this migration's scope | - |
 | I16 | Unified (one-pane) diff viewer support | GitHub handles both viewers through internal diff-viewer model helpers | Only `SimpleDiffViewer` (side by side) gets comments; unified viewer shows none | M3 |
 | I15 | GitHub's `ghpr://` virtual file system for timeline/diff tabs | Plugin-internal | `LightVirtualFile` + `FileEditorProvider`; timeline tabs are not restored after an IDE restart | M7 done |
@@ -308,5 +323,6 @@ Filled in as phases land, from `verifyPlugin` output.
 
 `verifyPlugin` after M2/M3: compatible, 0 internal, 163 experimental usages.
 After M4/M5: compatible, 0 internal, 301 experimental usages (adds `ui.toolwindow`, `codereview.list`, `codereview.list.search`).
+After M9: compatible, 0 internal, 529 experimental usages (adds `auth`, `auth.ui`, `auth.ui.login`).
 After M8: compatible, 0 internal, 470 experimental usages.
 After M6/M7: compatible, 0 internal, 0 deprecated, 459 experimental usages (adds `codereview.details.*`, `codereview.changes`, `util.RefComparisonChange`/`ChangesSelection`).
