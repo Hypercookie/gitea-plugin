@@ -56,7 +56,7 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
         val store = data.pendingStore
         val hasPending = store.pendingComments.isNotEmpty()
 
-        val repo = GitRepositoryManager.getInstance(project).getRepositoryForFile(file) ?: return null
+        val repo = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file) ?: return null
         if (repoContext.gitRoot != null && repoContext.gitRoot != repo.root) return null
         val isStale = repo.currentRevision != null && repo.currentRevision != pr.head.sha
 
