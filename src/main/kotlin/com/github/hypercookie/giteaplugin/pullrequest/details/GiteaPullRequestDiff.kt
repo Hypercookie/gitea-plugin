@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.pullrequest.details
 
+import com.github.hypercookie.giteaplugin.pullrequest.diff.GITEA_DIFF_CHAIN_KEY
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GITEA_DIFF_COMMENT_CONTEXT_KEY
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaDiffCommentContext
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
@@ -31,7 +32,9 @@ object GiteaPullRequestDiff {
                 changes.map { change -> async { createRequest(data, change) } }.map { it.await() }
             }
             withContext(Dispatchers.Main) {
-                val chain = SimpleDiffRequestChain(requests, selectedIndex.coerceIn(0, requests.lastIndex))
+                val chain = SimpleDiffRequestChain(requests, selectedIndex.coerceIn(0, requests.lastIndex)).apply {
+                    putUserData(GITEA_DIFF_CHAIN_KEY, true)
+                }
                 DiffManager.getInstance().showDiff(data.project, chain, com.intellij.diff.DiffDialogHints.DEFAULT)
             }
         }

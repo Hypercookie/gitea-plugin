@@ -31,4 +31,9 @@
                 displayName="Gitea"/>
     </extensions>
 
+    <applicationListeners>
+        <listener class="com.github.hypercookie.giteaplugin.GiteaPluginUnloadListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+    </applicationListeners>
+
 </idea-plugin>

@@ -27,3 +27,10 @@ data class GiteaDiffCommentContext(
 )
 
 val GITEA_DIFF_COMMENT_CONTEXT_KEY: Key<GiteaDiffCommentContext> = Key.create("Gitea.DiffCommentContext")
+
+/**
+ * Marks diff chains opened by this plugin, so their editor tabs, whose
+ * requests carry [GiteaDiffCommentContext], can be closed before the plugin
+ * is unloaded (see [com.github.hypercookie.giteaplugin.GiteaPluginUnloadListener]).
+ */
+val GITEA_DIFF_CHAIN_KEY: Key<Boolean> = Key.create("Gitea.DiffChain")

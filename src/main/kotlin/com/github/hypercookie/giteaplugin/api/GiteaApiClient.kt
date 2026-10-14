@@ -72,11 +72,9 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
 
     private val baseUrl = serverUrl.trimEnd('/')
 
-    // Shared across all instances: each java.net.http.HttpClient owns a
-    // selector thread + executor, and Phase 4+ construct a fresh
-    // GiteaApiClient on every refresh/action — a per-instance client would
-    // leak one of each per call site.
-    private val httpClient: HttpClient get() = sharedHttpClient
+    // Looked up per request, not held: see GiteaHttpClientService for why
+    // the client is shared and why it must not live in a static field.
+    private val httpClient: HttpClient get() = GiteaHttpClientService.getInstance().client
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -292,11 +290,5 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     private inline fun <reified T> decode(response: HttpResponse<String>): T {
         checkStatus(response)
         return json.decodeFromString(response.body())
-    }
-
-    companion object {
-        private val sharedHttpClient: HttpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build()
     }
 }
