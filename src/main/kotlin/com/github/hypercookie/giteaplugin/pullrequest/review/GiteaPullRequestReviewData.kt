@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.pullrequest.review
 
+import kotlinx.coroutines.delay
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
@@ -62,6 +63,15 @@ class GiteaPullRequestReviewData(
     val number: Long get() = _pullRequest.value.number
 
     init {
+        GiteaReviewSessionService.getInstance(project).register(this)
+        // Poll while the IDE is in front, so comments added, edited or
+        // deleted on the server show up without a manual refresh.
+        cs.launch {
+            while (true) {
+                delay(COMMENTS_POLL_MS)
+                if (com.intellij.openapi.application.ApplicationManager.getApplication().isActive) reloadComments()
+            }
+        }
         cs.launch { _currentUser.value = runCatching { client.getCurrentUser() }.getOrNull() }
         cs.launch { reloadComments() }
         // A submitted review empties the pending store; its comments are now
@@ -129,5 +139,9 @@ class GiteaPullRequestReviewData(
             ),
         )
         reloadComments()
+    }
+
+    private companion object {
+        const val COMMENTS_POLL_MS = 60_000L
     }
 }

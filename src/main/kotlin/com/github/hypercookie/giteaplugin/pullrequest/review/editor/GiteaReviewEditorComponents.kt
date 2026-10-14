@@ -150,9 +150,13 @@ object GiteaReviewEditorComponents {
     private fun createPending(project: Project, inlay: GiteaEditorInlay.Pending): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
         val body = GiteaMarkdown.createPane(GiteaMarkdown.toHtml(inlay.comment.body))
-        val item = CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(null, size) }, body) {
+        val author = inlay.author.value
+        val item = CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, body) {
+            iconTooltip = author?.presentableName()
             maxContentWidth = null
             val title = horizontalPanel(CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP).apply {
+                // Author like a posted comment, plus the PENDING tag (GitHub shows the same).
+                if (author != null) add(CodeReviewTimelineUIUtil.createTitleTextPane(author.presentableName(), null, null))
                 add(CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.pending.tag")))
             }
             val actions = horizontalPanel(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP).apply {
