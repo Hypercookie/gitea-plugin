@@ -13,7 +13,7 @@ dependencies {
     // JSON (de)serialization for Gitea API DTOs. HTTP transport uses JDK's
     // built-in java.net.http.HttpClient — no separate HTTP client dependency,
     // avoids classloader conflicts with whatever the IJ Platform bundles internally.
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     // Renders Gitea comment bodies (Markdown source) for the timeline tab.
     // Small, pure-Java, no transitive deps — same "avoid classloader
