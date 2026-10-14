@@ -214,6 +214,20 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
         }
     }
 
+    fun testMergeabilityFollowsGiteaAfterRecheck() {
+        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        runBlocking {
+            // #1 conflicts with main (README.md); #7 merges cleanly.
+            val blocked = com.github.hypercookie.giteaplugin.pullrequest.details.GiteaPullRequestStatusViewModel(scope, data(1))
+            val ok = com.github.hypercookie.giteaplugin.pullrequest.details.GiteaPullRequestStatusViewModel(scope, data(7))
+            val B = com.github.hypercookie.giteaplugin.pullrequest.details.GiteaMergeability.BLOCKED
+            val O = com.github.hypercookie.giteaplugin.pullrequest.details.GiteaMergeability.OK
+            withTimeout(TIMEOUT) { blocked.mergeability.first { it == B } }
+            kotlinx.coroutines.delay(500)
+            assertEquals(O, ok.mergeability.value)
+        }
+    }
+
     fun testMentionCandidatesForPullRequest() {
         if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
         runBlocking {

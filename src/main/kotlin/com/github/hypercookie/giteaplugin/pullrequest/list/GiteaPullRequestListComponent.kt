@@ -1,6 +1,7 @@
 package com.github.hypercookie.giteaplugin.pullrequest.list
 
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
+import com.github.hypercookie.giteaplugin.pullrequest.details.GiteaMergeability
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.toolwindow.GiteaProjectViewModel
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
@@ -139,8 +140,10 @@ object GiteaPullRequestListComponent {
                 if (item.labels.size == 1) "Label" else "Labels",
                 item.labels.map { TagPresentation.Simple(it.name, it.color?.let { hex -> runCatching { ColorUtil.fromHex(hex) }.getOrNull() }) },
             ),
-            mergeableStatus = if (item.mergeable == false) {
-                ReviewListItemPresentation.Status(CollaborationToolsIcons.Review.NonMergeable, "Pull request cannot be merged")
+            // A draft (work in progress) is also reported as not mergeable by
+            // Gitea; only flag open, non-draft pull requests.
+            mergeableStatus = if (GiteaMergeability.of(item.state, item.merged, item.draft, item.mergeable) != GiteaMergeability.OK) {
+                ReviewListItemPresentation.Status(CollaborationToolsIcons.Review.NonMergeable, "Gitea reports this pull request can't be merged automatically")
             } else {
                 null
             },
