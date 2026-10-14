@@ -3,9 +3,9 @@ package com.github.hypercookie.giteaplugin.pullrequest.details
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
-import com.github.hypercookie.giteaplugin.pullrequest.ReviewActionsPanel
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestActions
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewButton
 import com.github.hypercookie.giteaplugin.pullrequest.timeline.GiteaTimelineEditor
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
@@ -84,10 +84,10 @@ object GiteaPullRequestDetailsComponent {
             add(CodeReviewDetailsStatusComponentFactory.createNeedReviewerComponent(cs, reviewerStates(cs, data)))
         }
 
-        val actions = ReviewActionsPanel(
-            data.project, data.client, data.owner, data.repoName, data.number,
-            data.pullRequest.value.head.sha, data.pendingStore, data.pullRequest.value.user?.login,
-        ).component
+        val actions = JPanel(ListLayout.horizontal(0)).apply {
+            isOpaque = false
+            add(GiteaSubmitReviewButton.create(cs, data, above = true))
+        }
 
         return JPanel(MigLayout(LC().insets("0").gridGap("0", "0").fill().flowY().noGrid().hideMode(3))).apply {
             isOpaque = false

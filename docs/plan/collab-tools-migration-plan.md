@@ -224,8 +224,15 @@ Done together with M2, so the old controller can be deleted in one commit.
 - [x] Timeline as an editor tab; items from `CodeReviewChatItemUIUtil`,
       `CodeReviewTimelineUIUtil`, `StatusMessageComponentFactory`.
 
-### M8 - submit review
-- [ ] `CodeReviewSubmitViewModel` with our own popup.
+### M8 - submit review [x] (not sandbox-tested)
+- [x] `GiteaSubmitReviewViewModel` (public `CodeReviewSubmitViewModel`)
+      and `GiteaSubmitReviewPopup`, a mirror of the internal
+      `CodeReviewSubmitPopupHandler` + `GHPRSubmitReviewPopup`: title with
+      pending count, discard (with confirmation) and close, body editor,
+      error line, Approve / Request Changes / Comment (Approve and Request
+      Changes hidden on your own PR, as in GitHub).
+- [x] "Submit Review (N)…" button in the details tab and the editor
+      banner. Removed `ReviewActionsPanel`.
 
 ### M9 - accounts and settings
 - [ ] `AccountManagerBase`, `PasswordSafeCredentialsRepository`,
@@ -262,7 +269,8 @@ Two kinds of entries:
 | I7 | `MutableCodeReviewEditorGutterChangesModel` | `@Internal` | Own `CodeReviewEditorGutterActionableChangesModel` implementation | M2 |
 | I8 | `CodeReviewNavigableEditorViewModel` | `@Internal` | Own next/previous comment actions | M2 |
 | I9 | `CodeReviewCommentUIUtil` | Only `createEditorInlayPanel(component, tint)` is `@Internal`; the rest is public | Use the public one-argument `createEditorInlayPanel`, `getInlayPadding`, `createDeleteCommentIconButton`, `getResolveToggleActionText` directly. No own code needed | M2 done |
-| I10 | `CodeReviewSubmitPopupHandler` | `@Internal` | Own popup over public `CodeReviewSubmitViewModel` (keeps the Phase 28 popup shape) | M8 |
+| I10 | `CodeReviewSubmitPopupHandler`, collaboration `showAbove` popup helper | `@Internal` | `GiteaSubmitReviewPopup` mirrors the handler; "above" placement computed with `RelativePoint`; error line is a plain label instead of `ErrorStatusPanelFactory` | M8 done |
+| I20 | Green Approve button (`com.intellij.ide.plugins.newui.InstallButton`) | `@Internal` (caught by `verifyPlugin`) | Platform default-button style (blue) via `primaryButton()`. Visible difference from GitHub | M8 done |
 | I11 | `TimelineDiffComponentFactory` | `@Internal` | Own diff-hunk snippet for review threads in the timeline (`diff_hunk` rendered with an editor or `DiffUtil` viewer) | M7 |
 | I12 | (`CollaborationToolsUIUtil.createTagLabel`/`wrapWithLimitedSize` turned out public and are used directly) `CollaborationToolsUIUtil` internal members, `SwingBindingsKt`, `ActionUtilKt` (`swingAction`), `MigLayoutUtilKt`, `ui.Either`, `CoroutineUtilKt`; platform `childScope` (`com.intellij.platform.util.coroutines`, mixed `Internal`/`Experimental` members) | `@Internal` | Small own helpers: child scope (`SupervisorJob` of the parent), flow-to-Swing bindings, `AbstractAction` factory | all |
 | I13 | `TokenLoginDialog`, `TokenLoginInputPanelFactory` | `@ScheduledForRemoval` | Own `DialogWrapper` over public `TokenLoginPanelModel`/`LoginModel` | M9 |
@@ -300,4 +308,5 @@ Filled in as phases land, from `verifyPlugin` output.
 
 `verifyPlugin` after M2/M3: compatible, 0 internal, 163 experimental usages.
 After M4/M5: compatible, 0 internal, 301 experimental usages (adds `ui.toolwindow`, `codereview.list`, `codereview.list.search`).
+After M8: compatible, 0 internal, 470 experimental usages.
 After M6/M7: compatible, 0 internal, 0 deprecated, 459 experimental usages (adds `codereview.details.*`, `codereview.changes`, `util.RefComparisonChange`/`ChangesSelection`).

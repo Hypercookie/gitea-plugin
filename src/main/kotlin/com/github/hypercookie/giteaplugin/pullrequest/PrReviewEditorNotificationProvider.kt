@@ -2,6 +2,7 @@ package com.github.hypercookie.giteaplugin.pullrequest
 
 import com.github.hypercookie.giteaplugin.icons.GiteaIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewButton
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.project.Project
@@ -23,7 +24,7 @@ import javax.swing.JComponent
  *
  * - **Pending changes** — "in a top bar where I can push them": shown when
  *   the open file's branch resolves to an open PR with queued-but-not-
- *   submitted comments. Reuses [ReviewActionsPanel] so pushing from here
+ *   submitted comments. Reuses [com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewButton] so pushing from here
  *   goes through the same submit path as everywhere else.
  * - **Out of sync** — local HEAD is not the PR's head commit (local
  *   commits, or the PR got new commits). Comment positions are mapped onto
@@ -79,26 +80,26 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
             }
 
             if (hasPending) {
-                run {
-                    val client = data.client
-                    panel.add(
-                        JBPanel<JBPanel<*>>(BorderLayout()).apply {
-                            isOpaque = false
-                            add(
-                                JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
-                                    isOpaque = false
-                                    add(JBLabel("PR #${pr.number}: ${pr.title}", GiteaIcons.Gitea, JBLabel.LEFT))
-                                },
-                                BorderLayout.WEST,
-                            )
-                            add(
-                                ReviewActionsPanel(project, client, repoContext.owner, repoContext.repo, pr.number, pr.head.sha, store, pr.user?.login).component,
-                                BorderLayout.CENTER,
-                            )
-                        },
-                        BorderLayout.CENTER,
-                    )
-                }
+                panel.add(
+                    JBPanel<JBPanel<*>>(BorderLayout()).apply {
+                        isOpaque = false
+                        add(
+                            JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
+                                isOpaque = false
+                                add(JBLabel("PR #${pr.number}: ${pr.title}", GiteaIcons.Gitea, JBLabel.LEFT))
+                            },
+                            BorderLayout.WEST,
+                        )
+                        add(
+                            JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
+                                isOpaque = false
+                                add(GiteaSubmitReviewButton.createStatic(data))
+                            },
+                            BorderLayout.CENTER,
+                        )
+                    },
+                    BorderLayout.CENTER,
+                )
             }
 
             if (panel.componentCount == 0) null else panel
