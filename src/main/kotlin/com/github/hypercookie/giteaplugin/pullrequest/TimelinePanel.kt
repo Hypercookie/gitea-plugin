@@ -11,6 +11,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.comments.escapeHtml
 import com.github.hypercookie.giteaplugin.pullrequest.comments.markdownLabel
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
+import com.github.hypercookie.giteaplugin.util.primaryButton
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
@@ -70,7 +71,7 @@ class TimelinePanel(
     }
 
     private fun buildComposeRow(): JComponent {
-        val button = JButton("Comment")
+        val button = primaryButton("Comment")
         val rowStatus = JBLabel(" ")
         button.addActionListener {
             val text = composeField.text.trim()

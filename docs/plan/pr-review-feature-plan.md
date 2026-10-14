@@ -1071,6 +1071,15 @@ new endpoints.
       re-renders — same shape as `reply()`.
 - [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 - [ ] Not yet tested in a running sandbox IDE.
+- [x] **Button styling** (user request, same day): new
+      `util/Buttons.kt` `primaryButton()` sets
+      `DarculaButtonUI.DEFAULT_STYLE_KEY` (the accent "default" style a
+      `DialogWrapper` OK button gets). One per group, on the main
+      affirmative action: Reply, Start Review/Add to Review, Submit
+      Review…, timeline Comment, Approve (or Comment on your own PR, where
+      Approve is disabled). Cancel/Discard/Request Changes stay plain; no
+      red buttons. Settings page inline buttons stay plain (Platform's own
+      OK/Apply are the primary ones there).
 
 ### Phase 30 — edit/delete own comments
 - [ ] Spike: confirm Gitea's `PATCH`/`DELETE` endpoints for a review
@@ -1350,6 +1359,42 @@ User-reported round after Phase 28 manual testing:
       duplication regression).
       Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 - [ ] Not yet re-tested in a running sandbox IDE after this fix.
+
+### Phase 42 — deep investigation into existing GitHub/GitLab integration [next]
+User goal (2026-10-14): "I want basically the exact same thing" as the
+official JetBrains GitHub/GitLab plugins. UI pass 3 compared against
+screenshots only; this phase compares against the real plugins, end to
+end, and produces a gap list that re-plans Phases 30–37.
+- [ ] **Inventory the real plugins.** From the bundled 2025.2.6.2 jars
+      (`plugins/vcs-github`, `plugins/gitlab`,
+      `lib/.../intellij.platform.collaborationTools.jar`): `plugin.xml`
+      extension points, actions and their default shortcuts, tool window
+      ids/tabs, settings pages, notification groups. `javap` for class
+      structure, same discipline as Phases 5/6/18.
+- [ ] **Walk every user-visible flow** in a sandbox IDE with the GitHub
+      plugin against a real GitHub repo (and GitLab if an account is
+      available): log in, PR list (search, filters, sort, paging), PR
+      detail/overview, timeline, files tree, diff view, review mode in the
+      editor, inline comments (add, reply, resolve, edit, delete, react,
+      suggest changes), submit review, request reviewers, labels/assignees,
+      merge/squash/rebase/close, checkout, create PR from a branch,
+      notifications and badges, keyboard navigation, empty/loading/error
+      states. Screenshot each.
+- [ ] **Side-by-side gap table** (`docs/plan/parity-gap-analysis.md`): per
+      flow — official behavior, ours, gap, Gitea API support (yes / no /
+      partial, checked against the local 1.27.3 swagger), effort. Mark
+      gaps that Gitea's API can't support as "not possible", not as
+      missing work.
+- [ ] **Look-and-feel audit**: fonts, spacing, icons, colors, button styles
+      (primary vs. plain), hover states, light and dark themes — compare
+      component by component, list every visual difference.
+- [ ] **Re-plan**: rewrite Phases 30–37 (and add new phases) from the gap
+      table, ordered by user-visible impact. Get user sign-off on the new
+      order before building.
+- [ ] Decide whether to depend on `intellij.platform.collaborationTools`
+      directly (the module JetBrains' own plugins build on) instead of
+      re-implementing its components. Earlier phases avoided it as
+      internal API; reassess, since exact parity is now the explicit goal.
 
 ## Known bugs
 - [ ] **"New comment" box doesn't close after adding a comment** (Phase 41
