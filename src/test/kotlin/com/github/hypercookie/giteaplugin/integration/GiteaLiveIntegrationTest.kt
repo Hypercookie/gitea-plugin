@@ -242,6 +242,31 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
         }
     }
 
+    fun testCiStatusPollsUntilChecksFinish() {
+        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        runBlocking {
+            val data = data(7)
+            val sha = data.pullRequest.value.head.sha
+            val context = "plugin-test/ci-${System.currentTimeMillis()}"
+            fun post(state: String) {
+                val body = """{"state":"$state","context":"$context","description":"live test"}"""
+                val request = java.net.http.HttpRequest.newBuilder(java.net.URI("$serverUrl/api/v1/repos/$OWNER/$REPO/statuses/$sha"))
+                    .header("Authorization", "token $token").header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body)).build()
+                val response = java.net.http.HttpClient.newHttpClient().send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                assertEquals(response.body(), 201, response.statusCode())
+            }
+            val PENDING = com.intellij.collaboration.ui.codereview.details.data.CodeReviewCIJobState.PENDING
+            val SUCCESS = com.intellij.collaboration.ui.codereview.details.data.CodeReviewCIJobState.SUCCESS
+            post("pending")
+            val vm = com.github.hypercookie.giteaplugin.pullrequest.details.GiteaPullRequestStatusViewModel(scope, data)
+            withTimeout(TIMEOUT) { vm.ciJobs.first { jobs -> jobs.any { it.name == context && it.status == PENDING } } }
+            post("success")
+            // Picked up by the next poll (every 15 s) without any reload.
+            withTimeout(60_000) { vm.ciJobs.first { jobs -> jobs.any { it.name == context && it.status == SUCCESS } } }
+        }
+    }
+
     private companion object {
         /** Authored by alice, so the token's user (plugindev) can review it. */
         const val OTHERS_PR = 7L
