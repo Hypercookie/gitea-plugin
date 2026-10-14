@@ -34,6 +34,7 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.ActionLink
+import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.panels.ListLayout
 import com.intellij.ui.components.panels.Wrapper
@@ -185,8 +186,9 @@ object GiteaPullRequestDetailsComponent {
             row.isVisible = state != GiteaMergeability.OK
             when (state) {
                 GiteaMergeability.CHECKING -> {
-                    label.icon = CIBuildStatusIcons.pending
-                    label.text = "Checking whether the branch can be merged"
+                    // The platform's spinning loading icon while Gitea re-checks.
+                    label.icon = AnimatedIcon.Default.INSTANCE
+                    label.text = "Checking whether the branch can be merged…"
                 }
                 GiteaMergeability.BLOCKED -> {
                     label.icon = CIBuildStatusIcons.failed
