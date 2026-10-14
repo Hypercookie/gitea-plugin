@@ -18,6 +18,9 @@ Community Edition (https://github.com/JetBrains/intellij-community, build
   platform/markdown-utils/src/com/intellij/markdown/utils/CodeFenceSyntaxHighlighterGeneratingProvider.kt;
   util/GiteaMarkdown.kt follows
   plugins/github/github-core/.../pullrequest/comment/GHMarkdownToHtmlConverter.kt
+- pullrequest/review/mention/*: modeled on GithubMarkdownCompletionContributor,
+  GithubMarkdownTypedHandler and GitlabMarkdownCompletionContributor
+  (intellij-community master, added after build 252)
 - pullrequest/review/LineMapping.kt: replaces
   platform/collaboration-tools/.../ui/codereview/editor/ReviewInEditorUtil.kt
 

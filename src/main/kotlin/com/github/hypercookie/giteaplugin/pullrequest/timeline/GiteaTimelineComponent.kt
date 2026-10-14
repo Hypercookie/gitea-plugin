@@ -7,6 +7,7 @@ import com.github.hypercookie.giteaplugin.api.dto.TimelineEvent
 import com.github.hypercookie.giteaplugin.pullrequest.details.toDate
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
+import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
 import com.github.hypercookie.giteaplugin.util.giteaAction
@@ -236,7 +237,7 @@ object GiteaTimelineComponent {
             submitHint = MutableStateFlow(CollaborationToolsBundle.message("review.comment.hint", CommentInputActionsComponentFactory.submitShortcutText)),
         )
         val icon = CommentTextFieldFactory.IconConfig.of(FULL, avatars, data.currentUser.value)
-        return CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon).apply {
+        return CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon) { GiteaMentionSource.install(it, data.mentions) }.apply {
             border = JBUI.Borders.empty(FULL.inputPaddingInsets)
         }.let { field ->
             JPanel(BorderLayout()).apply {

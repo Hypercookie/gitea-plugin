@@ -30,6 +30,9 @@
                     icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <diff.DiffExtension implementation="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaCommentDiffExtension"/>
         <fileEditorProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.timeline.GiteaTimelineEditorProvider"/>
+        <completion.contributor language="any"
+                                implementationClass="com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionCompletionContributor"/>
+        <typedHandler implementation="com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionTypedHandler"/>
         <editorFactoryListener implementation="com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewInEditorController"/>
         <editorNotificationProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider"/>
         <notificationGroup id="Gitea" displayType="BALLOON" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>

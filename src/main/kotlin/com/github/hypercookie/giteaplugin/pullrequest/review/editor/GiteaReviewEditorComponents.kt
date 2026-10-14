@@ -5,6 +5,7 @@ import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaNewCommentViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaThreadViewModel
+import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindEnabled
 import com.github.hypercookie.giteaplugin.util.bindName
@@ -136,7 +137,7 @@ object GiteaReviewEditorComponents {
             ),
         )
         val icon = CommentTextFieldFactory.IconConfig.of(COMPACT, avatars, replyVm.currentUser.value)
-        return CodeReviewCommentTextFieldFactory.createIn(cs, replyVm, config, icon).let {
+        return CodeReviewCommentTextFieldFactory.createIn(cs, replyVm, config, icon) { GiteaMentionSource.install(it, vm.data.mentions) }.let {
             CollaborationToolsUIUtil.wrapWithLimitedSize(it, maxWidth = CodeReviewChatItemUIUtil.TEXT_CONTENT_WIDTH + COMPACT.contentLeftShift)
         }.apply {
             border = JBUI.Borders.empty(COMPACT.inputPaddingInsets)
@@ -195,7 +196,7 @@ object GiteaReviewEditorComponents {
             ),
         )
         val icon = CommentTextFieldFactory.IconConfig.of(COMPACT, avatars, vm.currentUser.value)
-        val editor = CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon).apply {
+        val editor = CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon) { GiteaMentionSource.install(it, vm.data.mentions) }.apply {
             border = JBUI.Borders.empty(COMPACT.inputPaddingInsets)
         }
         return CodeReviewCommentUIUtil.createEditorInlayPanel(editor)
