@@ -14,6 +14,7 @@ import com.intellij.collaboration.ui.codereview.review.CodeReviewSubmitViewModel
 import com.intellij.icons.AllIcons
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.fileTypes.FileTypes
@@ -22,6 +23,7 @@ import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.EditorTextField
 import com.intellij.openapi.ui.popup.IconButton
 import com.intellij.ui.awt.RelativePoint
@@ -137,7 +139,27 @@ class GiteaSubmitReviewViewModel(
 object GiteaSubmitReviewPopup {
 
     fun show(data: GiteaPullRequestReviewData, parent: Component, above: Boolean = false) {
-        val cs = GiteaProjectCoroutineScope.getInstance(data.project).coroutineScope.giteaChildScope("Gitea submit review")
+        val popup = createPopup(data)
+        if (above) {
+            // Platform's showAbove helper for popups is collaboration-tools
+            // internal; position the popup above the button directly.
+            val height = popup.content.preferredSize.height
+            popup.show(RelativePoint(parent, java.awt.Point(0, -height)))
+        } else {
+            popup.showUnderneathOf(parent)
+        }
+    }
+
+    /**
+     * Builds the popup without showing it. The review body editor belongs to
+     * its [EditorTextField], which creates it when the popup is shown and
+     * releases it when the popup's content is removed. The popup's scope is
+     * EDT-dispatched, as in the platform's `CodeReviewSubmitPopupHandler`,
+     * and cancelled when the popup is disposed, also if it was never shown.
+     */
+    internal fun createPopup(data: GiteaPullRequestReviewData): JBPopup {
+        val cs = GiteaProjectCoroutineScope.getInstance(data.project).coroutineScope
+            .giteaChildScope("Gitea submit review", Dispatchers.EDT)
         var popup: JBPopup? = null
         val vm = GiteaSubmitReviewViewModel(cs, data) { popup?.cancel() }
         val editor = createEditor(cs, vm.text)
@@ -152,15 +174,9 @@ object GiteaSubmitReviewPopup {
                 addListener(object : JBPopupListener {
                     override fun onClosed(event: LightweightWindowEvent) = cs.cancel()
                 })
+                Disposer.register(this) { cs.cancel() }
             }
-        if (above) {
-            // Platform's showAbove helper for popups is collaboration-tools
-            // internal; position the popup above the button directly.
-            val height = popup.content.preferredSize.height
-            popup.show(RelativePoint(parent, java.awt.Point(0, -height)))
-        } else {
-            popup.showUnderneathOf(parent)
-        }
+        return popup
     }
 
     private fun createPanel(cs: CoroutineScope, vm: GiteaSubmitReviewViewModel, editor: EditorTextField): JComponent {
