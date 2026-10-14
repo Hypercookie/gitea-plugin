@@ -29,6 +29,32 @@ dependencies {
     intellijPlatform {
         intellijIdea("2025.2.6.2")
         bundledPlugin("Git4Idea")
+        // Shared code review UI the bundled GitHub/GitLab plugins are built
+        // on (list, details, review in editor, comments, reactions).
+        // Public, non-@Internal API only — see
+        // docs/plan/collab-tools-migration-plan.md.
+        bundledModule("intellij.platform.collaborationTools")
+        // collaborationTools' own module dependencies; without them on the
+        // compile classpath, Git4Idea's GitRepository supertypes stop
+        // resolving.
+        bundledModule("intellij.platform.vcs.dvcs.impl")
+        bundledModule("intellij.platform.vcs.dvcs.impl.shared")
+        bundledModule("intellij.platform.vcs.log.impl")
         testFramework(TestFrameworkType.Platform)
+    }
+}
+
+intellijPlatform {
+    pluginVerification {
+        // Gate for the "public IntelliJ APIs only" rule: the verifier
+        // reports @ApiStatus.Internal, experimental and deprecated usages.
+        ides {
+            create("IU", "2025.2.6.2")
+        }
+        failureLevel = listOf(
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
+        )
     }
 }
