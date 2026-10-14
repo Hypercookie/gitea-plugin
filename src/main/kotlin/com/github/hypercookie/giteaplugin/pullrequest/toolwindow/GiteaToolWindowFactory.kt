@@ -57,6 +57,7 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
                     override fun actionPerformed(e: AnActionEvent) {
                         val projectVm = twVm.projectVm.value
                         if (projectVm == null) twVm.connect() else projectVm.listVm.reload()
+                        GiteaReviewSessionService.getInstance(project).refreshAllData()
                     }
                 },
             ),

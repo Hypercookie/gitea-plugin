@@ -46,6 +46,15 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
     val session: StateFlow<GiteaPullRequestReviewData?> = _session.asStateFlow()
 
     init {
+        // Coming back to the IDE (e.g. after deleting a comment in the
+        // browser) refreshes review data, like the GitHub plugin's refresh
+        // on frame activation.
+        com.intellij.openapi.application.ApplicationManager.getApplication().messageBus.connect(cs).subscribe(
+            com.intellij.openapi.application.ApplicationActivationListener.TOPIC,
+            object : com.intellij.openapi.application.ApplicationActivationListener {
+                override fun applicationActivated(ideFrame: com.intellij.openapi.wm.IdeFrame) = refreshAllData()
+            },
+        )
         project.messageBus.connect(cs).subscribe(
             GitRepository.GIT_REPO_CHANGE,
             GitRepositoryChangeListener { requestRefresh() },
@@ -57,6 +66,21 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
             }
         }
         requestRefresh()
+    }
+
+    /** Every live pull request data holder: the current-branch session and
+     * the ones behind open pull request tabs and diff viewers. */
+    private val liveData = java.util.concurrent.ConcurrentHashMap.newKeySet<GiteaPullRequestReviewData>()
+
+    fun register(data: GiteaPullRequestReviewData) {
+        liveData += data
+        data.cs.coroutineContext[kotlinx.coroutines.Job]?.invokeOnCompletion { liveData -= data }
+    }
+
+    /** Re-fetches pull request details and review comments everywhere, so
+     * comments edited or deleted on the server disappear from editors too. */
+    fun refreshAllData() {
+        liveData.forEach { it.reload() }
     }
 
     fun requestRefresh() {

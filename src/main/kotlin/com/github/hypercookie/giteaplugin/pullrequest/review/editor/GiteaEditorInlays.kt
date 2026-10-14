@@ -28,7 +28,12 @@ sealed class GiteaEditorInlay : CodeReviewInlayModel {
         override val key: Any = "thread:${vm.id}"
     }
 
-    class Pending(val comment: CreatePullReviewComment, val onDiscard: () -> Unit) : GiteaEditorInlay() {
+    class Pending(
+        val comment: CreatePullReviewComment,
+        /** The current user, who wrote the pending comment. */
+        val author: StateFlow<com.github.hypercookie.giteaplugin.api.dto.GiteaUser?>,
+        val onDiscard: () -> Unit,
+    ) : GiteaEditorInlay() {
         override val key: Any = "pending:${System.identityHashCode(comment)}"
     }
 

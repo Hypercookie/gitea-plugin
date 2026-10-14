@@ -267,6 +267,38 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
         }
     }
 
+    fun testRefreshDropsCommentsDeletedOnServer() {
+        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        runBlocking {
+            val data = data(7)
+            val sha = data.pullRequest.value.head.sha
+            val review = client().createReview(
+                OWNER, REPO, 7,
+                com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions(
+                    event = com.github.hypercookie.giteaplugin.api.dto.ReviewEvent.COMMENT,
+                    body = "refresh test",
+                    commitId = sha,
+                    comments = listOf(com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment("delete me", "src/Greeter.kt", newPosition = 4)),
+                ),
+            )
+            try {
+                data.reloadComments()
+                val comment = data.comments.value.single { it.reviewId == review.id }
+                // Delete on the server, as a user would in the browser.
+                val request = java.net.http.HttpRequest.newBuilder(java.net.URI("$serverUrl/api/v1/repos/$OWNER/$REPO/issues/comments/${comment.id}"))
+                    .header("Authorization", "token $token").DELETE().build()
+                assertEquals(204, java.net.http.HttpClient.newHttpClient().send(request, java.net.http.HttpResponse.BodyHandlers.discarding()).statusCode())
+
+                com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService.getInstance(project).refreshAllData()
+                withTimeout(TIMEOUT) { data.comments.first { comments -> comments.none { it.id == comment.id } } }
+            } finally {
+                val cleanup = java.net.http.HttpRequest.newBuilder(java.net.URI("$serverUrl/api/v1/repos/$OWNER/$REPO/pulls/7/reviews/${review.id}"))
+                    .header("Authorization", "token $token").DELETE().build()
+                java.net.http.HttpClient.newHttpClient().send(cleanup, java.net.http.HttpResponse.BodyHandlers.discarding())
+            }
+        }
+    }
+
     private companion object {
         /** Authored by alice, so the token's user (plugindev) can review it. */
         const val OTHERS_PR = 7L

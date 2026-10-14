@@ -197,7 +197,7 @@ class GiteaReviewEditorModel(
         pendingInlays.keys.retainAll(livePendingKeys)
         for (comment in filePending) {
             val inlay = pendingInlays.getOrPut(System.identityHashCode(comment)) {
-                GiteaEditorInlay.Pending(comment) { data.pendingStore.removeComment(comment) }
+                GiteaEditorInlay.Pending(comment, data.currentUser) { data.pendingStore.removeComment(comment) }
             }
             val refLine = ((if (side == ReviewSide.NEW) comment.newPosition else comment.oldPosition) - 1).toInt()
             inlay.lineState.value = m?.let { LineMapping.transfer(it.refToDoc, refLine) }
