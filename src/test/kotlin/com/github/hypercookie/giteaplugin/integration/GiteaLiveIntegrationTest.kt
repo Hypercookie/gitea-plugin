@@ -214,6 +214,20 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
         }
     }
 
+    fun testMentionCandidatesForPullRequest() {
+        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        runBlocking {
+            // PR #7 is authored by alice; the token belongs to plugindev.
+            val data = data(7)
+            withTimeout(TIMEOUT) { data.currentUser.first { it != null } }
+            val candidates = data.mentions.candidates()
+            println("mention candidates: ${candidates.map { it.user.login to it.priority }}")
+            assertEquals("alice", candidates.first().user.login)
+            assertTrue("current user is not suggested", candidates.none { it.user.login == data.currentUser.value!!.login })
+            assertEquals(candidates.size, candidates.map { it.user.login }.toSet().size)
+        }
+    }
+
     private companion object {
         /** Authored by alice, so the token's user (plugindev) can review it. */
         const val OTHERS_PR = 7L
