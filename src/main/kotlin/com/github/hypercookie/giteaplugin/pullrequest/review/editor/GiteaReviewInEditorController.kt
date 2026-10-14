@@ -24,6 +24,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -47,9 +48,13 @@ class GiteaReviewInEditorController : EditorFactoryListener {
         jobs[editor] = GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch(Dispatchers.Main) {
             sessions.collectLatest { data ->
                 if (data == null) return@collectLatest
-                val repository = GitRepositoryManager.getInstance(project).getRepositoryForFile(file) ?: return@collectLatest
-                if (data.repo.gitRoot != null && data.repo.gitRoot != repository.root) return@collectLatest
-                val path = VfsUtilCore.getRelativePath(file, repository.root) ?: return@collectLatest
+                // getRepositoryForFile may update repository state
+                // synchronously, which the platform forbids on the EDT.
+                val path = withContext(Dispatchers.Default) {
+                    val repository = GitRepositoryManager.getInstance(project).getRepositoryForFile(file) ?: return@withContext null
+                    if (data.repo.gitRoot != null && data.repo.gitRoot != repository.root) return@withContext null
+                    VfsUtilCore.getRelativePath(file, repository.root)
+                } ?: return@collectLatest
                 coroutineScope { showReview(this, data, editor, path) }
             }
         }
