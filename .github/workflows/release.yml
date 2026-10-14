@@ -7,6 +7,10 @@ on:
   release:
     types: [ prereleased, released ]
 
+# Least privilege by default; the release job asks for more below.
+permissions:
+  contents: read
+
 jobs:
 
   # Prepare and publish the plugin to JetBrains Marketplace repository

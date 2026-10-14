@@ -18,6 +18,10 @@ on:
   # Trigger the workflow on any pull request
   pull_request:
 
+# Least privilege by default; jobs that need more ask for it explicitly.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
