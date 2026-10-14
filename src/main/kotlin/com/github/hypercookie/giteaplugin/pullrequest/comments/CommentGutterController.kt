@@ -156,6 +156,7 @@ class CommentGutterController(
                         CommentThreadBoxPanel(
                             project, thread,
                             onReply = { text, onResult -> reply(thread, text, onResult) },
+                            onSetResolved = { resolved, onResult -> setResolved(thread, resolved, onResult) },
                             onResized = { threadInlays[lineIndex]?.let(InlineComponentHost::relayout) },
                         ),
                     ) ?: continue
@@ -231,6 +232,30 @@ class CommentGutterController(
                         updateComments(freshComments)
                         onResult(Result.success(Unit))
                         notify("Reply posted.", NotificationType.INFORMATION)
+                    },
+                    onFailure = { error -> onResult(Result.failure(error)) },
+                )
+            }
+        }
+    }
+
+    private fun setResolved(thread: List<PullReviewComment>, resolved: Boolean, onResult: (Result<Unit>) -> Unit) {
+        val anchorComment = thread.first()
+        GiteaProjectCoroutineScope.getInstance(project).coroutineScope.launch {
+            val result = runCatching {
+                val client = commentContext.client
+                if (resolved) {
+                    client.resolveComment(commentContext.owner, commentContext.repo, anchorComment.id)
+                } else {
+                    client.unresolveComment(commentContext.owner, commentContext.repo, anchorComment.id)
+                }
+                commentContext.fetchFreshComments()
+            }
+            withContext(Dispatchers.Main) {
+                result.fold(
+                    onSuccess = { freshComments ->
+                        updateComments(freshComments)
+                        onResult(Result.success(Unit))
                     },
                     onFailure = { error -> onResult(Result.failure(error)) },
                 )
