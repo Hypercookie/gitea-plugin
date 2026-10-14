@@ -1409,7 +1409,10 @@ end, and produces a gap list that re-plans Phases 30–37.
 - [ ] **Waiting on user sign-off** for the proposed Phases 43-52 order.
 
 ## Known bugs
-- [ ] **"New comment" box doesn't close after adding a comment** (Phase 41
+- [ ] **Needs sandbox re-check (branch `feature/collaboration-tools-migration`):**
+      the code below was deleted in the collaborationTools migration (M2);
+      new-comment inlays are now driven by the platform's `renderInlays`.
+      Original report: **"New comment" box doesn't close after adding a comment** (Phase 41
       follow-ups 1–2 didn't fix it; `6b15736` never re-tested in sandbox).
       Parked 2026-10-14 to continue the remaining phases — **fix before
       calling the feature done.** A third attempt is saved as

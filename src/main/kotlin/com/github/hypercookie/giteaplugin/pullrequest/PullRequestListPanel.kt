@@ -236,9 +236,9 @@ class PullRequestListPanel(private val project: Project, private val toolWindow:
     /** Checks out `pr.head.ref` locally via `GitBrancher` (handles VFS
      * refresh; confirms first if the working tree is dirty — this is a
      * hard-to-reverse action on the user's tree). Once checked out,
-     * [WorkingCopyCommentEditorListener][com.github.hypercookie.giteaplugin.pullrequest.comments.WorkingCopyCommentEditorListener]
-     * picks up this PR's comments automatically on any file opened from
-     * that branch — no further action needed here. */
+     * [GiteaReviewSessionService][com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService]
+     * picks up the branch change and shows this PR's review in every open
+     * editor — no further action needed here. */
     private fun checkoutBranch(pr: PullRequest) {
         val repo = GitRepositoryManager.getInstance(project).repositories.firstOrNull()
         if (repo == null) {

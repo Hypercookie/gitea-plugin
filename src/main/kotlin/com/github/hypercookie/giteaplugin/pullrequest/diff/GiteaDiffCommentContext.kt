@@ -1,8 +1,9 @@
 package com.github.hypercookie.giteaplugin.pullrequest.diff
 
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
-import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
+import com.github.hypercookie.giteaplugin.api.dto.PullRequest
 import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStore
+import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.intellij.openapi.util.Key
 
 /**
@@ -11,20 +12,18 @@ import com.intellij.openapi.util.Key
  * read it back in `onViewerCreated` — that's the only hand-off point
  * `DiffExtension` gives us between "we opened this diff" and "the viewer
  * exists," so context has to travel on the request itself.
+ *
+ * The request's left side must be the file at the merge base and the right
+ * side the file at `pr.head.sha`: review comment lines refer to those
+ * versions.
  */
 data class GiteaDiffCommentContext(
-    val owner: String,
-    val repo: String,
-    val prNumber: Long,
+    val repo: GiteaRepoContext,
     val client: GiteaApiClient,
-    val filename: String,
-    val comments: List<PullReviewComment>,
+    val pullRequest: PullRequest,
+    val path: String,
+    val basePath: String,
     val pendingStore: PendingReviewStore,
-) {
-    /** Re-fetches this file's comments — used after posting a reply so the
-     * gutter can re-render without the user having to reopen the diff. */
-    suspend fun fetchFreshComments(): List<PullReviewComment> =
-        client.getAllReviewComments(owner, repo, prNumber).filter { it.path == filename }
-}
+)
 
 val GITEA_DIFF_COMMENT_CONTEXT_KEY: Key<GiteaDiffCommentContext> = Key.create("Gitea.DiffCommentContext")

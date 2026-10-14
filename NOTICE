@@ -1,0 +1,17 @@
+Gitea plugin for JetBrains IDEs
+
+Parts of this plugin mirror the structure and behavior of the GitHub
+pull request support and the code review UI library in IntelliJ IDEA
+Community Edition (https://github.com/JetBrains/intellij-community, build
+252.28539.54), where the equivalent library API is not public:
+
+- pullrequest/review/editor/*: modeled on
+  plugins/github/github-core/src/org/jetbrains/plugins/github/pullrequest/ui/editor
+  and .../pullrequest/ui/comment
+- pullrequest/review/LineMapping.kt: replaces
+  platform/collaboration-tools/.../ui/codereview/editor/ReviewInEditorUtil.kt
+
+IntelliJ IDEA Community Edition
+Copyright 2000-2025 JetBrains s.r.o. and contributors
+Licensed under the Apache License, Version 2.0
+(http://www.apache.org/licenses/LICENSE-2.0)

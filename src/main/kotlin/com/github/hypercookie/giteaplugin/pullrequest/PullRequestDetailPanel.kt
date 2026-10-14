@@ -3,7 +3,6 @@ package com.github.hypercookie.giteaplugin.pullrequest
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.ChangedFile
 import com.github.hypercookie.giteaplugin.api.dto.PullRequest
-import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.pullrequest.comments.markdownLabel
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GITEA_DIFF_COMMENT_CONTEXT_KEY
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaDiffCommentContext
@@ -172,27 +171,21 @@ class PullRequestDetailPanel(
             val result = runCatching {
                 val baseDeferred = async {
                     if (file.status == "added") null
-                    else client.getFileContentOrNull(context.owner, context.repo, file.previousFilename ?: file.filename, pr.base.sha)
+                    // Merge base, not base.sha: old-side review comment
+                    // lines refer to the merge-base version.
+                    else client.getFileContentOrNull(context.owner, context.repo, file.previousFilename ?: file.filename, pr.mergeBase ?: pr.base.sha)
                 }
                 val headDeferred = async {
                     if (file.status == "removed") null
                     else client.getFileContentOrNull(context.owner, context.repo, file.filename, pr.head.sha)
                 }
-                // Comments fetched alongside content — Phase 6 read-only
-                // display. Fetches every review's comments on every open;
-                // fine at this scale, revisit if PRs with many reviews make
-                // this slow.
-                val commentsDeferred = async {
-                    client.getAllReviewComments(context.owner, context.repo, pr.number)
-                        .filter { it.path == file.filename || it.path == file.previousFilename }
-                }
-                Triple(baseDeferred.await(), headDeferred.await(), commentsDeferred.await())
+                baseDeferred.await() to headDeferred.await()
             }
             withContext(Dispatchers.Main) {
                 result.fold(
-                    onSuccess = { (baseText, headText, comments) ->
+                    onSuccess = { (baseText, headText) ->
                         statusLabel.text = "${allFiles.size} changed file(s) — double-click to view diff"
-                        showDiff(file, baseText, headText, comments)
+                        showDiff(file, baseText, headText)
                     },
                     onFailure = { error ->
                         statusLabel.text = "Failed to load diff for ${file.filename}: ${error.message}"
@@ -202,7 +195,7 @@ class PullRequestDetailPanel(
         }
     }
 
-    private fun showDiff(file: ChangedFile, baseText: String?, headText: String?, comments: List<PullReviewComment>) {
+    private fun showDiff(file: ChangedFile, baseText: String?, headText: String?) {
         val fileType = FileTypeManager.getInstance().getFileTypeByFileName(file.filename)
         val contentFactory = DiffContentFactory.getInstance()
         val baseContent = baseText?.let { contentFactory.create(project, it, fileType) } ?: contentFactory.createEmpty()
@@ -217,7 +210,7 @@ class PullRequestDetailPanel(
         )
         request.putUserData(
             GITEA_DIFF_COMMENT_CONTEXT_KEY,
-            GiteaDiffCommentContext(context.owner, context.repo, pr.number, client, file.filename, comments, pendingReviewStore),
+            GiteaDiffCommentContext(context, client, pr, file.filename, file.previousFilename ?: file.filename, pendingReviewStore),
         )
         DiffManager.getInstance().showDiff(project, request)
     }

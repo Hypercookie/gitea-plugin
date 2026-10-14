@@ -35,7 +35,7 @@ class GiteaRepoLinkService(private val project: Project) {
                     for ((account, server) in serverByAccount) {
                         if (!GiteaUrlUtil.isUnderServer(parsedRemote, server)) continue
                         val (owner, repoName) = GiteaUrlUtil.ownerAndRepo(parsedRemote, server) ?: continue
-                        matches += GiteaRepoContext(account, owner, repoName, url)
+                        matches += GiteaRepoContext(account, owner, repoName, url, repo.root)
                     }
                 }
             }

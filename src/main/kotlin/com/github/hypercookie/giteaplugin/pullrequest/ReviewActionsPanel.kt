@@ -93,8 +93,7 @@ class ReviewActionsPanel(
         }
         // Text button, not an icon — this codebase deliberately avoids
         // guessing icon constant names it hasn't confirmed exist (see
-        // Phase 38); `PendingCommentBoxPanel`'s own discard button is the
-        // same plain `JButton("Discard")` for the same reason.
+        // Phase 38). Replaced by the collaboration-tools submit popup in M8.
         val discardButton = JButton("Discard").apply { isEnabled = count > 0 }
         val isSelfAuthored = authorLogin != null && authorLogin == currentUserLogin
         val selfReviewTooltip = "Gitea doesn't allow this on your own pull request"
