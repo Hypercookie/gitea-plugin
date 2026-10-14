@@ -523,7 +523,8 @@ Advisor-identified build order (dependency order, not user-facing order):
       tree. New "View Details" toolbar button opens the old detail-tab flow
       for the selected row instead (kept, per the "keep both" decision).
       **Known v1 limitation**: only resolves same-repo PRs (branch already
-      exists locally or as `origin/<ref>`) — fork-based PRs not handled.
+      exists locally or as `origin/<ref>`) — fork-based PRs not handled
+      (dropped from scope 2026-10-14, not planned).
 - [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 
 All of Phases 11-17 (the architecture-pivot work) built and **manually
@@ -647,9 +648,8 @@ Follow-up round after the UI pass fix:
       re-resolves every currently open editor (not just newly-opened ones)
       against the new branch. `GiteaBranchChangeListener` (the old,
       cache-invalidation-only class) deleted — merged in here.
-- [ ] **Fork-based PR checkout** (Phase 16) still open — only same-repo
-      branches resolve today. Lower priority (needs a second account/fork to
-      even test); left as a known limitation.
+- ~~**Fork-based PR checkout** (Phase 16)~~ — dropped from scope by user
+      decision (2026-10-14). Only same-repo branches resolve; not planned.
 
 Both **manually verified by the user in a running sandbox**: branch switch
 with a file open live-updates gutters/boxes and the top banner; editing (or
@@ -1053,11 +1053,24 @@ new endpoints.
       succeed, both on the first attempt.
 - [ ] Not yet tested in a running sandbox IDE.
 
-### Phase 29 — wire up Resolve/Unresolve [cheap]
-- [ ] `CommentThreadBoxPanel`: add Reply/Resolve text links under each
-      comment (API already exists: `resolveComment`/`unresolveComment`,
-      unused since Phase 2/6). Resolved threads get a visibly different
-      (dimmed/collapsed) state.
+### Phase 29 — wire up Resolve/Unresolve [x]
+- [x] **Spike**: local Gitea down (Docker daemon not running), so checked
+      upstream `templates/swagger/v1_json.tmpl` (release/v1.24):
+      `PullReviewComment.resolver` (`User`, null while unresolved) exists.
+      The resolve/unresolve endpoints are *not* in v1.24's swagger, but the
+      Phase 2 spike found them on the local 1.27.3 instance (same for the
+      `/replies` endpoint Phase 7 already uses successfully) — so this
+      feature, like replies, needs a newer Gitea than 1.24.
+- [x] `PullReviewComment` decodes `resolver`. Resolution is per
+      conversation, read from and applied to the thread's first comment.
+- [x] `CommentThreadBoxPanel`: "Resolve"/"Unresolve" `ActionLink` next to
+      the Reply button; "Resolved by X" line in the expanded view; collapsed
+      row gets a "✓ Resolved" tag and dimmed text. Thread stays collapsed by
+      default either way (no auto-hide).
+- [x] `CommentGutterController.setResolved()` calls the API, refetches, and
+      re-renders — same shape as `reply()`.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Not yet tested in a running sandbox IDE.
 
 ### Phase 30 — edit/delete own comments
 - [ ] Spike: confirm Gitea's `PATCH`/`DELETE` endpoints for a review
@@ -1337,6 +1350,20 @@ User-reported round after Phase 28 manual testing:
       duplication regression).
       Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 - [ ] Not yet re-tested in a running sandbox IDE after this fix.
+
+## Known bugs
+- [ ] **"New comment" box doesn't close after adding a comment** (Phase 41
+      follow-ups 1–2 didn't fix it; `6b15736` never re-tested in sandbox).
+      Parked 2026-10-14 to continue the remaining phases — **fix before
+      calling the feature done.** A third attempt is saved as
+      `git stash` "WIP: comment-box-close debug": splits `doRender()` into
+      `disposeStep()`/`installStep()` on separate `invokeLater` ticks (both
+      generation-guarded) plus `GITEA_DEBUG2` logging, including a
+      per-`CommentGutterController` `instanceId` and editor identity in
+      `WorkingCopyCommentEditorListener.processFile` — the suspicion being
+      two controllers attached to the same editor. Next step: `stash pop`,
+      `runIde`, reproduce, grep `idea.log` for `GITEA_DEBUG2`, check for
+      more than one `inst=` per file.
 
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.

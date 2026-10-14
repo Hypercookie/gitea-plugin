@@ -7,6 +7,7 @@ import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
+import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
@@ -157,10 +158,14 @@ class CommentThreadBoxPanel(
     private val project: Project,
     private var thread: List<PullReviewComment>,
     private val onReply: (text: String, onResult: (Result<Unit>) -> Unit) -> Unit,
+    private val onSetResolved: (resolved: Boolean, onResult: (Result<Unit>) -> Unit) -> Unit,
     private val onResized: () -> Unit,
 ) : JBPanel<CommentThreadBoxPanel>(BorderLayout()) {
 
     private var expanded = false
+
+    /** Gitea tracks resolution on the conversation's first comment. */
+    private val resolver get() = thread.first().resolver
 
     init {
         maximumSize = Dimension(Int.MAX_VALUE, maximumSize.height)
@@ -185,13 +190,18 @@ class CommentThreadBoxPanel(
     private fun collapsedRow(): JComponent {
         val first = thread.first()
         val suffix = if (thread.size > 1) "  <span style='color:gray'>(+${thread.size - 1} more)</span>" else ""
+        val resolvedTag = resolver?.let { "<span style='color:gray'>✓ Resolved</span>  " } ?: ""
         val row = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 6, 2)).apply { isOpaque = false }
         row.add(avatarLabel(project, first.user))
         row.add(
             JBLabel(
-                "<html><b>${first.user?.login ?: "unknown"}</b>  " +
+                "<html>$resolvedTag<b>${first.user?.login ?: "unknown"}</b>  " +
                     "${escapeHtml(first.body.take(90)).replace("\n", " ")}$suffix</html>",
-            ),
+            ).apply {
+                // Resolved conversations read as dimmed, matching the
+                // GitHub plugin's collapsed-resolved look.
+                if (resolver != null) foreground = UIUtil.getContextHelpForeground()
+            },
         )
         row.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
         row.addMouseListener(object : MouseAdapter() {
@@ -237,6 +247,21 @@ class CommentThreadBoxPanel(
         val replyField = JBTextArea(2, 40).apply { lineWrap = true; wrapStyleWord = true }
         val replyButton = JButton("Reply")
         val statusLabel = JBLabel(" ")
+        val currentResolver = resolver
+        val resolveLink = ActionLink(if (currentResolver == null) "Resolve" else "Unresolve")
+        resolveLink.addActionListener {
+            resolveLink.isEnabled = false
+            statusLabel.text = if (currentResolver == null) "Resolving…" else "Unresolving…"
+            onSetResolved(currentResolver == null) { result ->
+                // On success the controller re-renders the whole thread
+                // from fresh comments, so only the failure path needs to
+                // restore this panel's state.
+                result.onFailure { error ->
+                    resolveLink.isEnabled = true
+                    statusLabel.text = "Failed: ${error.message}"
+                }
+            }
+        }
         replyButton.addActionListener {
             val text = replyField.text.trim()
             if (text.isEmpty()) return@addActionListener
@@ -261,9 +286,18 @@ class CommentThreadBoxPanel(
                 JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.RIGHT)).apply {
                     isOpaque = false
                     add(statusLabel)
+                    add(resolveLink)
                     add(replyButton)
                 },
                 BorderLayout.SOUTH,
+            )
+        }
+        if (currentResolver != null) {
+            column.add(
+                JBLabel("Resolved by ${currentResolver.login}").apply {
+                    foreground = UIUtil.getContextHelpForeground()
+                    border = JBUI.Borders.emptyTop(4)
+                },
             )
         }
         column.add(replyRow)
