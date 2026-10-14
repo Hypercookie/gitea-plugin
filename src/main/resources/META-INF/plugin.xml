@@ -13,7 +13,6 @@
         <module name="intellij.platform.collaborationTools"/>
     </dependencies>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow factoryClass="com.github.hypercookie.giteaplugin.pullrequest.toolwindow.GiteaToolWindowFactory"
