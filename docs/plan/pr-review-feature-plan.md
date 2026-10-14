@@ -1360,7 +1360,7 @@ User-reported round after Phase 28 manual testing:
       Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 - [ ] Not yet re-tested in a running sandbox IDE after this fix.
 
-### Phase 42 — deep investigation into existing GitHub/GitLab integration [next]
+### Phase 42 — deep investigation into existing GitHub/GitLab integration [x]
 User goal (2026-10-14): "I want basically the exact same thing" as the
 official JetBrains GitHub/GitLab plugins. UI pass 3 compared against
 screenshots only; this phase compares against the real plugins, end to
@@ -1395,6 +1395,18 @@ end, and produces a gap list that re-plans Phases 30–37.
       directly (the module JetBrains' own plugins build on) instead of
       re-implementing its components. Earlier phases avoided it as
       internal API; reassess, since exact parity is now the explicit goal.
+- [x] **Done 2026-10-14, static analysis only** (user decision: no live
+      walkthrough, no babysitting). Inventory, gap table, API probes and a
+      proposed re-plan are in `docs/plan/parity-gap-analysis.md`. Checked
+      items above that needed a live session (walking flows, screenshots)
+      were replaced by reading the plugins' descriptors and message bundles.
+      Headline: both official plugins are built on
+      `intellij.platform.collaborationTools`, 152 of its 210 `codereview`
+      classes are unmarked public API; recommendation is to adopt it
+      (proposed Phase 43) before continuing feature work.
+      Edit/delete/reactions on review comments confirmed working via the
+      issue-comment endpoints on 1.27.3.
+- [ ] **Waiting on user sign-off** for the proposed Phases 43-52 order.
 
 ## Known bugs
 - [ ] **"New comment" box doesn't close after adding a comment** (Phase 41
