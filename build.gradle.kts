@@ -1,3 +1,4 @@
+import org.jetbrains.changelog.Changelog
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
@@ -5,6 +6,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.intellij.platform")
     id("org.jetbrains.changelog")
+}
+
+group = providers.gradleProperty("group").get()
+version = providers.gradleProperty("version").get()
+
+kotlin {
+    jvmToolchain(21)
 }
 
 dependencies {
@@ -45,6 +53,44 @@ dependencies {
 }
 
 intellijPlatform {
+    pluginConfiguration {
+        version = providers.gradleProperty("version")
+
+        // Change notes for Marketplace come from the matching CHANGELOG.md
+        // section ("Unreleased" until a release patches it).
+        val changelog = project.changelog
+        changeNotes = providers.gradleProperty("version").map { pluginVersion ->
+            with(changelog) {
+                renderItem(
+                    (getOrNull(pluginVersion) ?: getUnreleased())
+                        .withHeader(false)
+                        .withEmptySections(false),
+                    Changelog.OutputType.HTML,
+                )
+            }
+        }
+
+        ideaVersion {
+            sinceBuild = "252"
+        }
+    }
+
+    // Marketplace signing and publishing, used by the Release workflow.
+    // Values come from repository secrets; nothing is needed locally.
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+        // A pre-release version like 1.2.0-beta.1 goes to the "beta" channel.
+        channels = providers.gradleProperty("version").map {
+            listOf(it.substringAfter('-', "").substringBefore('.').ifEmpty { "default" })
+        }
+    }
+
     pluginVerification {
         // Gate for the "public IntelliJ APIs only" rule: the verifier
         // reports @ApiStatus.Internal, experimental and deprecated usages.
@@ -67,4 +113,9 @@ tasks.test {
     if (!giteaToken.isPresent) {
         exclude("**/integration/**")
     }
+}
+
+changelog {
+    groups.empty()
+    repositoryUrl = providers.gradleProperty("pluginRepositoryUrl")
 }
