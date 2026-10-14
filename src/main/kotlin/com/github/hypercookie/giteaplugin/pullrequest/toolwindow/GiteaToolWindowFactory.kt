@@ -112,7 +112,7 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
                     null,
                 )
                 emptyText.appendLine("Open Settings", SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
-                    ShowSettingsUtil.getInstance().showSettingsDialog(null, GiteaConfigurable::class.java)
+                    ShowSettingsUtil.getInstance().showSettingsDialog(twVm.project, GiteaConfigurable::class.java)
                     twVm.connect()
                 }
                 emptyText.appendLine("Retry", SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) { twVm.connect() }

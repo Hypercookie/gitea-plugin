@@ -1,67 +1,80 @@
 package com.github.hypercookie.giteaplugin.accounts
 
-import com.intellij.credentialStore.CredentialAttributes
-import com.intellij.credentialStore.Credentials
-import com.intellij.credentialStore.generateServiceName
-import com.intellij.ide.passwordSafe.PasswordSafe
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.collaboration.auth.AccountManagerBase
+import com.intellij.collaboration.auth.AccountsRepository
+import com.intellij.collaboration.auth.PasswordSafeCredentialsRepository
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
-import com.intellij.util.xmlb.XmlSerializerUtil
+import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.logger
+import com.intellij.util.xmlb.annotations.Tag
 
 /**
- * Application-level store of configured Gitea accounts (server URL + display
- * name). Non-secret fields persist to XML via [PersistentStateComponent];
- * tokens never touch that file and instead go through the platform's
- * [PasswordSafe], keyed per-account by id.
+ * Gitea accounts and their tokens, on the collaboration tools'
+ * [AccountManagerBase] (same shape as the GitLab plugin's
+ * `PersistentGitLabAccountManager`). Tokens live in the IDE password safe
+ * under `generateServiceName("Gitea", account.id)`, the same key the
+ * plugin used before the migration, so stored tokens keep working.
+ */
+@Service(Service.Level.APP)
+class GiteaAccountManager : AccountManagerBase<GiteaAccount, String>(logger<GiteaAccountManager>()) {
+
+    override fun accountsRepository(): AccountsRepository<GiteaAccount> = service<GiteaPersistentAccounts>()
+
+    override fun credentialsRepository() =
+        PasswordSafeCredentialsRepository<GiteaAccount, String>(SERVICE_NAME, PasswordSafeCredentialsRepository.CredentialsMapper.Simple)
+
+    val accounts: Set<GiteaAccount> get() = accountsState.value
+
+    suspend fun getToken(account: GiteaAccount): String? = findCredentials(account)
+
+    companion object {
+        const val SERVICE_NAME = "Gitea"
+
+        fun getInstance(): GiteaAccountManager = service()
+    }
+}
+
+/**
+ * Account list storage. Keeps the pre-migration file, state name and bean
+ * layout (`<GiteaAccount id name serverUrl>`), so existing accounts load.
  */
 @Service(Service.Level.APP)
 @State(name = "GiteaAccounts", storages = [Storage("gitea-accounts.xml")])
-class GiteaAccountManager : PersistentStateComponent<GiteaAccountManager.State> {
+class GiteaPersistentAccounts : AccountsRepository<GiteaAccount>, PersistentStateComponent<GiteaPersistentAccounts.AccountsState> {
 
-    class State {
-        var accounts: MutableList<GiteaAccount> = mutableListOf()
+    class AccountsState {
+        var accounts: MutableList<AccountBean> = mutableListOf()
     }
 
-    private var myState = State()
-
-    val accounts: List<GiteaAccount>
-        get() = myState.accounts.toList()
-
-    fun addAccount(account: GiteaAccount, token: String) {
-        myState.accounts.add(account)
-        setToken(account, token)
+    @Tag("GiteaAccount")
+    class AccountBean {
+        var id: String = ""
+        var name: String = ""
+        var serverUrl: String = ""
     }
 
-    fun removeAccount(account: GiteaAccount) {
-        myState.accounts.removeAll { it.id == account.id }
-        setToken(account, null)
-    }
+    private var state = AccountsState()
 
-    fun getToken(account: GiteaAccount): String? =
-        PasswordSafe.instance.getPassword(credentialAttributes(account))
+    override var accounts: Set<GiteaAccount>
+        get() = state.accounts.filter { it.id.isNotBlank() }.mapTo(LinkedHashSet()) { GiteaAccount(it.id, it.name, it.serverUrl) }
+        set(value) {
+            state = AccountsState().apply {
+                accounts = value.mapTo(mutableListOf()) { account ->
+                    AccountBean().apply {
+                        id = account.id
+                        name = account.name
+                        serverUrl = account.serverUrl
+                    }
+                }
+            }
+        }
 
-    fun setToken(account: GiteaAccount, token: String?) {
-        PasswordSafe.instance.set(
-            credentialAttributes(account),
-            token?.let { Credentials(account.id, it) },
-        )
-    }
+    override fun getState(): AccountsState = state
 
-    private fun credentialAttributes(account: GiteaAccount): CredentialAttributes =
-        CredentialAttributes(generateServiceName("Gitea", account.id))
-
-    override fun getState(): State = myState
-
-    override fun loadState(state: State) {
-        XmlSerializerUtil.copyBean(state, myState)
-    }
-
-    companion object {
-        @JvmStatic
-        fun getInstance(): GiteaAccountManager =
-            ApplicationManager.getApplication().getService(GiteaAccountManager::class.java)
+    override fun loadState(state: AccountsState) {
+        this.state = state
     }
 }

@@ -80,7 +80,7 @@ class GiteaProjectViewModel(
  * Gitea remote or no token is configured (the platform then shows the
  * empty-state content).
  */
-class GiteaToolWindowViewModel(private val cs: CoroutineScope, private val project: Project) :
+class GiteaToolWindowViewModel(private val cs: CoroutineScope, val project: Project) :
     ReviewToolwindowViewModel<GiteaProjectViewModel> {
 
     private val _projectVm = MutableStateFlow<GiteaProjectViewModel?>(null)

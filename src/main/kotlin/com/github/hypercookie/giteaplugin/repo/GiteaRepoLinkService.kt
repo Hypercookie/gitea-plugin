@@ -1,7 +1,7 @@
 package com.github.hypercookie.giteaplugin.repo
 
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
-import com.github.hypercookie.giteaplugin.accounts.GiteaProjectAccountSettings
+import com.github.hypercookie.giteaplugin.accounts.GiteaProjectDefaultAccountHolder
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import git4idea.repo.GitRepositoryManager
@@ -52,7 +52,7 @@ class GiteaRepoLinkService(private val project: Project) {
         val all = findAllMatches()
         if (all.size <= 1) return all.firstOrNull()
 
-        val defaultAccountId = GiteaProjectAccountSettings.getInstance(project).defaultAccountId
+        val defaultAccountId = GiteaProjectDefaultAccountHolder.getInstance(project).account?.id
             ?: return null
         return all.singleOrNull { it.account.id == defaultAccountId }
     }

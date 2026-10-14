@@ -24,7 +24,7 @@
         <editorFactoryListener implementation="com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewInEditorController"/>
         <editorNotificationProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider"/>
         <notificationGroup id="Gitea" displayType="BALLOON" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
-        <applicationConfigurable
+        <projectConfigurable
                 parentId="vcs"
                 instance="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
                 id="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
