@@ -4,6 +4,7 @@ import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
 import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
+import com.github.hypercookie.giteaplugin.util.primaryButton
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.Project
@@ -54,7 +55,7 @@ class ReviewActionsPanel(
     private val authorLogin: String?,
 ) {
     private val statusLabel = JBLabel(" ")
-    private val submitButton = JButton("Submit Review…").apply { addActionListener { showSubmitPopup() } }
+    private val submitButton = primaryButton("Submit Review…").apply { addActionListener { showSubmitPopup() } }
 
     /** Fetched once on init; null until it resolves (self-review buttons
      * just stay enabled for that brief window rather than blocking on it —
@@ -97,7 +98,9 @@ class ReviewActionsPanel(
         val discardButton = JButton("Discard").apply { isEnabled = count > 0 }
         val isSelfAuthored = authorLogin != null && authorLogin == currentUserLogin
         val selfReviewTooltip = "Gitea doesn't allow this on your own pull request"
-        val approveButton = JButton("Approve").apply {
+        // One accent button per group: Approve when allowed, otherwise
+        // Comment, the only verdict left on your own PR.
+        val approveButton = (if (isSelfAuthored) JButton("Approve") else primaryButton("Approve")).apply {
             isEnabled = !isSelfAuthored
             if (isSelfAuthored) toolTipText = selfReviewTooltip
         }
@@ -105,7 +108,7 @@ class ReviewActionsPanel(
             isEnabled = !isSelfAuthored
             if (isSelfAuthored) toolTipText = selfReviewTooltip
         }
-        val commentButton = JButton("Comment")
+        val commentButton = if (isSelfAuthored) primaryButton("Comment") else JButton("Comment")
 
         val content = JBPanel<JBPanel<*>>(BorderLayout()).apply {
             border = JBUI.Borders.empty(10)

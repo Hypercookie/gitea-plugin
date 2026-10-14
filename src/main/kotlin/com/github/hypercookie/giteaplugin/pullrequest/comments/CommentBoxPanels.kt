@@ -4,6 +4,7 @@ import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
+import com.github.hypercookie.giteaplugin.util.primaryButton
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
@@ -245,7 +246,7 @@ class CommentThreadBoxPanel(
         }
 
         val replyField = JBTextArea(2, 40).apply { lineWrap = true; wrapStyleWord = true }
-        val replyButton = JButton("Reply")
+        val replyButton = primaryButton("Reply")
         val statusLabel = JBLabel(" ")
         val currentResolver = resolver
         val resolveLink = ActionLink(if (currentResolver == null) "Resolve" else "Unresolve")
@@ -334,7 +335,7 @@ class NewCommentBoxPanel(
                 // path backing a second option, so a real split button
                 // would promise a capability that doesn't exist. The label
                 // describes what actually happens.
-                JButton(startLabel).apply {
+                primaryButton(startLabel).apply {
                     addActionListener {
                         val text = textArea.text.trim()
                         if (text.isNotEmpty()) onAdd(text)
