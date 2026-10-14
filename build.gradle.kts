@@ -58,3 +58,13 @@ intellijPlatform {
         )
     }
 }
+
+tasks.test {
+    // Live tests talk to a local Gitea dev instance (docs/local-gitea-dev-instance.md).
+    // They only run when GITEA_DEV_TOKEN is set, so CI (GitHub Actions) never
+    // depends on a Gitea server.
+    val giteaToken = providers.environmentVariable("GITEA_DEV_TOKEN")
+    if (!giteaToken.isPresent) {
+        exclude("**/integration/**")
+    }
+}
