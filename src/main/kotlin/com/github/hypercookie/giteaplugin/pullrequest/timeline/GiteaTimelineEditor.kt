@@ -4,6 +4,7 @@ import com.github.hypercookie.giteaplugin.icons.GiteaIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorPolicy
@@ -15,6 +16,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.UserDataHolderBase
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.LightVirtualFile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import java.beans.PropertyChangeListener
 import java.util.concurrent.ConcurrentHashMap
@@ -67,7 +69,12 @@ class GiteaTimelineEditorProvider : FileEditorProvider, DumbAware {
 }
 
 private class GiteaTimelineFileEditor(private val file: GiteaTimelineVirtualFile) : UserDataHolderBase(), FileEditor {
-    private val cs = GiteaProjectCoroutineScope.getInstance(file.data.project).coroutineScope.giteaChildScope("Gitea timeline")
+    // EDT-dispatched, as in the GitHub plugin's GHPRTimelineFileEditor: the
+    // comment field from CodeReviewCommentTextFieldFactory releases its
+    // editor on this scope's dispatcher when the scope is cancelled, and
+    // EditorFactory.releaseEditor fails off the EDT, leaking the editor.
+    private val cs = GiteaProjectCoroutineScope.getInstance(file.data.project).coroutineScope
+        .giteaChildScope("Gitea timeline", Dispatchers.EDT)
     private val component = GiteaTimelineComponent.create(cs, file.data)
 
     override fun getComponent(): JComponent = component
