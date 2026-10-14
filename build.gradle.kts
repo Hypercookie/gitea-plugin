@@ -40,6 +40,8 @@ dependencies {
         bundledModule("intellij.platform.vcs.dvcs.impl")
         bundledModule("intellij.platform.vcs.dvcs.impl.shared")
         bundledModule("intellij.platform.vcs.log.impl")
+        // AsyncChangesTree (the PR changes tree from CodeReviewChangeListComponentFactory).
+        bundledModule("intellij.platform.vcs.impl")
         testFramework(TestFrameworkType.Platform)
     }
 }

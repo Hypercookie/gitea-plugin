@@ -129,9 +129,12 @@ class GiteaPullRequestListViewModel(
             GiteaListSearchValue.State.CLOSED, GiteaListSearchValue.State.MERGED -> "closed"
             null -> "all"
         }
+        // Rows the server sent, before any client-side filtering; paging
+        // stops only when the server itself returned a short page.
+        var serverCount = -1
         val raw: List<GiteaPullRequestListItem> = when {
             search.reviewRequested == true -> client.searchReviewRequested(repo.owner, apiState, page, PAGE_SIZE)
-                .also { if (it.size < PAGE_SIZE) hasMore = false }
+                .also { serverCount = it.size }
                 .filter { it.repository?.fullName == null || it.repository.fullName.equals("${repo.owner}/${repo.repo}", ignoreCase = true) }
                 .map(GiteaPullRequestListItem::of)
 
@@ -145,12 +148,13 @@ class GiteaPullRequestListViewModel(
                 repo.owner, repo.repo, apiState, search.sort.apiValue, search.author, search.label?.id, page, PAGE_SIZE,
             ).map(GiteaPullRequestListItem::of)
         }
+        if (serverCount < 0) serverCount = raw.size
         val filtered = when (search.state) {
             GiteaListSearchValue.State.MERGED -> raw.filter { it.merged }
             GiteaListSearchValue.State.CLOSED -> raw.filter { !it.merged }
             else -> raw
         }
-        return raw.size to filtered
+        return serverCount to filtered
     }
 
     companion object {

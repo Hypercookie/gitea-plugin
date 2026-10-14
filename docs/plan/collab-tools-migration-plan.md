@@ -263,8 +263,22 @@ Done together with M2, so the old controller can be deleted in one commit.
       experimental usages.
 - [ ] Sandbox test by the user, then merge decision.
 
+#### Verification beyond build gates
+- `GiteaLiveIntegrationTest` (skipped without `GITEA_DEV_TOKEN`) runs the
+  migrated view models against `plugindev/pr-test` on the local Gitea
+  1.27.3: editor model places all 7 README threads (4 anchor commits),
+  follows two inserted lines, marks PR changes; list VM covers all/open/
+  author/`/pulls` sort/merged; changes VM covers all files and one commit.
+  All pass. UI components themselves are still not run in an IDE.
+- Accounts compatibility test uses the real pre-migration sandbox XML.
+- `intellij.platform.vcs.impl` added as a module dependency (needed for
+  `AsyncChangesTree`; descriptor load test passes with it).
+- Timeline reviews now list their inline comments (path, line, OUTDATED/
+  RESOLVED tags, body), so threads the editor hides as outdated remain
+  visible somewhere. Diff hunk not shown (I11).
+
 #### Not yet ported (open follow-ups)
-- Review threads with diff hunks in the timeline (I11).
+- Diff hunk rendering for review comments in the timeline (I11).
 - Editor review toolbar and next/previous comment navigation (I6, I8).
 - Persistent list search history (I17).
 - New parity features from `parity-gap-analysis.md` (edit/delete,

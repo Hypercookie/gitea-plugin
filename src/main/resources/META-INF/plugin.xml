@@ -11,6 +11,7 @@
     <depends>Git4Idea</depends>
     <dependencies>
         <module name="intellij.platform.collaborationTools"/>
+        <module name="intellij.platform.vcs.impl"/>
     </dependencies>
 
 
