@@ -14,6 +14,10 @@ Community Edition (https://github.com/JetBrains/intellij-community, build
 - pullrequest/details/*: modeled on .../pullrequest/ui/details
 - util/MigLayoutGaps.kt: mirrors
   platform/collaboration-tools/.../ui/util/migLayoutUtil.kt
+- util/GiteaCodeFenceGeneratingProvider.kt: mirrors
+  platform/markdown-utils/src/com/intellij/markdown/utils/CodeFenceSyntaxHighlighterGeneratingProvider.kt;
+  util/GiteaMarkdown.kt follows
+  plugins/github/github-core/.../pullrequest/comment/GHMarkdownToHtmlConverter.kt
 - pullrequest/review/LineMapping.kt: replaces
   platform/collaboration-tools/.../ui/codereview/editor/ReviewInEditorUtil.kt
 

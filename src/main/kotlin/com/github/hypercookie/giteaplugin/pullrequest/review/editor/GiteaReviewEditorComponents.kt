@@ -13,7 +13,6 @@ import com.github.hypercookie.giteaplugin.util.bindVisibility
 import com.github.hypercookie.giteaplugin.util.giteaAction
 import com.intellij.collaboration.messages.CollaborationToolsBundle
 import com.intellij.collaboration.ui.CollaborationToolsUIUtil
-import com.intellij.collaboration.ui.SimpleHtmlPane
 import com.intellij.collaboration.ui.codereview.CodeReviewChatItemUIUtil
 import com.intellij.collaboration.ui.codereview.CodeReviewTimelineUIUtil
 import com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentTextFieldFactory
@@ -89,7 +88,7 @@ object GiteaReviewEditorComponents {
 
     private fun createComment(project: Project, comment: PullReviewComment, firstInResolvedThread: Boolean): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
-        val body = SimpleHtmlPane(GiteaMarkdown.toHtml(comment.body))
+        val body = GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body))
         val author = comment.user
         return CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, body) {
             iconTooltip = author?.presentableName()
@@ -149,7 +148,7 @@ object GiteaReviewEditorComponents {
 
     private fun createPending(project: Project, inlay: GiteaEditorInlay.Pending): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
-        val body = SimpleHtmlPane(GiteaMarkdown.toHtml(inlay.comment.body))
+        val body = GiteaMarkdown.createPane(GiteaMarkdown.toHtml(inlay.comment.body))
         val item = CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(null, size) }, body) {
             maxContentWidth = null
             val title = horizontalPanel(CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP).apply {

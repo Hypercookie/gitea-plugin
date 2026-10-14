@@ -76,7 +76,7 @@ object GiteaPullRequestDetailsComponent {
             add(CodeReviewDetailsCommitsComponentFactory.create(cs, changesVm, ::present))
             add(CodeReviewDetailsBranchComponentFactory.create(cs, branchesVm))
         }
-        val commitInfo = CodeReviewDetailsCommitInfoComponentFactory.create(cs, changesVm.selectedCommit, ::present) { SimpleHtmlPane() }
+        val commitInfo = CodeReviewDetailsCommitInfoComponentFactory.create(cs, changesVm.selectedCommit, ::present) { GiteaMarkdown.createPane("") }
 
         val status = JPanel(ListLayout.vertical(0)).apply {
             isOpaque = false

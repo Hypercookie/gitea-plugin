@@ -121,7 +121,7 @@ object GiteaTimelineComponent {
     private fun description(project: Project, avatars: GiteaAvatarIcons, data: GiteaPullRequestReviewData): JComponent {
         val pr = data.pullRequest.value
         val body = pr.body?.takeIf { it.isNotBlank() }?.let(GiteaMarkdown::toHtml) ?: "<i>No description provided</i>"
-        return chatItem(avatars, FULL, pr.user, SimpleHtmlPane(body), titlePane(pr.user, null, pr.createdAt))
+        return chatItem(avatars, FULL, pr.user, GiteaMarkdown.createPane(body), titlePane(pr.user, null, pr.createdAt))
     }
 
     private fun item(
@@ -133,12 +133,12 @@ object GiteaTimelineComponent {
         data: GiteaPullRequestReviewData,
     ): JComponent? =
         when (event.type) {
-            "comment" -> chatItem(avatars, FULL, event.user, SimpleHtmlPane(GiteaMarkdown.toHtml(event.body.orEmpty())), titlePane(event.user, null, event.createdAt))
+            "comment" -> chatItem(avatars, FULL, event.user, GiteaMarkdown.createPane(GiteaMarkdown.toHtml(event.body.orEmpty())), titlePane(event.user, null, event.createdAt))
             "review" -> {
                 val verb = "reviewed the changes"
                 val inline = commentsByReview[event.reviewId].orEmpty()
                 val content = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply { isOpaque = false }
-                event.body?.takeIf { it.isNotBlank() }?.let { content.add(SimpleHtmlPane(GiteaMarkdown.toHtml(it))) }
+                event.body?.takeIf { it.isNotBlank() }?.let { content.add(GiteaMarkdown.createPane(GiteaMarkdown.toHtml(it))) }
                 inline.forEach { content.add(inlineComment(it, data)) }
                 if (content.componentCount > 0) {
                     chatItem(avatars, FULL, event.user, content, titlePane(event.user, verb, event.createdAt))
@@ -192,7 +192,7 @@ object GiteaTimelineComponent {
             isOpaque = false
             border = JBUI.Borders.emptyLeft(8)
             add(header)
-            add(SimpleHtmlPane(GiteaMarkdown.toHtml(comment.body)))
+            add(GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body)))
         }
     }
 

@@ -15,11 +15,9 @@ dependencies {
     // avoids classloader conflicts with whatever the IJ Platform bundles internally.
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
-    // Renders Gitea comment bodies (Markdown source) for the timeline tab.
-    // Small, pure-Java, no transitive deps — same "avoid classloader
-    // conflicts with the IJ Platform" reasoning as the HTTP client choice
-    // in Phase 0, just for Markdown instead of JSON.
-    implementation("org.commonmark:commonmark:0.21.0")
+    // Markdown rendering uses the org.intellij.markdown parser bundled with the
+    // IntelliJ Platform (as the GitHub plugin does), so no Markdown library is
+    // shipped with the plugin.
 
     // Coroutines are bundled by the IntelliJ Platform at runtime; compileOnly
     // avoids shipping/duplicating a second copy on the plugin classpath.
