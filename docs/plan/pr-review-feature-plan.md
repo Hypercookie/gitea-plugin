@@ -1415,15 +1415,7 @@ end, and produces a gap list that re-plans Phases 30–37.
       Original report: **"New comment" box doesn't close after adding a comment** (Phase 41
       follow-ups 1–2 didn't fix it; `6b15736` never re-tested in sandbox).
       Parked 2026-10-14 to continue the remaining phases — **fix before
-      calling the feature done.** A third attempt is saved as
-      `git stash` "WIP: comment-box-close debug": splits `doRender()` into
-      `disposeStep()`/`installStep()` on separate `invokeLater` ticks (both
-      generation-guarded) plus `GITEA_DEBUG2` logging, including a
-      per-`CommentGutterController` `instanceId` and editor identity in
-      `WorkingCopyCommentEditorListener.processFile` — the suspicion being
-      two controllers attached to the same editor. Next step: `stash pop`,
-      `runIde`, reproduce, grep `idea.log` for `GITEA_DEBUG2`, check for
-      more than one `inst=` per file.
+      calling the feature done.** The debug stash for this bug was dropped on 2026-10-14; the code it targeted no longer exists after the collaborationTools migration.
 
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.

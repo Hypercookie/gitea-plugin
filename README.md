@@ -189,5 +189,7 @@ Further documentation:
 
 ## License
 
+Licensed under the Apache License, Version 2.0. See `LICENSE`.
+
 Parts of the user interface mirror code from IntelliJ IDEA Community Edition,
-which is licensed under the Apache License 2.0. See `NOTICE`.
+which is also licensed under the Apache License 2.0. See `NOTICE`.

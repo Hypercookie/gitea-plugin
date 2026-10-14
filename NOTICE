@@ -1,4 +1,7 @@
 Gitea plugin for JetBrains IDEs
+Copyright 2026 hypercookie
+
+Licensed under the Apache License, Version 2.0; see LICENSE.
 
 Parts of this plugin mirror the structure and behavior of the GitHub
 pull request support and the code review UI library in IntelliJ IDEA
@@ -25,4 +28,4 @@ IntelliJ IDEA Community Edition
 Copyright 2000-2025 JetBrains s.r.o. and contributors
 Licensed under the Apache License, Version 2.0
 (http://www.apache.org/licenses/LICENSE-2.0); a copy of the license is in
-LICENSE-APACHE-2.0.txt.
+LICENSE.
