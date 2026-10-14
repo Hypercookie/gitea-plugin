@@ -20,6 +20,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -29,7 +31,37 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.Base64
 
+/**
+ * A non-2xx response from the Gitea API. [message] is human-readable,
+ * built by [giteaErrorMessage] from the response body.
+ */
 class GiteaApiException(val statusCode: Int, message: String) : Exception(message)
+
+private val errorJson = Json { ignoreUnknownKeys = true }
+
+private const val MAX_RAW_ERROR_LENGTH = 300
+
+/**
+ * Builds a readable message for a failed request. Gitea answers API errors
+ * with `{"message": "...", "url": "<swagger link>"}` (e.g. `review event
+ * REQUEST_CHANGES requires a body`); that message is used as-is, prefixed
+ * with the status. Bodies that aren't Gitea JSON (a proxy's HTML error page,
+ * an empty body) fall back to a shortened copy of the raw text.
+ */
+internal fun giteaErrorMessage(statusCode: Int, body: String?): String {
+    val text = body?.trim().orEmpty()
+    val serverMessage = runCatching {
+        ((errorJson.parseToJsonElement(text) as? JsonObject)?.get("message") as? JsonPrimitive)
+            ?.takeIf { it.isString }?.content?.trim()
+    }.getOrNull()
+    val detail = when {
+        !serverMessage.isNullOrEmpty() -> serverMessage
+        text.isEmpty() -> null
+        text.length > MAX_RAW_ERROR_LENGTH -> text.take(MAX_RAW_ERROR_LENGTH) + "…"
+        else -> text
+    }
+    return if (detail == null) "HTTP $statusCode" else "HTTP $statusCode: $detail"
+}
 
 /**
  * Gitea REST API client (`/api/v1`). Endpoint shapes confirmed against a live
@@ -253,10 +285,7 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
 
     private fun checkStatus(response: HttpResponse<String>) {
         if (response.statusCode() !in 200..299) {
-            throw GiteaApiException(
-                response.statusCode(),
-                "Gitea API request failed: ${response.statusCode()} ${response.body()}",
-            )
+            throw GiteaApiException(response.statusCode(), giteaErrorMessage(response.statusCode(), response.body()))
         }
     }
 

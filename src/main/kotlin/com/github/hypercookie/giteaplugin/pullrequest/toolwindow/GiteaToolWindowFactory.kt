@@ -7,6 +7,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionS
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestListComponent
 import com.github.hypercookie.giteaplugin.settings.GiteaConfigurable
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
+import com.github.hypercookie.giteaplugin.util.errorPanel
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
 import com.intellij.collaboration.ui.toolwindow.ReviewTabsComponentFactory
 import com.intellij.collaboration.ui.toolwindow.manageReviewToolwindowTabs
@@ -21,6 +22,7 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBPanelWithEmptyText
+import com.intellij.util.ui.JBUI
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
@@ -96,7 +98,14 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
                         wrapper.add(GiteaPullRequestDetailsComponent.create(cs, data), BorderLayout.CENTER)
                         wrapper.revalidate()
                     }.onFailure {
-                        wrapper.emptyText.text = "Can't load pull request #${tabVm.number}: ${it.message}"
+                        // Empty text is a single line; the error panel wraps
+                        // long server messages instead of cutting them off.
+                        wrapper.emptyText.clear()
+                        val error = errorPanel("Can't load pull request #${tabVm.number}", it).apply {
+                            border = JBUI.Borders.empty(12)
+                        }
+                        wrapper.add(error, BorderLayout.NORTH)
+                        wrapper.revalidate()
                     }
                 }
             }

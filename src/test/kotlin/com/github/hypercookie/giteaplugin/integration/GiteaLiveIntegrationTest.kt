@@ -2,6 +2,10 @@ package com.github.hypercookie.giteaplugin.integration
 
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccount
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
+import com.github.hypercookie.giteaplugin.api.GiteaApiException
+import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
+import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
+import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
 import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStore
 import com.github.hypercookie.giteaplugin.pullrequest.details.GiteaPullRequestChangesViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaListSearchHistoryModel
@@ -9,6 +13,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaListSearchValue
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestListViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaSearchPanelViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaEditorInlay
 import com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewEditorModel
@@ -156,7 +161,61 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
         }
     }
 
+    /**
+     * Gitea's review-type rules, checked against the server and against the
+     * submit popup's button state. Only requests the server rejects during
+     * validation are sent, so no reviews are created.
+     */
+    fun testSubmitReviewFollowsGiteaReviewRules() {
+        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        runBlocking {
+            val comment = CreatePullReviewComment(body = "note", path = "README.md", newPosition = 1)
+            val others = client().getPullRequest(OWNER, REPO, OTHERS_PR)
+            val rejected = try {
+                client().createReview(
+                    OWNER, REPO, OTHERS_PR,
+                    CreatePullReviewOptions(ReviewEvent.REQUEST_CHANGES, body = " ", commitId = others.head.sha, comments = listOf(comment)),
+                )
+                null
+            } catch (e: GiteaApiException) {
+                e
+            }
+            assertNotNull("REQUEST_CHANGES with comments but no body is rejected", rejected)
+            assertEquals(422, rejected!!.statusCode)
+            assertEquals("HTTP 422: review event REQUEST_CHANGES requires a body", rejected.message)
+
+            val own = try {
+                client().createReview(OWNER, REPO, 1, CreatePullReviewOptions(ReviewEvent.REQUEST_CHANGES, body = "x"))
+                null
+            } catch (e: GiteaApiException) {
+                e
+            }
+            assertEquals("HTTP 422: reject your own pull is not allowed", own?.message)
+
+            val othersData = data(OTHERS_PR)
+            val vm = GiteaSubmitReviewViewModel(scope, othersData) {}
+            withTimeout(TIMEOUT) { vm.canApproveOrReject.first { it } }
+            othersData.pendingStore.addComment(comment)
+            withTimeout(TIMEOUT) { vm.canComment.first { it } }
+            assertFalse("pending comments alone don't allow Request Changes", vm.canRequestChanges.value)
+            vm.text.value = "Please fix"
+            withTimeout(TIMEOUT) { vm.canRequestChanges.first { it } }
+            vm.text.value = "  \n "
+            withTimeout(TIMEOUT) { vm.canRequestChanges.first { !it } }
+            assertTrue("pending comments still allow Comment", vm.canComment.value)
+
+            val ownData = data(1)
+            val ownVm = GiteaSubmitReviewViewModel(scope, ownData) {}
+            val viewer = withTimeout(TIMEOUT) { ownData.currentUser.first { it != null } }!!
+            assertEquals(ownData.pullRequest.value.user?.login, viewer.login)
+            kotlinx.coroutines.delay(500)
+            assertFalse("no Approve / Request Changes on own pull request", ownVm.canApproveOrReject.value)
+        }
+    }
+
     private companion object {
+        /** Authored by alice, so the token's user (plugindev) can review it. */
+        const val OTHERS_PR = 7L
         const val OWNER = "plugindev"
         const val REPO = "pr-test"
         const val TIMEOUT = 30_000L
