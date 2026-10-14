@@ -169,7 +169,7 @@ object GiteaTimelineComponent {
             "merge_pull" -> eventItem(avatars, event.user, "merged this", event.createdAt)
             "change_title" -> eventItem(avatars, event.user, "renamed this pull request from '${escape(event.oldTitle.orEmpty())}' to '${escape(event.newTitle.orEmpty())}'", event.createdAt)
             "label" -> eventItem(avatars, event.user, "changed labels ${escape(event.label?.name.orEmpty())}", event.createdAt)
-            "assignees" -> eventItem(avatars, event.user, "assigned ${escape(event.assignee?.login.orEmpty())}", event.createdAt)
+            "assignees" -> eventItem(avatars, event.user, "assigned ${escape(event.assignee?.displayName().orEmpty())}", event.createdAt)
             "review_request" -> eventItem(avatars, event.user, "requested a review", event.createdAt)
             "delete_branch" -> eventItem(avatars, event.user, "deleted the branch", event.createdAt)
             else -> eventItem(avatars, event.user, escape(event.type.replace('_', ' ')), event.createdAt)
@@ -201,7 +201,7 @@ object GiteaTimelineComponent {
         chatItem(avatars, SECONDARY, user, JPanel().apply { isOpaque = false }, titlePane(user, text, date))
 
     private fun titlePane(user: GiteaUser?, action: String?, date: String?): JComponent {
-        val name = user?.login ?: "unknown"
+        val name = escape(user?.displayName() ?: "unknown")
         val text = if (action != null) "<b>$name</b> $action" else "<b>$name</b>"
         val when_ = date.toDate()?.let { " <span style='color:gray'>${DateFormatUtil.formatPrettyDateTime(it)}</span>" }.orEmpty()
         return SimpleHtmlPane("$text$when_")
@@ -214,7 +214,7 @@ object GiteaTimelineComponent {
         content: JComponent,
         title: JComponent,
     ): JComponent = CodeReviewChatItemUIUtil.build(type, { size -> avatars.getIcon(user, size) }, content) {
-        iconTooltip = user?.login
+        iconTooltip = user?.displayName()
         withHeader(title, null)
     }
 
@@ -246,6 +246,9 @@ object GiteaTimelineComponent {
             }
         }
     }
+
+    /** Full name when set, login otherwise (Gitea's own display rule). */
+    private fun GiteaUser.displayName(): String = fullName?.takeIf { it.isNotBlank() } ?: login
 
     private fun escape(text: String) = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 }
