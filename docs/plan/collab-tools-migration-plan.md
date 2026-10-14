@@ -254,8 +254,23 @@ Done together with M2, so the old controller can be deleted in one commit.
       `AccountsPanelFactory`, `TokenLoginPanelModel`/`LoginModel`; own
       login dialog (`TokenLoginDialog` is scheduled for removal).
 
-### M10 - cleanup
-- [ ] Delete every replaced class, `verifyPlugin` 0 internal usages,
+### M10 - cleanup [x]
+- [x] Every replaced class deleted along the way (M2-M9). Template
+      leftovers removed (`MyBundle`, `MyProjectService`, `MyPluginTest`).
+- [x] README rewritten for the new UI; `NOTICE` lists mirrored sources.
+- [x] Final gate: `./gradlew buildPlugin test verifyPlugin` green, 25
+      tests, verifier "Compatible", 0 internal, 0 deprecated, 529
+      experimental usages.
+- [ ] Sandbox test by the user, then merge decision.
+
+#### Not yet ported (open follow-ups)
+- Review threads with diff hunks in the timeline (I11).
+- Editor review toolbar and next/previous comment navigation (I6, I8).
+- Persistent list search history (I17).
+- New parity features from `parity-gap-analysis.md` (edit/delete,
+  reactions, reviewers, merge/close, create PR, IDE integration) are
+  feature work, not migration, and are not started.
+- [x] Delete every replaced class, `verifyPlugin` 0 internal usages,
       experimental usages listed below, README and plan updated, merge
       decision with the user.
 
