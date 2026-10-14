@@ -1,23 +1,27 @@
 package com.github.hypercookie.giteaplugin.accounts
 
-import java.util.UUID
+import com.intellij.collaboration.api.ServerPath
+import com.intellij.collaboration.auth.ServerAccount
+import java.net.URI
+
+/** A Gitea server, by its base URL (may include a sub-path). */
+data class GiteaServerPath(val url: String) : ServerPath {
+    override fun toURI(): URI = URI(url)
+    override fun toString(): String = url
+}
 
 /**
- * A configured Gitea server + account identity. Mutable var properties and a
- * no-arg constructor are required for IntelliJ's XML state persistence
- * (XmlSerializerUtil) to (de)serialize instances via reflection.
+ * A configured Gitea account. Built on the collaboration tools'
+ * [ServerAccount], like the GitLab plugin's `GitLabAccount`; equality is by
+ * [id] (from [com.intellij.collaboration.auth.Account]).
  */
-class GiteaAccount() {
-    var id: String = UUID.randomUUID().toString()
-    var name: String = ""
-    var serverUrl: String = ""
+class GiteaAccount(
+    override val id: String = generateId(),
+    override val name: String = "",
+    serverUrl: String = "",
+) : ServerAccount() {
+    val serverUrl: String = serverUrl.trimEnd('/')
+    override val server: GiteaServerPath = GiteaServerPath(this.serverUrl)
 
-    constructor(name: String, serverUrl: String) : this() {
-        this.name = name
-        this.serverUrl = serverUrl.trimEnd('/')
-    }
-
-    override fun equals(other: Any?): Boolean = other is GiteaAccount && other.id == id
-    override fun hashCode(): Int = id.hashCode()
-    override fun toString(): String = if (name.isNotBlank()) name else serverUrl
+    override fun toString(): String = if (name.isNotBlank()) "$name@$serverUrl" else serverUrl
 }

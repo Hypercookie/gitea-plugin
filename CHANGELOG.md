@@ -1,7 +1,13 @@
 <!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
-# gitea-plugin Changelog
+# Gitea Changelog
 
 ## [Unreleased]
 ### Added
-- Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
+- Gitea accounts with token login, stored in the IDE password safe.
+- Pull Requests tool window with search, quick filters, filters and paging.
+- Pull request tab with commits, changed files, status checks, reviewers and diffs.
+- Pull request timeline in an editor tab, with new top-level comments.
+- Review threads in the editor and the diff viewer: reply, resolve, add comments.
+- Pending reviews, submitted as approval, comment or change request.
+- Branch checkout from the pull request list.

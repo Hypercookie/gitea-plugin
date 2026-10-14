@@ -4,7 +4,11 @@ import com.github.hypercookie.giteaplugin.api.dto.ChangedFile
 import com.github.hypercookie.giteaplugin.api.dto.CreateIssueCommentOption
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewCommentReplyOptions
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
+import com.github.hypercookie.giteaplugin.api.dto.CombinedCommitStatus
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
+import com.github.hypercookie.giteaplugin.api.dto.GitCommitWithFiles
+import com.github.hypercookie.giteaplugin.api.dto.GiteaIssue
+import com.github.hypercookie.giteaplugin.api.dto.GiteaLabel
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.IssueComment
 import com.github.hypercookie.giteaplugin.api.dto.PullReview
@@ -16,6 +20,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -25,7 +31,37 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.Base64
 
+/**
+ * A non-2xx response from the Gitea API. [message] is human-readable,
+ * built by [giteaErrorMessage] from the response body.
+ */
 class GiteaApiException(val statusCode: Int, message: String) : Exception(message)
+
+private val errorJson = Json { ignoreUnknownKeys = true }
+
+private const val MAX_RAW_ERROR_LENGTH = 300
+
+/**
+ * Builds a readable message for a failed request. Gitea answers API errors
+ * with `{"message": "...", "url": "<swagger link>"}` (e.g. `review event
+ * REQUEST_CHANGES requires a body`); that message is used as-is, prefixed
+ * with the status. Bodies that aren't Gitea JSON (a proxy's HTML error page,
+ * an empty body) fall back to a shortened copy of the raw text.
+ */
+internal fun giteaErrorMessage(statusCode: Int, body: String?): String {
+    val text = body?.trim().orEmpty()
+    val serverMessage = runCatching {
+        ((errorJson.parseToJsonElement(text) as? JsonObject)?.get("message") as? JsonPrimitive)
+            ?.takeIf { it.isString }?.content?.trim()
+    }.getOrNull()
+    val detail = when {
+        !serverMessage.isNullOrEmpty() -> serverMessage
+        text.isEmpty() -> null
+        text.length > MAX_RAW_ERROR_LENGTH -> text.take(MAX_RAW_ERROR_LENGTH) + "…"
+        else -> text
+    }
+    return if (detail == null) "HTTP $statusCode" else "HTTP $statusCode: $detail"
+}
 
 /**
  * Gitea REST API client (`/api/v1`). Endpoint shapes confirmed against a live
@@ -36,11 +72,9 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
 
     private val baseUrl = serverUrl.trimEnd('/')
 
-    // Shared across all instances: each java.net.http.HttpClient owns a
-    // selector thread + executor, and Phase 4+ construct a fresh
-    // GiteaApiClient on every refresh/action — a per-instance client would
-    // leak one of each per call site.
-    private val httpClient: HttpClient get() = sharedHttpClient
+    // Looked up per request, not held: see GiteaHttpClientService for why
+    // the client is shared and why it must not live in a static field.
+    private val httpClient: HttpClient get() = GiteaHttpClientService.getInstance().client
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -69,6 +103,68 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
         }
         return get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls?$query")
     }
+
+    /** One page of `/pulls`. Used by the list when a sort order is chosen
+     * (the issues endpoints can't sort). */
+    suspend fun listPullRequestsPage(
+        owner: String,
+        repo: String,
+        state: String,
+        sort: String?,
+        poster: String?,
+        label: Long?,
+        page: Int,
+        limit: Int,
+    ): List<PullRequest> {
+        val query = buildString {
+            append("state=${enc(state)}&page=$page&limit=$limit")
+            if (!sort.isNullOrBlank()) append("&sort=${enc(sort)}")
+            if (!poster.isNullOrBlank()) append("&poster=${enc(poster)}")
+            if (label != null) append("&labels=$label")
+        }
+        return get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls?$query")
+    }
+
+    /** One page of pull requests through the repository issues endpoint,
+     * which supports text search and author/assignee/label filters. */
+    suspend fun searchPullRequestIssues(
+        owner: String,
+        repo: String,
+        state: String,
+        query: String?,
+        createdBy: String?,
+        assignedBy: String?,
+        label: String?,
+        page: Int,
+        limit: Int,
+    ): List<GiteaIssue> {
+        val q = buildString {
+            append("type=pulls&state=${enc(state)}&page=$page&limit=$limit")
+            if (!query.isNullOrBlank()) append("&q=${enc(query)}")
+            if (!createdBy.isNullOrBlank()) append("&created_by=${enc(createdBy)}")
+            if (!assignedBy.isNullOrBlank()) append("&assigned_by=${enc(assignedBy)}")
+            if (!label.isNullOrBlank()) append("&labels=${enc(label)}")
+        }
+        return get("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues?$q")
+    }
+
+    /** Pull requests where the current user's review is requested, across
+     * all repositories of [owner]; callers filter to one repository. */
+    suspend fun searchReviewRequested(owner: String, state: String, page: Int, limit: Int): List<GiteaIssue> =
+        get("/api/v1/repos/issues/search?type=pulls&review_requested=true&owner=${enc(owner)}&state=${enc(state)}&page=$page&limit=$limit")
+
+    suspend fun listLabels(owner: String, repo: String): List<GiteaLabel> =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/labels?limit=100")
+
+    /** Users who can be assigned (and so also review/author) in [repo]. */
+    suspend fun listAssignees(owner: String, repo: String): List<GiteaUser> =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/assignees")
+
+    suspend fun getCommitWithFiles(owner: String, repo: String, sha: String): GitCommitWithFiles =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/git/commits/${enc(sha)}?files=true&stat=false&verification=false")
+
+    suspend fun getCombinedStatus(owner: String, repo: String, ref: String): CombinedCommitStatus =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/commits/${enc(ref)}/status")
 
     suspend fun getPullRequest(owner: String, repo: String, index: Long): PullRequest =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index")
@@ -187,21 +283,12 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
 
     private fun checkStatus(response: HttpResponse<String>) {
         if (response.statusCode() !in 200..299) {
-            throw GiteaApiException(
-                response.statusCode(),
-                "Gitea API request failed: ${response.statusCode()} ${response.body()}",
-            )
+            throw GiteaApiException(response.statusCode(), giteaErrorMessage(response.statusCode(), response.body()))
         }
     }
 
     private inline fun <reified T> decode(response: HttpResponse<String>): T {
         checkStatus(response)
         return json.decodeFromString(response.body())
-    }
-
-    companion object {
-        private val sharedHttpClient: HttpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build()
     }
 }

@@ -45,6 +45,9 @@ data class PullReviewComment(
     @SerialName("pull_request_review_id") val reviewId: Long? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
+    /** Who resolved this comment's conversation; null while unresolved.
+     * Gitea tracks resolution on the thread's first comment. */
+    val resolver: GiteaUser? = null,
 )
 
 /** Body for `POST /pulls/{index}/comments/{id}/replies` — path/position are

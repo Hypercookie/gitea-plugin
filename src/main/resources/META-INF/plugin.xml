@@ -1,34 +1,48 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.hypercookie.giteaplugin</id>
-    <name>gitea-plugin</name>
+    <name>Gitea</name>
     <vendor>hypercookie</vendor>
     <description><![CDATA[
-        <p>Gitea integration: browse pull requests, read and reply to review comments right in the editor, and submit reviews (approve, comment, request changes) — without leaving IntelliJ.</p>
+        <p>Provides integration with <a href="https://about.gitea.com/">Gitea</a> pull requests.</p>
+        <ul>
+          <li>List, search and filter the pull requests of the current repository in the Pull Requests tool window.</li>
+          <li>Open a pull request to see its commits, changed files, status checks and timeline, and view file diffs.</li>
+          <li>Review in the editor: see review threads next to the code of the checked-out pull request branch, reply to and resolve them, and add new comments from the gutter.</li>
+          <li>Collect comments in a pending review and submit it as approval, comment or change request.</li>
+          <li>Check out a pull request branch from the list.</li>
+        </ul>
+        <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Tested with Gitea 1.27.</p>
+        <p>Requires the Git plugin.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>Git4Idea</depends>
+    <dependencies>
+        <module name="intellij.platform.collaborationTools"/>
+        <module name="intellij.platform.vcs.impl"/>
+    </dependencies>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.hypercookie.giteaplugin.pullrequest.GiteaPullRequestsToolWindowFactory"
-                    id="Gitea Pull Requests" anchor="right" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
+        <toolWindow factoryClass="com.github.hypercookie.giteaplugin.pullrequest.toolwindow.GiteaToolWindowFactory"
+                    id="Gitea Pull Requests" anchor="left" doNotActivateOnStart="true" canCloseContents="true"
+                    icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <diff.DiffExtension implementation="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaCommentDiffExtension"/>
+        <fileEditorProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.timeline.GiteaTimelineEditorProvider"/>
+        <editorFactoryListener implementation="com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewInEditorController"/>
         <editorNotificationProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider"/>
         <notificationGroup id="Gitea" displayType="BALLOON" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
-        <applicationConfigurable
+        <projectConfigurable
                 parentId="vcs"
                 instance="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
                 id="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
                 displayName="Gitea"/>
     </extensions>
 
-    <projectListeners>
-        <listener class="com.github.hypercookie.giteaplugin.pullrequest.comments.WorkingCopyCommentEditorListener"
-                  topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
-        <listener class="com.github.hypercookie.giteaplugin.pullrequest.comments.WorkingCopyCommentEditorListener"
-                  topic="git4idea.repo.GitRepositoryChangeListener"/>
-    </projectListeners>
+    <applicationListeners>
+        <listener class="com.github.hypercookie.giteaplugin.GiteaPluginUnloadListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+    </applicationListeners>
+
 </idea-plugin>

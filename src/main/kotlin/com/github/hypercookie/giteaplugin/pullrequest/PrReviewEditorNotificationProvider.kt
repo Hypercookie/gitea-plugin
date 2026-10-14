@@ -1,11 +1,9 @@
 package com.github.hypercookie.giteaplugin.pullrequest
 
-import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
-import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.icons.GiteaIcons
-import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewButton
 import com.intellij.icons.AllIcons
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -26,14 +24,13 @@ import javax.swing.JComponent
  *
  * - **Pending changes** — "in a top bar where I can push them": shown when
  *   the open file's branch resolves to an open PR with queued-but-not-
- *   submitted comments. Reuses [ReviewActionsPanel] so pushing from here
+ *   submitted comments. Reuses [com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewButton] so pushing from here
  *   goes through the same submit path as everywhere else.
- * - **Staleness** — the local file may have drifted from the PR's reviewed
- *   commit (local commits ahead of `pr.head.sha`, or an unsaved edit), which
- *   the "accept + warn" line-drift decision (see
- *   docs/plan/pr-review-feature-plan.md, "Architecture pivot") said should
- *   surface as a warning rather than a real head-blob↔working-copy line
- *   mapping.
+ * - **Out of sync** — local HEAD is not the PR's head commit (local
+ *   commits, or the PR got new commits). Comment positions are mapped onto
+ *   local edits ([com.github.hypercookie.giteaplugin.pullrequest.review.LineMapping]),
+ *   so unsaved edits no longer warrant a warning; this matches the GitHub
+ *   plugin's "local branch is out of sync" state.
  *
  * See docs/plan/pr-review-feature-plan.md, "UI pass," Phase 20 and Phase 14.
  *
@@ -52,19 +49,16 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
         // inside a non-cancelable read action (confirmed via a SEVERE
         // SlowOperations log during manual testing when this used to call
         // getToken()/resolveForCurrentBranch() synchronously). Only reads
-        // already-resolved, in-memory state; the token/client are resolved
-        // lazily below, once, when the banner component is actually built.
-        val repoContext = GiteaRepoLinkService.getInstance(project).resolveDefault() ?: return null
-        val resolver = GiteaBranchPrResolverService.getInstance(project)
-        val branch = resolver.currentBranchName() ?: return null
-        val pr = resolver.peekCachedPr(branch) ?: return null
-
-        val store = PendingReviewStoreService.getInstance(project).storeFor(repoContext.owner, repoContext.repo, pr.number)
+        // the already-resolved review session, which carries its client.
+        val data = GiteaReviewSessionService.getInstance(project).session.value ?: return null
+        val repoContext = data.repo
+        val pr = data.pullRequest.value
+        val store = data.pendingStore
         val hasPending = store.pendingComments.isNotEmpty()
 
-        val repo = GitRepositoryManager.getInstance(project).repositories.firstOrNull()
-        val isStale = (repo?.currentRevision != null && repo.currentRevision != pr.head.sha) ||
-            FileDocumentManager.getInstance().isFileModified(file)
+        val repo = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file) ?: return null
+        if (repoContext.gitRoot != null && repoContext.gitRoot != repo.root) return null
+        val isStale = repo.currentRevision != null && repo.currentRevision != pr.head.sha
 
         if (!hasPending && !isStale) return null
 
@@ -77,7 +71,7 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
             if (isStale) {
                 panel.add(
                     JBLabel(
-                        "Local file differs from PR #${pr.number}'s reviewed commit — comment positions may be inaccurate.",
+                        "Pull request #${pr.number} exists for current branch ${pr.head.ref}, but local branch is out of sync with remote",
                         AllIcons.General.Warning,
                         JBLabel.LEFT,
                     ).apply { border = JBUI.Borders.empty(2, 8) },
@@ -86,27 +80,26 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
             }
 
             if (hasPending) {
-                val token = GiteaAccountManager.getInstance().getToken(repoContext.account)
-                if (!token.isNullOrBlank()) {
-                    val client = GiteaApiClient(repoContext.account.serverUrl, token)
-                    panel.add(
-                        JBPanel<JBPanel<*>>(BorderLayout()).apply {
-                            isOpaque = false
-                            add(
-                                JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
-                                    isOpaque = false
-                                    add(JBLabel("PR #${pr.number}: ${pr.title}", GiteaIcons.Gitea, JBLabel.LEFT))
-                                },
-                                BorderLayout.WEST,
-                            )
-                            add(
-                                ReviewActionsPanel(project, client, repoContext.owner, repoContext.repo, pr.number, pr.head.sha, store, pr.user?.login).component,
-                                BorderLayout.CENTER,
-                            )
-                        },
-                        BorderLayout.CENTER,
-                    )
-                }
+                panel.add(
+                    JBPanel<JBPanel<*>>(BorderLayout()).apply {
+                        isOpaque = false
+                        add(
+                            JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
+                                isOpaque = false
+                                add(JBLabel("PR #${pr.number}: ${pr.title}", GiteaIcons.Gitea, JBLabel.LEFT))
+                            },
+                            BorderLayout.WEST,
+                        )
+                        add(
+                            JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT)).apply {
+                                isOpaque = false
+                                add(GiteaSubmitReviewButton.createStatic(data))
+                            },
+                            BorderLayout.CENTER,
+                        )
+                    },
+                    BorderLayout.CENTER,
+                )
             }
 
             if (panel.componentCount == 0) null else panel

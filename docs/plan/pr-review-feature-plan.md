@@ -523,7 +523,8 @@ Advisor-identified build order (dependency order, not user-facing order):
       tree. New "View Details" toolbar button opens the old detail-tab flow
       for the selected row instead (kept, per the "keep both" decision).
       **Known v1 limitation**: only resolves same-repo PRs (branch already
-      exists locally or as `origin/<ref>`) — fork-based PRs not handled.
+      exists locally or as `origin/<ref>`) — fork-based PRs not handled
+      (dropped from scope 2026-10-14, not planned).
 - [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 
 All of Phases 11-17 (the architecture-pivot work) built and **manually
@@ -647,9 +648,8 @@ Follow-up round after the UI pass fix:
       re-resolves every currently open editor (not just newly-opened ones)
       against the new branch. `GiteaBranchChangeListener` (the old,
       cache-invalidation-only class) deleted — merged in here.
-- [ ] **Fork-based PR checkout** (Phase 16) still open — only same-repo
-      branches resolve today. Lower priority (needs a second account/fork to
-      even test); left as a known limitation.
+- ~~**Fork-based PR checkout** (Phase 16)~~ — dropped from scope by user
+      decision (2026-10-14). Only same-repo branches resolve; not planned.
 
 Both **manually verified by the user in a running sandbox**: branch switch
 with a file open live-updates gutters/boxes and the top banner; editing (or
@@ -1053,11 +1053,33 @@ new endpoints.
       succeed, both on the first attempt.
 - [ ] Not yet tested in a running sandbox IDE.
 
-### Phase 29 — wire up Resolve/Unresolve [cheap]
-- [ ] `CommentThreadBoxPanel`: add Reply/Resolve text links under each
-      comment (API already exists: `resolveComment`/`unresolveComment`,
-      unused since Phase 2/6). Resolved threads get a visibly different
-      (dimmed/collapsed) state.
+### Phase 29 — wire up Resolve/Unresolve [x]
+- [x] **Spike**: local Gitea down (Docker daemon not running), so checked
+      upstream `templates/swagger/v1_json.tmpl` (release/v1.24):
+      `PullReviewComment.resolver` (`User`, null while unresolved) exists.
+      The resolve/unresolve endpoints are *not* in v1.24's swagger, but the
+      Phase 2 spike found them on the local 1.27.3 instance (same for the
+      `/replies` endpoint Phase 7 already uses successfully) — so this
+      feature, like replies, needs a newer Gitea than 1.24.
+- [x] `PullReviewComment` decodes `resolver`. Resolution is per
+      conversation, read from and applied to the thread's first comment.
+- [x] `CommentThreadBoxPanel`: "Resolve"/"Unresolve" `ActionLink` next to
+      the Reply button; "Resolved by X" line in the expanded view; collapsed
+      row gets a "✓ Resolved" tag and dimmed text. Thread stays collapsed by
+      default either way (no auto-hide).
+- [x] `CommentGutterController.setResolved()` calls the API, refetches, and
+      re-renders — same shape as `reply()`.
+- [x] Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
+- [ ] Not yet tested in a running sandbox IDE.
+- [x] **Button styling** (user request, same day): new
+      `util/Buttons.kt` `primaryButton()` sets
+      `DarculaButtonUI.DEFAULT_STYLE_KEY` (the accent "default" style a
+      `DialogWrapper` OK button gets). One per group, on the main
+      affirmative action: Reply, Start Review/Add to Review, Submit
+      Review…, timeline Comment, Approve (or Comment on your own PR, where
+      Approve is disabled). Cancel/Discard/Request Changes stay plain; no
+      red buttons. Settings page inline buttons stay plain (Platform's own
+      OK/Apply are the primary ones there).
 
 ### Phase 30 — edit/delete own comments
 - [ ] Spike: confirm Gitea's `PATCH`/`DELETE` endpoints for a review
@@ -1337,6 +1359,71 @@ User-reported round after Phase 28 manual testing:
       duplication regression).
       Verified: `./gradlew compileKotlin` + `./gradlew buildPlugin` succeed.
 - [ ] Not yet re-tested in a running sandbox IDE after this fix.
+
+### Phase 42 — deep investigation into existing GitHub/GitLab integration [x]
+User goal (2026-10-14): "I want basically the exact same thing" as the
+official JetBrains GitHub/GitLab plugins. UI pass 3 compared against
+screenshots only; this phase compares against the real plugins, end to
+end, and produces a gap list that re-plans Phases 30–37.
+- [ ] **Inventory the real plugins.** From the bundled 2025.2.6.2 jars
+      (`plugins/vcs-github`, `plugins/gitlab`,
+      `lib/.../intellij.platform.collaborationTools.jar`): `plugin.xml`
+      extension points, actions and their default shortcuts, tool window
+      ids/tabs, settings pages, notification groups. `javap` for class
+      structure, same discipline as Phases 5/6/18.
+- [ ] **Walk every user-visible flow** in a sandbox IDE with the GitHub
+      plugin against a real GitHub repo (and GitLab if an account is
+      available): log in, PR list (search, filters, sort, paging), PR
+      detail/overview, timeline, files tree, diff view, review mode in the
+      editor, inline comments (add, reply, resolve, edit, delete, react,
+      suggest changes), submit review, request reviewers, labels/assignees,
+      merge/squash/rebase/close, checkout, create PR from a branch,
+      notifications and badges, keyboard navigation, empty/loading/error
+      states. Screenshot each.
+- [ ] **Side-by-side gap table** (`docs/plan/parity-gap-analysis.md`): per
+      flow — official behavior, ours, gap, Gitea API support (yes / no /
+      partial, checked against the local 1.27.3 swagger), effort. Mark
+      gaps that Gitea's API can't support as "not possible", not as
+      missing work.
+- [ ] **Look-and-feel audit**: fonts, spacing, icons, colors, button styles
+      (primary vs. plain), hover states, light and dark themes — compare
+      component by component, list every visual difference.
+- [ ] **Re-plan**: rewrite Phases 30–37 (and add new phases) from the gap
+      table, ordered by user-visible impact. Get user sign-off on the new
+      order before building.
+- [ ] Decide whether to depend on `intellij.platform.collaborationTools`
+      directly (the module JetBrains' own plugins build on) instead of
+      re-implementing its components. Earlier phases avoided it as
+      internal API; reassess, since exact parity is now the explicit goal.
+- [x] **Done 2026-10-14, static analysis only** (user decision: no live
+      walkthrough, no babysitting). Inventory, gap table, API probes and a
+      proposed re-plan are in `docs/plan/parity-gap-analysis.md`. Checked
+      items above that needed a live session (walking flows, screenshots)
+      were replaced by reading the plugins' descriptors and message bundles.
+      Headline: both official plugins are built on
+      `intellij.platform.collaborationTools`, 152 of its 210 `codereview`
+      classes are unmarked public API; recommendation is to adopt it
+      (proposed Phase 43) before continuing feature work.
+      Edit/delete/reactions on review comments confirmed working via the
+      issue-comment endpoints on 1.27.3.
+- [ ] **Waiting on user sign-off** for the proposed Phases 43-52 order.
+
+## Known bugs
+- [ ] **Needs sandbox re-check (branch `feature/collaboration-tools-migration`):**
+      the code below was deleted in the collaborationTools migration (M2);
+      new-comment inlays are now driven by the platform's `renderInlays`.
+      Original report: **"New comment" box doesn't close after adding a comment** (Phase 41
+      follow-ups 1–2 didn't fix it; `6b15736` never re-tested in sandbox).
+      Parked 2026-10-14 to continue the remaining phases — **fix before
+      calling the feature done.** A third attempt is saved as
+      `git stash` "WIP: comment-box-close debug": splits `doRender()` into
+      `disposeStep()`/`installStep()` on separate `invokeLater` ticks (both
+      generation-guarded) plus `GITEA_DEBUG2` logging, including a
+      per-`CommentGutterController` `instanceId` and editor identity in
+      `WorkingCopyCommentEditorListener.processFile` — the suspicion being
+      two controllers attached to the same editor. Next step: `stash pop`,
+      `runIde`, reproduce, grep `idea.log` for `GITEA_DEBUG2`, check for
+      more than one `inst=` per file.
 
 ## Open risks / verify before Phase 9
 - ~~Review-state enum values~~ — resolved, see Phase 2.
