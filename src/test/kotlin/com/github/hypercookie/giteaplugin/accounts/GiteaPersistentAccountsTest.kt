@@ -5,7 +5,9 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.xmlb.XmlSerializer
 
 /** The account list must still load from the XML the plugin wrote before
- * the collaborationTools migration (a bean list of `GiteaAccount`). */
+ * the collaborationTools migration. The fixture is the `GiteaAccounts`
+ * component copied from a real pre-migration sandbox config
+ * (`.intellijPlatform/sandbox/.../options/gitea-accounts.xml`). */
 class GiteaPersistentAccountsTest : BasePlatformTestCase() {
 
     fun testLoadsPreMigrationState() {
@@ -14,8 +16,8 @@ class GiteaPersistentAccountsTest : BasePlatformTestCase() {
               <option name="accounts">
                 <list>
                   <GiteaAccount>
-                    <option name="id" value="abc-123" />
-                    <option name="name" value="plugindev" />
+                    <option name="id" value="58d55538-c0ac-40ba-b03e-72b7ce4337e2" />
+                    <option name="name" value="Test" />
                     <option name="serverUrl" value="http://localhost:3000" />
                   </GiteaAccount>
                 </list>
@@ -26,8 +28,8 @@ class GiteaPersistentAccountsTest : BasePlatformTestCase() {
         val repo = GiteaPersistentAccounts().apply { loadState(state) }
 
         val account = repo.accounts.single()
-        assertEquals("abc-123", account.id)
-        assertEquals("plugindev", account.name)
+        assertEquals("58d55538-c0ac-40ba-b03e-72b7ce4337e2", account.id)
+        assertEquals("Test", account.name)
         assertEquals("http://localhost:3000", account.serverUrl)
     }
 

@@ -44,9 +44,12 @@ import javax.swing.ScrollPaneConstants
  * platform's chat-item layout (`CodeReviewChatItemUIUtil`, FULL type for
  * comments, FULL_SECONDARY for events) like the GitHub plugin's timeline.
  *
- * Review threads are shown as the review's summary only; GitHub's inline
- * thread-with-diff-hunk rendering relies on the internal
- * `TimelineDiffComponentFactory` (migration ledger I11, not ported yet).
+ * Each review lists its inline comments (file, line, body; OUTDATED when
+ * written on an older commit than the PR head, since Gitea has no outdated
+ * flag, ledger G10), so comments hidden in the editor
+ * as outdated stay reachable. GitHub additionally renders the diff hunk
+ * with the internal `TimelineDiffComponentFactory` (migration ledger I11);
+ * here the hunk is not shown.
  */
 object GiteaTimelineComponent {
 
@@ -78,7 +81,7 @@ object GiteaTimelineComponent {
         }
 
         val itemsPanel = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply { isOpaque = false }
-        cs.bindOnEdt(state) { loaded ->
+        cs.bindOnEdt(kotlinx.coroutines.flow.combine(state, data.comments) { loaded, _ -> loaded }) { loaded ->
             itemsPanel.removeAll()
             itemsPanel.add(description(project, avatars, data))
             when (loaded) {
@@ -92,7 +95,8 @@ object GiteaTimelineComponent {
                 )
                 is Loaded.Items -> {
                     val commitsBySha = loaded.commits.associateBy { it.sha }
-                    loaded.events.mapNotNull { item(project, avatars, it, commitsBySha) }.forEach(itemsPanel::add)
+                    val commentsByReview = data.comments.value.groupBy { it.reviewId }
+                    loaded.events.mapNotNull { item(project, avatars, it, commitsBySha, commentsByReview, data) }.forEach(itemsPanel::add)
                 }
             }
             itemsPanel.revalidate()
@@ -120,14 +124,24 @@ object GiteaTimelineComponent {
         return chatItem(avatars, FULL, pr.user, SimpleHtmlPane(body), titlePane(pr.user, null, pr.createdAt))
     }
 
-    private fun item(project: Project, avatars: GiteaAvatarIcons, event: TimelineEvent, commits: Map<String, GitCommit>): JComponent? =
+    private fun item(
+        project: Project,
+        avatars: GiteaAvatarIcons,
+        event: TimelineEvent,
+        commits: Map<String, GitCommit>,
+        commentsByReview: Map<Long?, List<com.github.hypercookie.giteaplugin.api.dto.PullReviewComment>>,
+        data: GiteaPullRequestReviewData,
+    ): JComponent? =
         when (event.type) {
             "comment" -> chatItem(avatars, FULL, event.user, SimpleHtmlPane(GiteaMarkdown.toHtml(event.body.orEmpty())), titlePane(event.user, null, event.createdAt))
             "review" -> {
                 val verb = "reviewed the changes"
-                val body = event.body?.takeIf { it.isNotBlank() }?.let { SimpleHtmlPane(GiteaMarkdown.toHtml(it)) }
-                if (body != null) {
-                    chatItem(avatars, FULL, event.user, body, titlePane(event.user, verb, event.createdAt))
+                val inline = commentsByReview[event.reviewId].orEmpty()
+                val content = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply { isOpaque = false }
+                event.body?.takeIf { it.isNotBlank() }?.let { content.add(SimpleHtmlPane(GiteaMarkdown.toHtml(it))) }
+                inline.forEach { content.add(inlineComment(it, data)) }
+                if (content.componentCount > 0) {
+                    chatItem(avatars, FULL, event.user, content, titlePane(event.user, verb, event.createdAt))
                 } else {
                     eventItem(avatars, event.user, verb, event.createdAt)
                 }
@@ -159,6 +173,28 @@ object GiteaTimelineComponent {
             "delete_branch" -> eventItem(avatars, event.user, "deleted the branch", event.createdAt)
             else -> eventItem(avatars, event.user, escape(event.type.replace('_', ' ')), event.createdAt)
         }
+
+    /** One inline review comment under its review: location, OUTDATED tag
+     * when it was made on an older commit, and the body. */
+    private fun inlineComment(comment: com.github.hypercookie.giteaplugin.api.dto.PullReviewComment, data: GiteaPullRequestReviewData): JComponent {
+        val line = comment.position?.takeIf { it > 0 } ?: comment.originalPosition
+        val header = JPanel(ListLayout.horizontal(com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP)).apply {
+            isOpaque = false
+            add(JBLabel("${comment.path}:${line ?: "?"}").apply { foreground = UIUtil.getContextHelpForeground() })
+            if (comment.commitId != null && comment.commitId != data.pullRequest.value.head.sha) {
+                add(com.intellij.collaboration.ui.CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.outdated.tag")))
+            }
+            if (comment.resolver != null) {
+                add(com.intellij.collaboration.ui.CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.resolved.tag")))
+            }
+        }
+        return JPanel(ListLayout.vertical(2)).apply {
+            isOpaque = false
+            border = JBUI.Borders.emptyLeft(8)
+            add(header)
+            add(SimpleHtmlPane(GiteaMarkdown.toHtml(comment.body)))
+        }
+    }
 
     private fun eventItem(avatars: GiteaAvatarIcons, user: GiteaUser?, text: String, date: String?): JComponent =
         chatItem(avatars, SECONDARY, user, JPanel().apply { isOpaque = false }, titlePane(user, text, date))

@@ -115,13 +115,15 @@ class GiteaReviewEditorModel(
             }
         }
 
-        cs.launch {
+        // Off the EDT: the caller's scope is Main, but the mapping work
+        // (read action, file fetches, line diffs) belongs in the background.
+        cs.launch(Dispatchers.Default) {
             combine(documentStamp.debounce(DOCUMENT_DEBOUNCE_MS), data.threads, data.pullRequest) { _, threads, _ -> threads }
                 .mapLatest { threads -> computeMappings(threads) }
                 .collect { mappings.value = it }
         }
 
-        cs.launch {
+        cs.launch(Dispatchers.Main) {
             combine(mappings, data.threads, data.pending, newComments) { m, threads, pending, new ->
                 Snapshot(m, threads, pending, new)
             }.collect(::applySnapshot)
