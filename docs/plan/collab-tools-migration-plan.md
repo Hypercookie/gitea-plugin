@@ -22,6 +22,14 @@ Rules:
    `./gradlew verifyPlugin` (configured to fail on internal API usage),
    deletes the code it replaces, and is committed on its own.
 4. Each phase is marked "not sandbox-tested" until the user runs it.
+5. Where the API we need is internal, mirror the corresponding
+   intellij-community source (Apache 2.0) at the build we target
+   (`idea/252.28539.54`), for both behavior and UI, and list the source
+   files in `NOTICE` (user instruction, 2026-10-14).
+6. `@ApiStatus.Internal` is often on single members, not whole classes
+   (for example only the two-argument `createEditorInlayPanel` is
+   internal; the one-argument overload is public). The class-level survey
+   below over-counts; `verifyPlugin` is the authority.
 
 Gates (in place since `42751ac`):
 
@@ -91,38 +99,73 @@ Raw data (regenerable): the scratchpad `collab-status.txt` and
 - [x] Descriptor load test, verifier gate. Display name `gitea-plugin` ->
       `Gitea` (verifier rejects the template word "plugin").
 
-### M1 - view model layer
+### M1 - view model layer [x]
 Gitea data exposed as coroutine/`StateFlow` view models the collaboration
-components consume. Keeps `GiteaApiClient`, DTOs and `PendingReviewStore`.
-- [ ] Per-PR data holder with its own `CoroutineScope`: details, review
+components consume. Keeps `GiteaApiClient`, DTOs and `PendingReviewStore`
+(which gained a `StateFlow`).
+- [x] `GiteaReviewSessionService`: current-branch PR as a flow, debounced
+      on `GIT_REPO_CHANGE`, same PR updated in place.
+- [x] `ReviewThreads` (grouping by path, side, line, `commit_id`) and
+      `LineMapping` with JUnit tests (11 cases).
+- [x] Per-PR data holder with its own `CoroutineScope`: details, review
       threads (grouped from `PullReviewComment`s), pending comments,
       current user; reload on demand.
-- [ ] Thread VM implementing `CodeReviewResolvableItemViewModel` and
-      `CodeReviewFoldableThreadViewModel`; comment VM (author, body, dates,
-      can edit/delete, reactions later).
-- [ ] Reply and new-comment VMs extending
+- [x] Thread VM implementing `CodeReviewResolvableItemViewModel`.
+      `CodeReviewFoldableThreadViewModel` not needed: the editor thread
+      shows all comments, like GitHub's compact thread.
+- [x] Reply and new-comment VMs extending
       `CodeReviewSubmittableTextViewModelBase`.
 
-### M2 - review in the editor
+### M2 - review in the editor [x] (not sandbox-tested)
 Replaces `CommentGutterController`, `InlineComponentHost`,
 `WorkingCopyCommentEditorListener`, `CommentBoxPanels` (editor parts).
-- [ ] `EditorFactoryListener` installer (same shape as GitHub's
+- [x] `EditorFactoryListener` installer (same shape as GitHub's
       `GHPRReviewInEditorController$InstallerListener`), one coroutine scope
       per editor, cancelled on editor release.
-- [ ] Per-file model implementing `CodeReviewEditorModel<I>`
+- [x] Line mapping (I6): fetch the file at each thread's `commit_id`, at
+      `pr.head.sha` and at the merge base; `ComparisonManager.compareLines`
+      gives anchor-commit->document (thread placement, outdated), document->
+      head (new comments; lines inside local edits are not commentable) and
+      merge base->head pushed through head->document (change markers, so
+      local uncommitted edits are not shown as PR changes). Renamed files
+      use `previous_filename` for the base. Pure logic covered by JUnit.
+- [x] Session kept alive while the PR number is unchanged; a new head sha
+      reloads in place (no inlay teardown, reply drafts survive).
+      `GitRepositoryChangeListener` triggers are debounced.
+- [x] Repository resolved per file (`getRepositoryForFile`), not
+      `repositories.firstOrNull()`.
+- [x] Banner condition changes from "comments may be on the wrong line"
+      to "local HEAD != `pr.head.sha`" (GitHub's out-of-sync state).
+- [x] `<editorFactoryListener>` added in the same commit that removes both
+      `WorkingCopyCommentEditorListener` registrations.
+- [x] Per-file model implementing `CodeReviewEditorModel<I>`
       (inlays + gutter controls) and `CodeReviewEditorGutterActionableChangesModel`.
-- [ ] Inlays via `renderInlays` + `CodeReviewComponentInlayRenderer`;
+- [x] Inlays via `renderInlays` + `CodeReviewComponentInlayRenderer`;
       gutter comment icons via `CodeReviewEditorGutterControlsRenderer.setupIn`;
       changed-line markers via `CodeReviewEditorGutterChangesRenderer.setupIn`.
-- [ ] Thread component from `CodeReviewChatItemUIUtil`,
+- [x] Thread component from `CodeReviewChatItemUIUtil`,
       `TimelineThreadCommentsPanel`, `CodeReviewCommentTextFieldFactory`,
       `CommentInputActionsComponentFactory`.
-- [ ] Re-check the parked "new comment box doesn't close" bug: the code it
-      lives in is deleted here. Close it in `pr-review-feature-plan.md` or
-      re-file it against the new code.
+- [x] Parked "new comment box doesn't close" bug: the code it lived in
+      (`CommentGutterController`, `InlineComponentHost`,
+      `WorkingCopyCommentEditorListener`) is deleted. New-comment inlays are
+      now removed by the model (`newComments` state) and rendered by the
+      platform's `renderInlays`. Marked "needs sandbox re-check" in
+      `pr-review-feature-plan.md`.
+- [x] Also fixed on the way: the PR diff's left side was fetched at
+      `base.sha`; old-side comment lines refer to the merge base, so it now
+      uses `merge_base` (`PullRequest.mergeBase` added).
+- Implementation notes: new comments offer "Start Review" / "Add Review
+  Comment" (pending) and "Add Single Comment" (immediate `createReview`
+  with event COMMENT), with the platform's discard confirmation. Thread
+  view models live in the editor scope and are not cancelled when a thread
+  disappears until the editor closes (small leak, acceptable).
 
-### M3 - review in the diff viewer
-- [ ] `GiteaCommentDiffExtension` on the same models and components.
+### M3 - review in the diff viewer [x] (not sandbox-tested)
+Done together with M2, so the old controller can be deleted in one commit.
+- [x] `GiteaCommentDiffExtension` on the same models and components:
+      head editor shows new-side threads (`position`), base editor shows
+      old-side threads (`original_position`).
 
 ### M4 - tool window shell
 - [ ] "Pull Requests" tool window: list plus one closable tab per opened PR.
@@ -176,15 +219,16 @@ Two kinds of entries:
 | I3 | `ReviewListSearchPanelFactory`, `ChooserPopupUtil` | `@Internal` | Own panel composed from `ReviewListSearchTextFieldFactory`, `DropDownComponentFactory`, `CollaborationToolsPopupUtil` | M5 |
 | I4 | `ListLoader`, `ReloadablePotentiallyInfiniteListLoader`, `ApiPageUtil` | `@Internal` | Own paged loader (`page`/`limit` query, `StateFlow<List>`, load-more on scroll) | M5 |
 | I5 | `CodeReviewChangeListViewModelBase`, `CodeReviewCommitsChangesStateHandler` | `@Internal` | Own `CodeReviewChangeListViewModel` / `CodeReviewChangesViewModel` implementations | M6 |
-| I6 | `ReviewInEditorUtil` (review toolbar, `trackDocumentDiffSync`, line transfer, marker color scheme) | `@Internal` | Own document-vs-PR-head range tracking on public `ComparisonManager`/`DiffUtil`; own line mapping; own `LineStatusMarkerColorScheme`; own in-editor toolbar or keep the editor notification banner | M2 |
+| I6 | `ReviewInEditorUtil` (review toolbar, `trackDocumentDiffSync`, line transfer, marker color scheme) | `@Internal` | `LineMapping` (`ComparisonManager.compareLines`, debounced on document changes) for line transfer and PR ranges; `CodeReviewEditorGutterChangesRenderer.render` with its default color scheme; review toolbar not built, the editor notification banner stays | M2 done |
 | I7 | `MutableCodeReviewEditorGutterChangesModel` | `@Internal` | Own `CodeReviewEditorGutterActionableChangesModel` implementation | M2 |
 | I8 | `CodeReviewNavigableEditorViewModel` | `@Internal` | Own next/previous comment actions | M2 |
-| I9 | `CodeReviewCommentUIUtil` (`createEditorInlayPanel`, edit/delete/reaction icon buttons, folded thread controls, resolve text) | `@Internal` | Own inlay panel wrapper (rounded border, editor background), own `InlineIconButton`s | M2 |
+| I9 | `CodeReviewCommentUIUtil` | Only `createEditorInlayPanel(component, tint)` is `@Internal`; the rest is public | Use the public one-argument `createEditorInlayPanel`, `getInlayPadding`, `createDeleteCommentIconButton`, `getResolveToggleActionText` directly. No own code needed | M2 done |
 | I10 | `CodeReviewSubmitPopupHandler` | `@Internal` | Own popup over public `CodeReviewSubmitViewModel` (keeps the Phase 28 popup shape) | M8 |
 | I11 | `TimelineDiffComponentFactory` | `@Internal` | Own diff-hunk snippet for review threads in the timeline (`diff_hunk` rendered with an editor or `DiffUtil` viewer) | M7 |
-| I12 | `CollaborationToolsUIUtil`, `SwingBindingsKt`, `ActionUtilKt`, `MigLayoutUtilKt`, `ui.Either`, `CoroutineUtilKt` | `@Internal` | Small own helpers (flow-to-Swing bindings, `launchOnShow`-style scoping) | all |
+| I12 | (`CollaborationToolsUIUtil.createTagLabel`/`wrapWithLimitedSize` turned out public and are used directly) `CollaborationToolsUIUtil` internal members, `SwingBindingsKt`, `ActionUtilKt` (`swingAction`), `MigLayoutUtilKt`, `ui.Either`, `CoroutineUtilKt`; platform `childScope` (`com.intellij.platform.util.coroutines`, mixed `Internal`/`Experimental` members) | `@Internal` | Small own helpers: child scope (`SupervisorJob` of the parent), flow-to-Swing bindings, `AbstractAction` factory | all |
 | I13 | `TokenLoginDialog`, `TokenLoginInputPanelFactory` | `@ScheduledForRemoval` | Own `DialogWrapper` over public `TokenLoginPanelModel`/`LoginModel` | M9 |
 | I14 | `CodeReviewCreateReviewUIUtil` | `@Internal` | Only needed for "create pull request", not in this migration's scope | - |
+| I16 | Unified (one-pane) diff viewer support | GitHub handles both viewers through internal diff-viewer model helpers | Only `SimpleDiffViewer` (side by side) gets comments; unified viewer shows none | M3 |
 | I15 | `CodeReviewDiffVirtualFile` | `@Experimental` (allowed) | Used if it fits; otherwise own `LightVirtualFile` + `FileEditorProvider` for the timeline tab | M7 |
 
 ### No Gitea API
@@ -200,7 +244,7 @@ Two kinds of entries:
 | G7 | ETag-based list refresh | No ETag on list responses | Poll and compare `updated_at` | M5 |
 | G8 | Text search on the PR list | `/pulls` has no `q` | Use `/repos/issues/search?type=pulls&q=...` | M5 |
 | G9 | Review thread resolution per thread | Resolution is per comment (`resolver`); we resolve the first comment | Treat first comment's `resolver` as the thread state | M1 |
-| G10 | Outdated thread detection | No `outdated` flag | `position == 0` with `original_position > 0` means outdated | M1 |
+| G10 | Outdated thread detection | No `outdated` flag. `position` is the new-side line and `original_position` the old-side line (mutually exclusive, confirmed on `plugindev/pr-test`: comment 15 has `position 0, original_position 15`, an old-side comment). Each comment carries `commit_id`, the commit its line refers to | Map each thread's line from the file at its `commit_id` to the current document; a line that falls inside a changed region is outdated | M2 |
 | G11 | CI check runs with details | Commit statuses only (`/commits/{ref}/status`) | Map statuses to `CodeReviewCIJob` | M6 |
 
 ### Experimental API in use
@@ -209,3 +253,10 @@ Filled in as phases land, from `verifyPlugin` output.
 
 | API | Where | Phase |
 |---|---|---|
+| `CodeReviewChatItemUIUtil`, `CodeReviewTimelineUIUtil`, `CodeReviewCommentUIUtil`, `CodeReviewCommentTextFieldFactory`, `CommentInputActionsComponentFactory`, `CollaborationToolsUIUtil`, `SimpleHtmlPane` | `GiteaReviewEditorComponents` | M2 |
+| `CodeReviewEditorModel`, `CodeReviewInlayModel`, `CodeReviewEditorGutterControlsModel`, `CodeReviewEditorGutterActionableChangesModel`, gutter controls/changes renderers, `renderInlays`, `CodeReviewComponentInlayRenderer`, platform `ComponentInlayRenderer` | `GiteaReviewEditorModel`, `GiteaReviewInEditorController` | M2 |
+| `CodeReviewSubmittableTextViewModelBase` | `GiteaReviewViewModels` | M1 |
+| `AsyncImageIconsProvider`, `CachingIconsProvider`, `IconsProvider` | `GiteaAvatarIcons` | M2 |
+| platform `ListLayout` | `GiteaReviewEditorComponents` | M2 |
+
+`verifyPlugin` after M2/M3: compatible, 0 internal, 163 experimental usages.

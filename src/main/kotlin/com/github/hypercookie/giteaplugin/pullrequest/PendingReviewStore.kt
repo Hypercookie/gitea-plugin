@@ -1,5 +1,8 @@
 package com.github.hypercookie.giteaplugin.pullrequest
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
 
 /**
@@ -13,6 +16,11 @@ class PendingReviewStore {
 
     private val _pendingComments = mutableListOf<CreatePullReviewComment>()
     val pendingComments: List<CreatePullReviewComment> get() = _pendingComments.toList()
+
+    private val _state = MutableStateFlow<List<CreatePullReviewComment>>(emptyList())
+
+    /** Same content as [pendingComments], for flow-based view models. */
+    val state: StateFlow<List<CreatePullReviewComment>> = _state.asStateFlow()
 
     private val listeners = mutableListOf<() -> Unit>()
 
@@ -38,6 +46,7 @@ class PendingReviewStore {
     }
 
     private fun notifyListeners() {
+        _state.value = _pendingComments.toList()
         listeners.forEach { it() }
     }
 }

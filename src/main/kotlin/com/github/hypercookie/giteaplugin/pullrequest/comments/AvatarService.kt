@@ -16,7 +16,8 @@ import javax.swing.ImageIcon
  * Loads and circularly-clips user avatars (Gitea's `avatar_url` — already
  * resolved server-side to an uploaded avatar or a federated Gravatar, so no
  * email-hashing needed here), cached by url+size. Used inside
- * [CommentThreadBoxPanel] and friends.
+ * the PR list and timeline rows (editor inlays use
+ * [com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons]).
  */
 object AvatarService {
 
