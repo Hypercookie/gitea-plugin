@@ -35,6 +35,15 @@ import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.AnimatedIcon
+import com.intellij.collaboration.messages.CollaborationToolsBundle
+import com.intellij.collaboration.ui.codereview.details.data.CodeReviewCIJobState
+import com.intellij.collaboration.ui.codereview.list.search.ChooserPopupUtil
+import com.intellij.collaboration.ui.codereview.list.search.PopupConfig
+import com.intellij.collaboration.ui.codereview.list.search.ShowDirection
+import com.intellij.collaboration.ui.util.popup.PopupItemPresentation
+import com.intellij.ide.BrowserUtil
+import com.intellij.ui.awt.RelativePoint
+import kotlinx.coroutines.flow.collectLatest
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.panels.ListLayout
 import com.intellij.ui.components.panels.Wrapper
@@ -83,7 +92,7 @@ object GiteaPullRequestDetailsComponent {
 
         val status = JPanel(ListLayout.vertical(0)).apply {
             isOpaque = false
-            add(CodeReviewDetailsStatusComponentFactory.createCiComponent(cs, statusVm))
+            add(ciRow(cs, statusVm))
             add(mergeabilityRow(cs, statusVm))
             add(CodeReviewDetailsStatusComponentFactory.createNeedReviewerComponent(cs, reviewerStates(cs, data)))
         }
@@ -168,6 +177,63 @@ object GiteaPullRequestDetailsComponent {
             author = commit.author?.login ?: commit.commit.author.name,
             committedDate = commit.commit.author.date.toDate() ?: java.util.Date(0),
         )
+    }
+
+    /**
+     * The platform's CI row (`CodeReviewDetailsStatusComponentFactory.createCiComponent`)
+     * with one change: while any check is still running, the icon is the
+     * spinning loading icon instead of the static "pending" one. Texts are
+     * the platform's.
+     */
+    private fun ciRow(cs: CoroutineScope, statusVm: GiteaPullRequestStatusViewModel): JComponent {
+        val title = JBLabel()
+        val details = ActionLink(CollaborationToolsBundle.message("review.details.status.ci.link.details")) { statusVm.showJobsDetails() }
+        val row = JPanel(ListLayout.horizontal(8)).apply {
+            isOpaque = false
+            border = JBUI.Borders.empty(5, 0)
+            add(title)
+            add(details)
+        }
+        cs.bindOnEdt(statusVm.ciJobs) { jobs ->
+            row.isVisible = jobs.isNotEmpty()
+            val failed = jobs.count { it.status == CodeReviewCIJobState.FAILED }
+            val pending = jobs.count { it.status == CodeReviewCIJobState.PENDING }
+            when {
+                jobs.filter { it.isRequired }.all { it.status == CodeReviewCIJobState.SUCCESS } -> {
+                    title.icon = CIBuildStatusIcons.success
+                    title.text = CollaborationToolsBundle.message("review.details.status.ci.passed")
+                }
+                pending != 0 -> {
+                    title.icon = AnimatedIcon.Default.INSTANCE
+                    title.text = CollaborationToolsBundle.message(
+                        if (failed != 0) "review.details.status.ci.progress.and.failed" else "review.details.status.ci.progress",
+                    )
+                }
+                else -> {
+                    title.icon = CIBuildStatusIcons.failed
+                    title.text = CollaborationToolsBundle.message("review.details.status.ci.failed")
+                }
+            }
+        }
+        cs.launch {
+            statusVm.showJobsDetailsRequests.collectLatest { jobs ->
+                val job = ChooserPopupUtil.showChooserPopup(
+                    RelativePoint(details, java.awt.Point()),
+                    jobs,
+                    { PopupItemPresentation.Simple(it.name, jobIcon(it.status)) },
+                    PopupConfig(title = CollaborationToolsBundle.message("review.details.status.ci.popup.title"), alwaysShowSearchField = false, showDirection = ShowDirection.ABOVE),
+                )
+                job?.detailsUrl?.let(BrowserUtil::browse)
+            }
+        }
+        return row
+    }
+
+    private fun jobIcon(state: CodeReviewCIJobState): javax.swing.Icon = when (state) {
+        CodeReviewCIJobState.FAILED -> CIBuildStatusIcons.failed
+        CodeReviewCIJobState.PENDING -> AnimatedIcon.Default.INSTANCE
+        CodeReviewCIJobState.SKIPPED -> CIBuildStatusIcons.skipped
+        CodeReviewCIJobState.SUCCESS -> CIBuildStatusIcons.success
     }
 
     /**

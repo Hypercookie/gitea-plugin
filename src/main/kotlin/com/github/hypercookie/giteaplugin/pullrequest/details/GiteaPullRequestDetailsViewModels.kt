@@ -276,26 +276,36 @@ class GiteaPullRequestStatusViewModel(
             }
         }
         cs.launch {
-            data.pullRequest.collect { pr ->
-                val combined = runCatching { data.client.getCombinedStatus(data.owner, data.repoName, pr.head.sha) }.getOrNull()
-                _ciJobs.value = combined?.statuses.orEmpty().map { status ->
-                    CodeReviewCIJob(
-                        status.context ?: status.description ?: "status",
-                        when (status.status) {
-                            "success" -> CodeReviewCIJobState.SUCCESS
-                            "failure", "error" -> CodeReviewCIJobState.FAILED
-                            "skipped" -> CodeReviewCIJobState.SKIPPED
-                            else -> CodeReviewCIJobState.PENDING
-                        },
-                        true,
-                        status.targetUrl,
-                    )
-                }
+            // Re-poll while any check is still running, so the row moves from
+            // "in progress" to its result without a manual refresh.
+            data.pullRequest.collectLatest { pr ->
+                do {
+                    val combined = runCatching { data.client.getCombinedStatus(data.owner, data.repoName, pr.head.sha) }.getOrNull()
+                    if (combined != null) _ciJobs.value = combined.statuses.orEmpty().map(::toJob)
+                    val running = _ciJobs.value.any { it.status == CodeReviewCIJobState.PENDING }
+                    if (running) delay(CI_POLL_MS)
+                } while (running)
             }
         }
     }
 
+    /** Gitea commit status states: pending, success, error, failure, warning.
+     * A warning doesn't fail the combined status in Gitea, so it counts as
+     * passed here; the platform has no warning state. */
+    private fun toJob(status: com.github.hypercookie.giteaplugin.api.dto.CommitStatus) = CodeReviewCIJob(
+        status.context ?: status.description ?: "status",
+        when (status.status) {
+            "success", "warning" -> CodeReviewCIJobState.SUCCESS
+            "failure", "error" -> CodeReviewCIJobState.FAILED
+            "skipped" -> CodeReviewCIJobState.SKIPPED
+            else -> CodeReviewCIJobState.PENDING
+        },
+        true,
+        status.targetUrl,
+    )
+
     private companion object {
+        const val CI_POLL_MS = 15_000L
         const val RECHECK_ATTEMPTS = 3
         const val RECHECK_DELAY_MS = 2_000L
     }
