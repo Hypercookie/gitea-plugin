@@ -337,6 +337,7 @@ Two kinds of entries:
 | G9 | Review thread resolution per thread | Resolution is per comment (`resolver`); we resolve the first comment | Treat first comment's `resolver` as the thread state | M1 |
 | G10 | Outdated thread detection | No `outdated` flag. `position` is the new-side line and `original_position` the old-side line (mutually exclusive, confirmed on `plugindev/pr-test`: comment 15 has `position 0, original_position 15`, an old-side comment). Each comment carries `commit_id`, the commit its line refers to | Map each thread's line from the file at its `commit_id` to the current document; a line that falls inside a changed region is outdated | M2 |
 | G11 | CI check runs with details | Commit statuses only (`/commits/{ref}/status`) | Map statuses to `CodeReviewCIJob` | M6 |
+| G12 | Conflicts status ("Branch has conflicts") | `mergeable: false` also means "still checking", "check failed" or work in progress (`PullRequest.Mergeable` in models/issues/pull.go); the API doesn't say which | Drafts and closed PRs are never flagged; a false flag is re-fetched 3 times, 2 s apart, before showing "Branch can't be merged automatically" (own row instead of the platform's conflicts row, whose wording would overstate it) | fix |
 
 ### Experimental API in use
 

@@ -37,7 +37,9 @@ import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.panels.ListLayout
 import com.intellij.ui.components.panels.Wrapper
+import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import com.intellij.collaboration.ui.icon.CIBuildStatusIcons
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -81,7 +83,7 @@ object GiteaPullRequestDetailsComponent {
         val status = JPanel(ListLayout.vertical(0)).apply {
             isOpaque = false
             add(CodeReviewDetailsStatusComponentFactory.createCiComponent(cs, statusVm))
-            add(CodeReviewDetailsStatusComponentFactory.createConflictsComponent(cs, statusVm.hasConflicts.asBooleanFlow()))
+            add(mergeabilityRow(cs, statusVm))
             add(CodeReviewDetailsStatusComponentFactory.createNeedReviewerComponent(cs, reviewerStates(cs, data)))
         }
 
@@ -167,8 +169,35 @@ object GiteaPullRequestDetailsComponent {
         )
     }
 
-    private fun kotlinx.coroutines.flow.SharedFlow<Boolean?>.asBooleanFlow() =
-        kotlinx.coroutines.flow.flow { collect { emit(it == true) } }
+    /**
+     * Same look as the platform's conflicts row, but Gitea's wording: its
+     * `mergeable` flag can't tell conflicts from a failed check, so the
+     * platform's "Branch has conflicts" text would overstate it.
+     */
+    private fun mergeabilityRow(cs: CoroutineScope, statusVm: GiteaPullRequestStatusViewModel): JComponent {
+        val label = JBLabel()
+        val row = JPanel(ListLayout.horizontal(8)).apply {
+            isOpaque = false
+            border = JBUI.Borders.empty(5, 0)
+            add(label)
+        }
+        cs.bindOnEdt(statusVm.mergeability) { state ->
+            row.isVisible = state != GiteaMergeability.OK
+            when (state) {
+                GiteaMergeability.CHECKING -> {
+                    label.icon = CIBuildStatusIcons.pending
+                    label.text = "Checking whether the branch can be merged"
+                }
+                GiteaMergeability.BLOCKED -> {
+                    label.icon = CIBuildStatusIcons.failed
+                    label.text = "Branch can't be merged automatically"
+                    label.toolTipText = "Gitea reports conflicts with the target branch, or it could not check them"
+                }
+                GiteaMergeability.OK -> Unit
+            }
+        }
+        return row
+    }
 
     private fun action(text: String, icon: javax.swing.Icon, perform: () -> Unit) = object : DumbAwareAction(text, null, icon) {
         override fun actionPerformed(e: AnActionEvent) = perform()

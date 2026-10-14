@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -229,8 +231,21 @@ class GiteaPullRequestStatusViewModel(
     private val data: GiteaPullRequestReviewData,
 ) : CodeReviewStatusViewModel {
 
-    override val hasConflicts: SharedFlow<Boolean?> =
-        data.pullRequest.map { pr -> pr.mergeable?.not()?.takeIf { pr.state == "open" } }.stateIn(cs, SharingStarted.Eagerly, null)
+    private val _mergeability = MutableStateFlow(GiteaMergeability.OK)
+
+    /** See [GiteaMergeability]: a false `mergeable` is re-checked a few times
+     * before it is reported as blocked, since Gitea also reports false while
+     * its background conflict check is still running. */
+    val mergeability: StateFlow<GiteaMergeability> = _mergeability.asStateFlow()
+
+    /** Platform contract: null while checking, true when blocked. */
+    override val hasConflicts: SharedFlow<Boolean?> = _mergeability.map {
+        when (it) {
+            GiteaMergeability.OK -> false
+            GiteaMergeability.CHECKING -> null
+            GiteaMergeability.BLOCKED -> true
+        }
+    }.stateIn(cs, SharingStarted.Eagerly, false)
 
     override val requiredConversationsResolved: SharedFlow<Boolean> = MutableStateFlow(false)
 
@@ -241,6 +256,25 @@ class GiteaPullRequestStatusViewModel(
     override val showJobsDetailsRequests: SharedFlow<List<CodeReviewCIJob>> = _showJobs.asSharedFlow()
 
     init {
+        cs.launch {
+            data.pullRequest.collectLatest { pr ->
+                var assessment = GiteaMergeability.of(pr.state, pr.merged, pr.draft, pr.mergeable)
+                _mergeability.value = assessment
+                var attempt = 0
+                while (assessment == GiteaMergeability.CHECKING && attempt < RECHECK_ATTEMPTS) {
+                    attempt++
+                    delay(RECHECK_DELAY_MS)
+                    val fresh = runCatching { data.client.getPullRequest(data.owner, data.repoName, pr.number) }.getOrNull() ?: continue
+                    assessment = GiteaMergeability.of(fresh.state, fresh.merged, fresh.draft, fresh.mergeable)
+                    if (assessment == GiteaMergeability.OK) {
+                        _mergeability.value = GiteaMergeability.OK
+                        data.update(fresh)
+                        return@collectLatest
+                    }
+                }
+                if (assessment == GiteaMergeability.CHECKING) _mergeability.value = GiteaMergeability.BLOCKED
+            }
+        }
         cs.launch {
             data.pullRequest.collect { pr ->
                 val combined = runCatching { data.client.getCombinedStatus(data.owner, data.repoName, pr.head.sha) }.getOrNull()
@@ -259,6 +293,11 @@ class GiteaPullRequestStatusViewModel(
                 }
             }
         }
+    }
+
+    private companion object {
+        const val RECHECK_ATTEMPTS = 3
+        const val RECHECK_DELAY_MS = 2_000L
     }
 
     override fun showJobsDetails() {
