@@ -5,6 +5,8 @@ import com.github.hypercookie.giteaplugin.api.dto.CreateIssueCommentOption
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewCommentReplyOptions
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
+import com.github.hypercookie.giteaplugin.api.dto.GiteaIssue
+import com.github.hypercookie.giteaplugin.api.dto.GiteaLabel
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.IssueComment
 import com.github.hypercookie.giteaplugin.api.dto.PullReview
@@ -69,6 +71,62 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
         }
         return get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls?$query")
     }
+
+    /** One page of `/pulls`. Used by the list when a sort order is chosen
+     * (the issues endpoints can't sort). */
+    suspend fun listPullRequestsPage(
+        owner: String,
+        repo: String,
+        state: String,
+        sort: String?,
+        poster: String?,
+        label: Long?,
+        page: Int,
+        limit: Int,
+    ): List<PullRequest> {
+        val query = buildString {
+            append("state=${enc(state)}&page=$page&limit=$limit")
+            if (!sort.isNullOrBlank()) append("&sort=${enc(sort)}")
+            if (!poster.isNullOrBlank()) append("&poster=${enc(poster)}")
+            if (label != null) append("&labels=$label")
+        }
+        return get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls?$query")
+    }
+
+    /** One page of pull requests through the repository issues endpoint,
+     * which supports text search and author/assignee/label filters. */
+    suspend fun searchPullRequestIssues(
+        owner: String,
+        repo: String,
+        state: String,
+        query: String?,
+        createdBy: String?,
+        assignedBy: String?,
+        label: String?,
+        page: Int,
+        limit: Int,
+    ): List<GiteaIssue> {
+        val q = buildString {
+            append("type=pulls&state=${enc(state)}&page=$page&limit=$limit")
+            if (!query.isNullOrBlank()) append("&q=${enc(query)}")
+            if (!createdBy.isNullOrBlank()) append("&created_by=${enc(createdBy)}")
+            if (!assignedBy.isNullOrBlank()) append("&assigned_by=${enc(assignedBy)}")
+            if (!label.isNullOrBlank()) append("&labels=${enc(label)}")
+        }
+        return get("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues?$q")
+    }
+
+    /** Pull requests where the current user's review is requested, across
+     * all repositories of [owner]; callers filter to one repository. */
+    suspend fun searchReviewRequested(owner: String, state: String, page: Int, limit: Int): List<GiteaIssue> =
+        get("/api/v1/repos/issues/search?type=pulls&review_requested=true&owner=${enc(owner)}&state=${enc(state)}&page=$page&limit=$limit")
+
+    suspend fun listLabels(owner: String, repo: String): List<GiteaLabel> =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/labels?limit=100")
+
+    /** Users who can be assigned (and so also review/author) in [repo]. */
+    suspend fun listAssignees(owner: String, repo: String): List<GiteaUser> =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/assignees")
 
     suspend fun getPullRequest(owner: String, repo: String, index: Long): PullRequest =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index")

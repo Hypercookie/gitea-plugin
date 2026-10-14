@@ -167,11 +167,27 @@ Done together with M2, so the old controller can be deleted in one commit.
       head editor shows new-side threads (`position`), base editor shows
       old-side threads (`original_position`).
 
-### M4 - tool window shell
-- [ ] "Pull Requests" tool window: list plus one closable tab per opened PR.
+### M4 - tool window shell [x] (not sandbox-tested)
+- [x] Platform `manageReviewToolwindowTabs` with our
+      `ReviewToolwindowViewModel`/`ReviewToolwindowProjectViewModel`
+      (only the interface's default `refresh()` is internal; we don't
+      override it) and `ReviewTabsComponentFactory`. One closable tab per
+      opened PR; empty state links to Settings and Retry.
+- [x] Anchor left, stripe title "Pull Requests" (id stays
+      "Gitea Pull Requests" so it can't clash with the GitHub plugin).
+      Refresh is a tool window title action.
+- [x] Removed `CurrentBranchReviewPanel` (the official plugins have no
+      such panel; the editor banner covers pending comments and submit for
+      the current branch) and the old `PullRequestListPanel`.
+- PR tabs still host the old `PullRequestDetailPanel` until M6.
 
-### M5 - pull request list
-- [ ] `ReviewListViewModel`, `ReviewListItemPresentation`,
+### M5 - pull request list [x] (not sandbox-tested)
+- [x] Done as below. List rows: platform `ReviewListComponentFactory`
+      (labels, assignees, reviewers, state tag, conflict icon, comment
+      counter). Lazy paging via `ReviewListUtil.wrapWithLazyVerticalScroll`.
+      Context menu: View Pull Request (also Enter/double-click), Checkout,
+      Open in Browser, Copy Link, Refresh List. Empty states as in GitHub.
+- [x] `ReviewListViewModel`, `ReviewListItemPresentation`,
       `TagPresentation`, `UserPresentation`; search bar from
       `ReviewListSearchPanelViewModelBase`, `ReviewListSearchTextFieldFactory`,
       `DropDownComponentFactory`, `ReviewListQuickFilter`,
@@ -214,10 +230,11 @@ Two kinds of entries:
 
 | # | Official plugin uses | Why we can't | What we build instead | Phase |
 |---|---|---|---|---|
-| I1 | `ReviewToolwindowProjectViewModel` + `ReviewToolwindowTabsManager` | Interface is `@Internal`; the public tab manager is generic over it | Own tab manager over `ToolWindow.contentManager` using public `ReviewTab`/`ReviewTabsComponentFactory`-like split | M4 |
-| I2 | `ReviewListComponentFactory`, `ReviewListCellRenderer*` | `@Internal` | Own `JBList` + renderer built from public `ReviewListItemPresentation`, `TagPresentation`, `UserPresentation`, `UnreadDotIcon` | M5 |
-| I3 | `ReviewListSearchPanelFactory`, `ChooserPopupUtil` | `@Internal` | Own panel composed from `ReviewListSearchTextFieldFactory`, `DropDownComponentFactory`, `CollaborationToolsPopupUtil` | M5 |
-| I4 | `ListLoader`, `ReloadablePotentiallyInfiniteListLoader`, `ApiPageUtil` | `@Internal` | Own paged loader (`page`/`limit` query, `StateFlow<List>`, load-more on scroll) | M5 |
+| I1 | `ReviewToolwindowProjectViewModel.refresh()` | Only this default member is `@Internal` | Nothing: the interface and `manageReviewToolwindowTabs` are usable; we don't override `refresh()` | M4 done |
+| I2 | `ReviewListComponentFactory.create(presenter, options)`, `ReviewListCellRenderer*` | Only the two-argument overload and the renderer classes are `@Internal` | Use the public one-argument `create(presenter)`; rows are not "bordered" like GitHub's (that option is the internal overload) | M5 done |
+| I3 | `ReviewListSearchPanelFactory.create(scope, quickFilterListener)`, `ChooserPopupUtil.showAsyncMultipleChooserPopup` | Only these members are `@Internal` | Use public `create(scope)` and single-choice `showAsyncChooserPopup`; filters are single-select (labels too) | M5 done |
+| I4 | `ListLoader`, `ReloadablePotentiallyInfiniteListLoader`, `ApiPageUtil` | `@Internal` | `GiteaPullRequestListViewModel`: page counter, `StateFlow` of items, loading and error | M5 done |
+| I17 | `PersistingReviewListSearchHistoryModel` backed by a persistent state component | Public, but needs our own state component | Search history kept in memory for the session only | M5 |
 | I5 | `CodeReviewChangeListViewModelBase`, `CodeReviewCommitsChangesStateHandler` | `@Internal` | Own `CodeReviewChangeListViewModel` / `CodeReviewChangesViewModel` implementations | M6 |
 | I6 | `ReviewInEditorUtil` (review toolbar, `trackDocumentDiffSync`, line transfer, marker color scheme) | `@Internal` | `LineMapping` (`ComparisonManager.compareLines`, debounced on document changes) for line transfer and PR ranges; `CodeReviewEditorGutterChangesRenderer.render` with its default color scheme; review toolbar not built, the editor notification banner stays | M2 done |
 | I7 | `MutableCodeReviewEditorGutterChangesModel` | `@Internal` | Own `CodeReviewEditorGutterActionableChangesModel` implementation | M2 |
@@ -240,9 +257,9 @@ Two kinds of entries:
 | G3 | GraphQL timeline with typed review threads | REST only; review comments and timeline are separate | Merge `/issues/{n}/timeline` with review comments client-side | M7 |
 | G4 | Mark files as viewed | Web UI only | Dropped; viewed state not shown | M6 |
 | G5 | Multiline comments (`WithMultilineComments`) | Comments anchor to one line | Implement only `CodeReviewCommentableEditorModel`, not the multiline variant | M2 |
-| G6 | Review-state list filters | Not a `/pulls` or issues-search parameter | Client-side over loaded pages, or omitted | M5 |
+| G6 | Review-state list filters | Not a parameter of any repository list endpoint | Review filter omitted; "Review requests" quick filter uses `/repos/issues/search?review_requested=true&owner=` filtered to this repository | M5 done |
 | G7 | ETag-based list refresh | No ETag on list responses | Poll and compare `updated_at` | M5 |
-| G8 | Text search on the PR list | `/pulls` has no `q` | Use `/repos/issues/search?type=pulls&q=...` | M5 |
+| G8 | Text search and assignee filter on the PR list | `/pulls` has no `q` or assignee; `/repos/{o}/{r}/issues?type=pulls` has `q`, `created_by`, `assigned_by`, `labels` but no sort | Issues endpoint by default; `/pulls` only when a non-default sort is chosen without text or assignee (sort is ignored otherwise). Issues results carry no mergeability or reviewers, so those row decorations appear only in `/pulls` mode. "Merged" is filtered client-side from closed | M5 done |
 | G9 | Review thread resolution per thread | Resolution is per comment (`resolver`); we resolve the first comment | Treat first comment's `resolver` as the thread state | M1 |
 | G10 | Outdated thread detection | No `outdated` flag. `position` is the new-side line and `original_position` the old-side line (mutually exclusive, confirmed on `plugindev/pr-test`: comment 15 has `position 0, original_position 15`, an old-side comment). Each comment carries `commit_id`, the commit its line refers to | Map each thread's line from the file at its `commit_id` to the current document; a line that falls inside a changed region is outdated | M2 |
 | G11 | CI check runs with details | Commit statuses only (`/commits/{ref}/status`) | Map statuses to `CodeReviewCIJob` | M6 |
@@ -260,3 +277,4 @@ Filled in as phases land, from `verifyPlugin` output.
 | platform `ListLayout` | `GiteaReviewEditorComponents` | M2 |
 
 `verifyPlugin` after M2/M3: compatible, 0 internal, 163 experimental usages.
+After M4/M5: compatible, 0 internal, 301 experimental usages (adds `ui.toolwindow`, `codereview.list`, `codereview.list.search`).

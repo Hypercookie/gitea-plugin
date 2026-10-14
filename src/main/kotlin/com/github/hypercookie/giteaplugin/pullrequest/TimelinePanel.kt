@@ -244,7 +244,7 @@ private fun formatTimestamp(iso: String?): String {
 private data class RowSpec(val content: JComponent, val dotColor: JBColor)
 
 // Reuses the same color pairs this codebase already uses for "merged"
-// (purple) and diff additions (green) elsewhere — PullRequestListPanel's
+// (purple) and diff additions (green) elsewhere — the list's
 // MERGED_COLOR and PullRequestDetailPanel's ADD_COLOR — rather than
 // inventing a new palette just for this.
 private val COMMENT_DOT = JBColor(0x0969DA, 0x58A6FF)

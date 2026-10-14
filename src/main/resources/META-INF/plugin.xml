@@ -16,8 +16,9 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.hypercookie.giteaplugin.pullrequest.GiteaPullRequestsToolWindowFactory"
-                    id="Gitea Pull Requests" anchor="right" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
+        <toolWindow factoryClass="com.github.hypercookie.giteaplugin.pullrequest.toolwindow.GiteaToolWindowFactory"
+                    id="Gitea Pull Requests" anchor="left" doNotActivateOnStart="true" canCloseContents="true"
+                    icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <diff.DiffExtension implementation="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaCommentDiffExtension"/>
         <editorFactoryListener implementation="com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewInEditorController"/>
         <editorNotificationProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider"/>
