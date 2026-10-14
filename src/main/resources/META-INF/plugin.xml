@@ -4,7 +4,16 @@
     <name>Gitea</name>
     <vendor>hypercookie</vendor>
     <description><![CDATA[
-        <p>Gitea integration: browse pull requests, read and reply to review comments right in the editor, and submit reviews (approve, comment, request changes) — without leaving IntelliJ.</p>
+        <p>Provides integration with <a href="https://about.gitea.com/">Gitea</a> pull requests.</p>
+        <ul>
+          <li>List, search and filter the pull requests of the current repository in the Pull Requests tool window.</li>
+          <li>Open a pull request to see its commits, changed files, status checks and timeline, and view file diffs.</li>
+          <li>Review in the editor: see review threads next to the code of the checked-out pull request branch, reply to and resolve them, and add new comments from the gutter.</li>
+          <li>Collect comments in a pending review and submit it as approval, comment or change request.</li>
+          <li>Check out a pull request branch from the list.</li>
+        </ul>
+        <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Tested with Gitea 1.27.</p>
+        <p>Requires the Git plugin.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
