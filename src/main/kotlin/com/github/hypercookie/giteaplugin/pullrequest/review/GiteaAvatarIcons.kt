@@ -7,6 +7,9 @@ import com.intellij.collaboration.ui.icon.IconsProvider
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.intellij.util.IconUtil
+import com.intellij.util.ui.ImageUtil
+import icons.CollaborationToolsIcons
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -30,6 +33,14 @@ class GiteaAvatarIcons(cs: CoroutineScope) : IconsProvider<GiteaUser?> {
                 val url = key.takeIf { it.isNotBlank() } ?: return null
                 return withContext(Dispatchers.IO) { runCatching { ImageIO.read(URI(url).toURL()) }.getOrNull() }
             }
+
+            // Same as the GitHub plugin's avatar loader: a default avatar
+            // while loading, and round avatars once loaded.
+            override fun createBaseIcon(key: String?, iconSize: Int): Icon =
+                IconUtil.resizeSquared(CollaborationToolsIcons.Review.DefaultAvatar, iconSize)
+
+            override suspend fun postProcess(image: Image): Image =
+                ImageUtil.createCircleImage(ImageUtil.toBufferedImage(image))
         }),
     )
 
