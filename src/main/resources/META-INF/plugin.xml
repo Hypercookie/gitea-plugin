@@ -20,6 +20,7 @@
                     id="Gitea Pull Requests" anchor="left" doNotActivateOnStart="true" canCloseContents="true"
                     icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <diff.DiffExtension implementation="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaCommentDiffExtension"/>
+        <fileEditorProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.timeline.GiteaTimelineEditorProvider"/>
         <editorFactoryListener implementation="com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewInEditorController"/>
         <editorNotificationProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider"/>
         <notificationGroup id="Gitea" displayType="BALLOON" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>

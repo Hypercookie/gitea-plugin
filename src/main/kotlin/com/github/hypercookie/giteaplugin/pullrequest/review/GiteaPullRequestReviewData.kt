@@ -60,6 +60,23 @@ class GiteaPullRequestReviewData(
     init {
         cs.launch { _currentUser.value = runCatching { client.getCurrentUser() }.getOrNull() }
         cs.launch { reloadComments() }
+        // A submitted review empties the pending store; its comments are now
+        // real server-side comments, so fetch them.
+        cs.launch {
+            var previous = pendingStore.state.value
+            pendingStore.state.collect { current ->
+                if (previous.isNotEmpty() && current.isEmpty()) reloadComments()
+                previous = current
+            }
+        }
+    }
+
+    /** Re-fetches the pull request and its comments. */
+    fun reload() {
+        cs.launch {
+            runCatching { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)
+            reloadComments()
+        }
     }
 
     /** Called when the same PR shows up again with possibly newer data

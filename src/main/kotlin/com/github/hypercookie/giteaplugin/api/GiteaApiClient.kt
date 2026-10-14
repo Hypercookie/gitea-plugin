@@ -4,7 +4,9 @@ import com.github.hypercookie.giteaplugin.api.dto.ChangedFile
 import com.github.hypercookie.giteaplugin.api.dto.CreateIssueCommentOption
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewCommentReplyOptions
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
+import com.github.hypercookie.giteaplugin.api.dto.CombinedCommitStatus
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
+import com.github.hypercookie.giteaplugin.api.dto.GitCommitWithFiles
 import com.github.hypercookie.giteaplugin.api.dto.GiteaIssue
 import com.github.hypercookie.giteaplugin.api.dto.GiteaLabel
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
@@ -127,6 +129,12 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     /** Users who can be assigned (and so also review/author) in [repo]. */
     suspend fun listAssignees(owner: String, repo: String): List<GiteaUser> =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/assignees")
+
+    suspend fun getCommitWithFiles(owner: String, repo: String, sha: String): GitCommitWithFiles =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/git/commits/${enc(sha)}?files=true&stat=false&verification=false")
+
+    suspend fun getCombinedStatus(owner: String, repo: String, ref: String): CombinedCommitStatus =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/commits/${enc(ref)}/status")
 
     suspend fun getPullRequest(owner: String, repo: String, index: Long): PullRequest =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index")
