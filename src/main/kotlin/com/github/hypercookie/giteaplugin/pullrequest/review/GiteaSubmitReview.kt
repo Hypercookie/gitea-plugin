@@ -4,9 +4,12 @@ import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
 import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
+import com.github.hypercookie.giteaplugin.util.bindVisibility
+import com.github.hypercookie.giteaplugin.util.errorPresenter
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
 import com.github.hypercookie.giteaplugin.util.primaryButton
 import com.intellij.collaboration.messages.CollaborationToolsBundle
+import com.intellij.collaboration.ui.codereview.list.error.ErrorStatusPanelFactory
 import com.intellij.collaboration.ui.codereview.review.CodeReviewSubmitViewModel
 import com.intellij.icons.AllIcons
 import com.intellij.notification.NotificationGroupManager
@@ -67,9 +70,28 @@ class GiteaSubmitReviewViewModel(
     private val _error = MutableStateFlow<Throwable?>(null)
     override val error: StateFlow<Throwable?> = _error.asStateFlow()
 
-    /** Gitea rejects approving or requesting changes on your own pull request. */
-    val viewerIsAuthor: Boolean
-        get() = data.currentUser.value?.login != null && data.currentUser.value?.login == data.pullRequest.value.user?.login
+    /**
+     * Whether Approve / Request Changes are offered. Gitea rejects both on
+     * your own pull request ("approve/reject your own pull is not allowed"),
+     * so they stay hidden until the current user is known and isn't the
+     * author.
+     */
+    val canApproveOrReject: StateFlow<Boolean> =
+        combine(data.currentUser, data.pullRequest) { user, pr -> user?.login != null && user.login != pr.user?.login }
+            .stateIn(cs, SharingStarted.Eagerly, false)
+
+    /**
+     * Mirrors Gitea's `preparePullReviewType` (routers/api/v1/repo/pull_review.go):
+     * REQUEST_CHANGES needs a non-blank body even when inline comments are
+     * attached, COMMENT needs a non-blank body or at least one comment, and
+     * APPROVED needs neither. Bodies are checked after trimming whitespace.
+     */
+    val canRequestChanges: StateFlow<Boolean> =
+        text.map { it.isNotBlank() }.stateIn(cs, SharingStarted.Eagerly, false)
+
+    val canComment: StateFlow<Boolean> =
+        combine(text, draftCommentsCount) { text, count -> text.isNotBlank() || count > 0 }
+            .stateIn(cs, SharingStarted.Eagerly, draftCommentsCount.value > 0)
 
     fun submit(event: ReviewEvent) {
         if (_isBusy.value) return
@@ -166,51 +188,63 @@ object GiteaSubmitReviewPopup {
             add(close, HorizontalLayout.RIGHT)
             add(discard, HorizontalLayout.RIGHT)
         }
-        val errorLabel = JBLabel().apply {
-            icon = AllIcons.General.Error
-            isVisible = false
-        }
-        cs.bindOnEdt(vm.error) {
-            errorLabel.isVisible = it != null
-            errorLabel.text = it?.let { e -> "${CollaborationToolsBundle.message("review.submit.failed")}: ${e.message}" }
-        }
+        // Same wrapping error panel as the platform's CodeReviewSubmitPopupHandler,
+        // so long server messages are shown in full instead of being cut off.
+        val errorPanel = ErrorStatusPanelFactory.create(
+            cs, vm.error, errorPresenter(CollaborationToolsBundle.message("review.submit.failed")), ErrorStatusPanelFactory.Alignment.LEFT,
+        )
         return JPanel(MigLayout(LC().insets("12").fill().flowY().noGrid().hideMode(3))).apply {
             background = JBUI.CurrentTheme.Popup.BACKGROUND
             preferredSize = JBDimension(500, 200)
             add(titlePanel, CC().growX())
             add(editor, CC().growX().growY())
-            add(errorLabel, CC().growY().growPrioY(0))
+            add(errorPanel, CC().growY().growPrioY(0))
             add(createActions(cs, vm), CC())
         }
     }
 
     private fun createActions(cs: CoroutineScope, vm: GiteaSubmitReviewViewModel): JComponent {
-        val hasAnyComment = combine(vm.text, vm.draftCommentsCount) { text, count -> text.isNotEmpty() || count > 0 }
+        // Enablement follows Gitea's server-side rules (see the view model), so
+        // a disabled button explains what is missing instead of failing with
+        // HTTP 422 on submit.
         val buttons = buildList<JComponent> {
-            if (!vm.viewerIsAuthor) {
-                // GitHub draws Approve with the green `InstallButton`, which is
-                // `@ApiStatus.Internal` (migration ledger I20); the platform's
-                // default-button style marks it as the primary action instead.
-                add(
-                    primaryButton("Approve").apply {
-                        addActionListener { vm.submit(ReviewEvent.APPROVED) }
-                        cs.bindOnEdt(vm.isBusy) { isEnabled = !it }
-                    },
-                )
-                add(
-                    JButton("Request Changes").apply {
-                        isOpaque = false
-                        addActionListener { vm.submit(ReviewEvent.REQUEST_CHANGES) }
-                        cs.bindOnEdt(combine(vm.isBusy, hasAnyComment) { busy, any -> !busy && any }) { isEnabled = it }
-                    },
-                )
-            }
+            // GitHub draws Approve with the green `InstallButton`, which is
+            // `@ApiStatus.Internal` (migration ledger I20); the platform's
+            // default-button style marks it as the primary action instead.
+            add(
+                primaryButton("Approve").apply {
+                    addActionListener { vm.submit(ReviewEvent.APPROVED) }
+                    cs.bindOnEdt(vm.isBusy) { isEnabled = !it }
+                    bindVisibility(cs, vm.canApproveOrReject)
+                },
+            )
+            add(
+                JButton("Request Changes").apply {
+                    isOpaque = false
+                    addActionListener { vm.submit(ReviewEvent.REQUEST_CHANGES) }
+                    bindVisibility(cs, vm.canApproveOrReject)
+                    cs.bindOnEdt(combine(vm.isBusy, vm.canRequestChanges, ::Pair)) { (busy, allowed) ->
+                        isEnabled = !busy && allowed
+                        toolTipText = if (allowed) {
+                            "Submit feedback that must be addressed before merging"
+                        } else {
+                            "Gitea requires a review message to request changes"
+                        }
+                    }
+                },
+            )
             add(
                 JButton("Comment").apply {
                     isOpaque = false
-                    toolTipText = "Submit general feedback without explicit approval"
                     addActionListener { vm.submit(ReviewEvent.COMMENT) }
-                    cs.bindOnEdt(combine(vm.isBusy, hasAnyComment) { busy, any -> !busy && any }) { isEnabled = it }
+                    cs.bindOnEdt(combine(vm.isBusy, vm.canComment, ::Pair)) { (busy, allowed) ->
+                        isEnabled = !busy && allowed
+                        toolTipText = if (allowed) {
+                            "Submit general feedback without explicit approval"
+                        } else {
+                            "Write a review message or add pending comments to comment"
+                        }
+                    }
                 },
             )
         }

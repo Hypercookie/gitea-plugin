@@ -9,6 +9,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewBu
 import com.github.hypercookie.giteaplugin.pullrequest.timeline.GiteaTimelineEditor
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
+import com.github.hypercookie.giteaplugin.util.errorPanel
 import com.github.hypercookie.giteaplugin.util.gap
 import com.intellij.collaboration.ui.SimpleHtmlPane
 import com.intellij.collaboration.ui.codereview.CodeReviewProgressTreeModelFromDetails
@@ -107,7 +108,7 @@ object GiteaPullRequestDetailsComponent {
         cs.bindOnEdt(changesVm.changeListVm) { result ->
             val content = when {
                 result == null -> JBLabel("Loading…")
-                result.isFailure -> JBLabel("Can't load changes: ${result.exceptionOrNull()?.message}")
+                result.isFailure -> errorPanel("Can't load changes", result.exceptionOrNull()!!)
                 else -> {
                     val vm = result.getOrThrow()
                     val progress = CodeReviewProgressTreeModelFromDetails(cs, vm)
