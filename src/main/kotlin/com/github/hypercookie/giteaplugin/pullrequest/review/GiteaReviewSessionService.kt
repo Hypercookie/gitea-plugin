@@ -130,6 +130,14 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
         requestRefresh()
     }
 
+    /** Re-fetches [data]'s pull request in every live holder of it: the
+     * pull request tab, diff viewers opened from it and the current-branch
+     * session each keep their own comments when the pull request isn't the
+     * checked-out one. */
+    fun refreshPullRequest(data: GiteaPullRequestReviewData) {
+        liveData.filter { it === data || (it.repo == data.repo && it.number == data.number) }.forEach { it.reload() }
+    }
+
     fun requestRefresh() {
         refreshRequests.tryEmit(Unit)
     }

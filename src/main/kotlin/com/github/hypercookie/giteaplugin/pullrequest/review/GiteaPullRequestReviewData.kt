@@ -19,14 +19,20 @@ import com.intellij.openapi.util.text.StringUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
@@ -50,6 +56,16 @@ class GiteaPullRequestReviewData(
 
     private val _comments = MutableStateFlow<List<PullReviewComment>>(emptyList())
     val comments: StateFlow<List<PullReviewComment>> = _comments.asStateFlow()
+
+    /** Serializes [reloadComments], so a slow response from an earlier
+     * fetch (the poll, say) can't overwrite the result of a later one. */
+    private val commentsLoadLock = Mutex()
+
+    private val _reloads = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Emits on every [reload], so views that fetch data of their own (the
+     * timeline's comments and events) fetch it again too. */
+    val reloads: SharedFlow<Unit> = _reloads.asSharedFlow()
 
     val threads: StateFlow<List<ReviewThread>> =
         _comments.map(ReviewThreads::group).stateIn(cs, SharingStarted.Eagerly, emptyList())
@@ -106,9 +122,11 @@ class GiteaPullRequestReviewData(
         }
     }
 
-    /** Re-fetches the pull request, its comments and their reactions. */
+    /** Re-fetches the pull request, its comments and their reactions, and
+     * tells [reloads] collectors to fetch theirs. */
     fun reload() {
         reactions.refresh()
+        _reloads.tryEmit(Unit)
         cs.launch {
             runCatching { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)
             reloadComments()
@@ -128,10 +146,11 @@ class GiteaPullRequestReviewData(
         }
     }
 
-    suspend fun reloadComments() {
+    suspend fun reloadComments() = commentsLoadLock.withLock {
         runCatching { client.getAllReviewComments(owner, repoName, number) }
             .onSuccess { _comments.value = it }
-            .onFailure { thisLogger().warn("Failed to load review comments for #$number", it) }
+            .onFailure { if (it !is CancellationException) thisLogger().warn("Failed to load review comments for #$number", it) }
+        Unit
     }
 
     /**

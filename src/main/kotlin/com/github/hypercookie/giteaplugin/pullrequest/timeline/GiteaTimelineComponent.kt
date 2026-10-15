@@ -34,11 +34,8 @@ import com.intellij.util.text.DateFormatUtil
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.awt.BorderLayout
 import javax.swing.JComponent
@@ -64,49 +61,31 @@ object GiteaTimelineComponent {
     private val SECONDARY = CodeReviewChatItemUIUtil.ComponentType.FULL_SECONDARY
     private val json = Json { ignoreUnknownKeys = true }
 
-    private sealed interface Loaded {
-        data class Items(val events: List<TimelineEvent>, val commits: List<GitCommit>) : Loaded
-        data class Error(val error: Throwable) : Loaded
-        data object Loading : Loaded
-    }
-
     fun create(cs: CoroutineScope, data: GiteaPullRequestReviewData): JComponent {
         val project = data.project
         val avatars = GiteaAvatarIcons.getInstance(project)
-        val state = MutableStateFlow<Loaded>(Loaded.Loading)
-
-        fun reload() {
-            data.reactions.refresh()
-            cs.launch {
-                state.value = runCatching {
-                    coroutineScope {
-                        val events = async { data.client.getTimeline(data.owner, data.repoName, data.number) }
-                        val commits = async { data.client.getPullRequestCommits(data.owner, data.repoName, data.number) }
-                        Loaded.Items(events.await(), commits.await())
-                    }
-                }.getOrElse { Loaded.Error(it) }
-            }
-        }
+        val loader = GiteaTimelineLoader(cs, data)
+        data.reactions.refresh()
 
         val itemsPanel = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply { isOpaque = false }
         // Items are rebuilt on every change; their bindings (reaction pills)
         // live in a scope that is replaced with them.
         var itemsCs: CoroutineScope? = null
-        cs.bindOnEdt(kotlinx.coroutines.flow.combine(state, data.comments) { loaded, _ -> loaded }) { loaded ->
+        cs.bindOnEdt(kotlinx.coroutines.flow.combine(loader.state, data.comments, data.pullRequest) { loaded, _, _ -> loaded }) { loaded ->
             itemsCs?.cancel()
             val ics = cs.giteaChildScope("Gitea timeline items").also { itemsCs = it }
             itemsPanel.removeAll()
             itemsPanel.add(description(ics, avatars, data))
             when (loaded) {
-                Loaded.Loading -> itemsPanel.add(JBLabel("Loading…").apply { border = JBUI.Borders.empty(8) })
-                is Loaded.Error -> itemsPanel.add(
+                GiteaTimelineLoader.State.Loading -> itemsPanel.add(JBLabel("Loading…").apply { border = JBUI.Borders.empty(8) })
+                is GiteaTimelineLoader.State.Error -> itemsPanel.add(
                     JPanel(ListLayout.horizontal(8)).apply {
                         isOpaque = false
                         add(JBLabel("Can't load timeline items", AllIcons.General.Error, JBLabel.LEFT))
-                        add(ActionLink("Retry") { reload() })
+                        add(ActionLink("Retry") { loader.reload() })
                     },
                 )
-                is Loaded.Items -> {
+                is GiteaTimelineLoader.State.Items -> {
                     val commitsBySha = loaded.commits.associateBy { it.sha }
                     val commentsByReview = data.comments.value.groupBy { it.reviewId }
                     loaded.events.mapNotNull { item(ics, avatars, it, commitsBySha, commentsByReview, data) }.forEach(itemsPanel::add)
@@ -115,9 +94,7 @@ object GiteaTimelineComponent {
             itemsPanel.revalidate()
             itemsPanel.repaint()
         }
-        reload()
-
-        val newComment = newCommentField(cs, data, avatars) { reload() }
+        val newComment = newCommentField(cs, data, avatars) { loader.reload() }
         val content = JPanel(ListLayout.vertical(0)).apply {
             isOpaque = false
             border = JBUI.Borders.empty(CodeReviewTimelineUIUtil.VERT_PADDING, 0)
