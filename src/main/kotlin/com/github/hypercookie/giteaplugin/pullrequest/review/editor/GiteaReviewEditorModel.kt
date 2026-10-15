@@ -88,7 +88,7 @@ class GiteaReviewEditorModel(
         val docToRef: List<ChangedBlock> = LineMapping.inverse(refToDoc)
     }
 
-    private val documentStamp = MutableStateFlow(0L)
+    private val documentStamp = MutableStateFlow(INITIAL_STAMP)
     private val mappings = MutableStateFlow<Mappings?>(null)
 
     private val threadVms = LinkedHashMap<Long, GiteaEditorInlay.Thread>()
@@ -130,7 +130,10 @@ class GiteaReviewEditorModel(
         // Off the EDT: the caller's scope is Main, but the mapping work
         // (read action, file fetches, line diffs) belongs in the background.
         cs.launch(Dispatchers.Default) {
-            combine(documentStamp.debounce(DOCUMENT_DEBOUNCE_MS), data.threads, data.pullRequest) { _, threads, _ -> threads }
+            // Only edits are debounced: the first mapping places comments
+            // as soon as the file opens (comment navigation waits on it).
+            val edits = documentStamp.debounce { if (it == INITIAL_STAMP) 0L else DOCUMENT_DEBOUNCE_MS }
+            combine(edits, data.threads, data.pullRequest) { _, threads, _ -> threads }
                 .mapLatest { threads -> computeMappings(threads) }
                 .collect { mappings.value = it }
         }
@@ -367,5 +370,6 @@ class GiteaReviewEditorModel(
 
     companion object {
         private const val DOCUMENT_DEBOUNCE_MS = 300L
+        private const val INITIAL_STAMP = -1L
     }
 }

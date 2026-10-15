@@ -16,9 +16,14 @@ import javax.swing.JComponent
  * `@ApiStatus.Internal`, so this plugin keeps its own.
  */
 
-/** Runs [apply] on the EDT for every value of [flow] while [cs] is alive. */
+/**
+ * Runs [apply] on the EDT for every value of [flow] while [cs] is alive.
+ * Called on the EDT, a value the flow already has is applied right away,
+ * so a component is complete when it is created rather than one EDT event
+ * later (an editor inlay would show up empty first, then grow).
+ */
 fun <T> CoroutineScope.bindOnEdt(flow: Flow<T>, apply: (T) -> Unit) {
-    launch(Dispatchers.Main) { flow.collect { apply(it) } }
+    launch(Dispatchers.Main.immediate) { flow.collect { apply(it) } }
 }
 
 fun JComponent.bindVisibility(cs: CoroutineScope, flow: Flow<Boolean>) = cs.bindOnEdt(flow) { isVisible = it }

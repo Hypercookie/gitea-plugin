@@ -1,6 +1,7 @@
 package com.github.hypercookie.giteaplugin.pullrequest.diff
 
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
+import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaEditorInlay
 import com.intellij.codeInsight.hint.HintManager
 import com.intellij.diff.DiffContext
@@ -8,10 +9,13 @@ import com.intellij.diff.editor.DiffEditorViewerFileEditor
 import com.intellij.diff.impl.CacheDiffRequestChainProcessor
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.tools.util.DiffDataKeys
+import com.intellij.diff.util.DiffUserDataKeys
+import com.intellij.diff.util.Side
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.PlatformCoreDataKeys
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -91,7 +95,16 @@ class GiteaDiffCommentNavigation(
         val targetRequest = requests[plan.target.fileIndex]
         // Picked up by the extension once the target file's viewer exists.
         targetRequest.putUserData(PENDING_REVEAL_KEY, reveal)
-        processor(e)?.setCurrentRequest(plan.target.fileIndex) ?: targetRequest.putUserData(PENDING_REVEAL_KEY, null)
+        // The viewer's own first scroll (to the first change, or where the
+        // file was left) would show the wrong place before the reveal and
+        // could land after it; aimed at the comment's line instead, the
+        // file opens there. Cleared once revealed, see [GiteaCommentDiffExtension].
+        val side = if (plan.target.side == ReviewSide.NEW) Side.RIGHT else Side.LEFT
+        targetRequest.putUserData(DiffUserDataKeys.SCROLL_TO_LINE, com.intellij.openapi.util.Pair.create(side, plan.target.line))
+        if (processor(e)?.setCurrentRequest(plan.target.fileIndex) == null) {
+            targetRequest.putUserData(PENDING_REVEAL_KEY, null)
+            targetRequest.putUserData(DiffUserDataKeys.SCROLL_TO_LINE, null)
+        }
     }
 
     /** The processor showing this chain in an editor tab. */
@@ -139,27 +152,44 @@ internal class GiteaDiffCommentViewer(
     val data: GiteaPullRequestReviewData,
     private val editors: List<Pair<EditorEx, StateFlow<Collection<GiteaEditorInlay>>>>,
 ) {
-    fun reveal(reveal: PendingReveal) {
-        cs.launch(Dispatchers.Main) {
-            // Lines are known once the editor model has mapped the file,
-            // which takes file fetches right after the viewer opened.
-            val found = withTimeoutOrNull(REVEAL_TIMEOUT_MS) {
-                combine(editors.map { (editor, inlays) -> threadLine(inlays, reveal.threadId).map { it?.let { (inlay, line) -> Triple(editor, inlay, line) } } }) {
-                    it.firstNotNullOfOrNull { found -> found }
-                }.filterNotNull().first()
+    /** Scrolls to and focuses the thread of [reveal]; [onDone] runs after
+     * that, or once the thread wasn't found in time. */
+    fun reveal(reveal: PendingReveal, onDone: () -> Unit = {}) {
+        // EDT, not Main: moving the caret and scrolling need the
+        // write-intent lock, which Main doesn't hold after a suspension.
+        cs.launch(Dispatchers.EDT) {
+            try {
+                doReveal(reveal)
+            } finally {
+                onDone()
             }
-            if (found == null) return@launch
-            val (editor, inlay, line) = found
-            val wasShown = !inlay.hiddenState.value && !inlay.collapsedState.value
-            inlay.hiddenState.value = false
-            inlay.visibleState.value = true
-            inlay.collapsedState.value = false
-            // Let an expanded inlay lay out before measuring it.
-            if (!wasShown) delay(LAYOUT_DELAY_MS)
-            scrollTo(editor, line)
-            IdeFocusManager.getInstance(data.project).requestFocus(editor.contentComponent, true)
-            HintManager.getInstance().showInformationHint(editor, reveal.text)
         }
+    }
+
+    private suspend fun doReveal(reveal: PendingReveal) {
+        // Lines are known once the editor model has mapped the file,
+        // which takes file fetches right after the viewer opened.
+        val found = withTimeoutOrNull(REVEAL_TIMEOUT_MS) {
+            combine(editors.map { (editor, inlays) -> threadLine(inlays, reveal.threadId).map { it?.let { (inlay, line) -> Triple(editor, inlay, line) } } }) {
+                it.firstNotNullOfOrNull { found -> found }
+            }.filterNotNull().first()
+        }
+        if (found == null) return
+        val (editor, inlay, line) = found
+        val wasShown = !inlay.hiddenState.value && !inlay.collapsedState.value
+        inlay.hiddenState.value = false
+        inlay.visibleState.value = true
+        inlay.collapsedState.value = false
+        // The line is known before the inlay is in the editor (it is
+        // added in a later EDT event); scrolling then would measure
+        // without it and the comment would appear after the jump.
+        val wasInEditor = inlay.shownState.value
+        if (!wasInEditor) withTimeoutOrNull(RENDER_TIMEOUT_MS) { inlay.shownState.first { it } }
+        // Let an expanded or just added inlay lay out before measuring it.
+        if (!wasShown || !wasInEditor) delay(LAYOUT_DELAY_MS)
+        scrollTo(editor, line)
+        IdeFocusManager.getInstance(data.project).requestFocus(editor.contentComponent, true)
+        HintManager.getInstance().showInformationHint(editor, reveal.text)
     }
 
     private fun threadLine(inlays: StateFlow<Collection<GiteaEditorInlay>>, threadId: Long) =
@@ -192,6 +222,7 @@ internal class GiteaDiffCommentViewer(
     private companion object {
         const val REVEAL_TIMEOUT_MS = 15_000L
         const val LAYOUT_DELAY_MS = 50L
+        const val RENDER_TIMEOUT_MS = 1_000L
     }
 }
 
