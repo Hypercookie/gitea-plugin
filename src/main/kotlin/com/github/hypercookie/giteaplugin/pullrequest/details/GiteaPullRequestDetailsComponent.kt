@@ -6,6 +6,7 @@ import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
 import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchPrResolverService
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestActions
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewButton
 import com.github.hypercookie.giteaplugin.pullrequest.timeline.GiteaTimelineEditor
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
@@ -77,7 +78,9 @@ object GiteaPullRequestDetailsComponent {
         val statusVm = GiteaPullRequestStatusViewModel(cs, data)
 
         val popupGroup = DefaultActionGroup(
-            action("Refresh Pull Request", AllIcons.Actions.Refresh) { data.reload() },
+            action("Refresh Pull Request", AllIcons.Actions.Refresh) {
+                GiteaReviewSessionService.getInstance(data.project).refreshPullRequest(data)
+            },
             action("Open in Browser", AllIcons.General.Web) { GiteaPullRequestActions.openInBrowser(data.pullRequest.value.htmlUrl) },
             action("Copy Link", AllIcons.Actions.Copy) { GiteaPullRequestActions.copyLink(data.pullRequest.value.htmlUrl) },
         )
