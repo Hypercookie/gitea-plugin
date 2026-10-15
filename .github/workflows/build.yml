@@ -13,16 +13,12 @@ concurrency:
 
 jobs:
 
+  # Build and test in one job: check reuses the compiled classes, and the
+  # job restores the Gradle cache once instead of twice.
   build:
-    name: Build
+    name: Build and test
     runs-on: ubuntu-latest
     steps:
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
-
       - name: Fetch Sources
         uses: actions/checkout@v6
 
@@ -35,42 +31,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Build plugin
-        run: ./gradlew buildPlugin
+      - name: Build plugin and run tests
+        run: ./gradlew buildPlugin check
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: plugin-distribution
           path: ./build/distributions/*.zip
-
-  test:
-    name: Test
-    needs: [ build ]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
-
-      - name: Fetch Sources
-        uses: actions/checkout@v6
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-read-only: true
-
-      - name: Run Tests
-        run: ./gradlew check
 
       - name: Collect Tests Result
         if: ${{ failure() }}
@@ -83,7 +51,6 @@ jobs:
   # is the newest release, which covers a new line before it is listed here.
   verify:
     name: Verify plugin (${{ matrix.ide }})
-    needs: [ build ]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -123,7 +90,7 @@ jobs:
   releaseDraft:
     name: Release draft
     if: github.event_name != 'pull_request'
-    needs: [ build, test, verify ]
+    needs: [ build, verify ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
