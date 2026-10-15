@@ -3,6 +3,7 @@ package com.github.hypercookie.giteaplugin.pullrequest.details
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
+import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchPrResolverService
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestActions
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewButton
@@ -27,6 +28,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.AnActionWrapper
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.UiDataProvider
@@ -108,14 +110,14 @@ object GiteaPullRequestDetailsComponent {
             add(ReviewDetailsUIUtil.createTitlePanel(title, timelineLink), CC().growX().gap(ReviewDetailsUIUtil.TITLE_GAPS))
             add(commitsAndBranches, CC().growX().gap(ReviewDetailsUIUtil.COMMIT_POPUP_BRANCHES_GAPS))
             add(commitInfo, CC().growX().gap(ReviewDetailsUIUtil.COMMIT_INFO_GAPS))
-            add(createChangesComponent(cs, changesVm), CC().grow().shrinkPrioY(200))
+            add(createChangesComponent(cs, data, changesVm), CC().grow().shrinkPrioY(200))
             add(status, CC().growX().gap(ReviewDetailsUIUtil.STATUSES_GAPS).maxHeight("${ReviewDetailsUIUtil.STATUSES_MAX_HEIGHT}"))
             add(actions, CC().growX().pushX().gap(ReviewDetailsUIUtil.ACTIONS_GAPS).minHeight("pref"))
             PopupHandler.installPopupMenu(this, popupGroup, ActionPlaces.POPUP)
         }
     }
 
-    private fun createChangesComponent(cs: CoroutineScope, changesVm: GiteaPullRequestChangesViewModel): JComponent {
+    private fun createChangesComponent(cs: CoroutineScope, data: GiteaPullRequestReviewData, changesVm: GiteaPullRequestChangesViewModel): JComponent {
         val wrapper = Wrapper(JBLabel("Loading…"))
         cs.bindOnEdt(changesVm.changeListVm) { result ->
             val content = when {
@@ -125,13 +127,11 @@ object GiteaPullRequestDetailsComponent {
                     val vm = result.getOrThrow()
                     val progress = CodeReviewProgressTreeModelFromDetails(cs, vm)
                     val tree = CodeReviewChangeListComponentFactory.createIn(cs, vm, progress, "Pull request does not contain any changes")
+                    val jumpToSource = GiteaJumpToSourceAction(data).apply { registerCustomShortcutSet(tree, null) }
                     tree.installPopupHandler(
                         DefaultActionGroup(
                             ActionManager.getInstance().getAction("Diff.ShowDiff"),
-                            // "Jump to Source" (F4), as in the GitHub plugin's changes popup: opens the
-                            // local files of the selected changes, from the tree's NAVIGATABLE_ARRAY
-                            // (new path, or old path of a deleted file). Hidden when none exists locally.
-                            ActionManager.getInstance().getAction("EditSource"),
+                            jumpToSource,
                             Separator.getInstance(),
                             ActionManager.getInstance().getAction("ExpandAll"),
                             ActionManager.getInstance().getAction("CollapseAll"),
@@ -273,5 +273,31 @@ object GiteaPullRequestDetailsComponent {
 
     private fun action(text: String, icon: javax.swing.Icon, perform: () -> Unit) = object : DumbAwareAction(text, null, icon) {
         override fun actionPerformed(e: AnActionEvent) = perform()
+    }
+}
+
+/**
+ * "Jump to Source" (F4), as in the GitHub plugin's changes popup: opens the
+ * local files of the selected changes, from the tree's NAVIGATABLE_ARRAY
+ * (new path, or old path of a deleted file), through the platform's
+ * EditSource. Only while the pull request branch is checked out: other
+ * local files aren't the pull request's versions. Registered on the tree,
+ * where it also takes F4 from the global EditSource, which would open them.
+ */
+private class GiteaJumpToSourceAction(private val data: GiteaPullRequestReviewData) :
+    AnActionWrapper(ActionManager.getInstance().getAction("EditSource")) {
+
+    private fun isCheckedOut() =
+        GiteaBranchPrResolverService.getInstance(data.project).isCheckedOut(data.repo, data.pullRequest.value)
+
+    override fun update(e: AnActionEvent) {
+        if (isCheckedOut()) return super.update(e)
+        e.presentation.isVisible = false
+        // Enabled for the shortcut only, so F4 ends here instead of in the global EditSource.
+        e.presentation.isEnabled = e.place == ActionPlaces.KEYBOARD_SHORTCUT
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        if (isCheckedOut()) super.actionPerformed(e)
     }
 }
