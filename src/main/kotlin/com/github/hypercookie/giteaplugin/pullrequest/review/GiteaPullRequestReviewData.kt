@@ -13,6 +13,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStore
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsService
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaPullRequestMentionSource
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
@@ -125,7 +126,7 @@ class GiteaPullRequestReviewData(
     /** Re-fetches the pull request, its comments and their reactions, and
      * tells [reloads] collectors to fetch theirs. */
     fun reload() {
-        reactions.refresh()
+        if (GiteaSettings.getInstance().showReactions) reactions.refresh()
         _reloads.tryEmit(Unit)
         cs.launch {
             runCatching { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)

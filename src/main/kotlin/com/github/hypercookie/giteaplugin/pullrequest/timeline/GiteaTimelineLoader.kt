@@ -3,6 +3,7 @@ package com.github.hypercookie.giteaplugin.pullrequest.timeline
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
 import com.github.hypercookie.giteaplugin.api.dto.TimelineEvent
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
@@ -59,7 +60,7 @@ internal class GiteaTimelineLoader(cs: CoroutineScope, private val data: GiteaPu
 
     /** Fetches the timeline and its reactions again. */
     fun reload() {
-        data.reactions.refresh()
+        if (GiteaSettings.getInstance().showReactions) data.reactions.refresh()
         requests.tryEmit(Unit)
     }
 }

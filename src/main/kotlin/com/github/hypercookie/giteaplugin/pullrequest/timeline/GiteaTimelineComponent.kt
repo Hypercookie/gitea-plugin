@@ -7,10 +7,11 @@ import com.github.hypercookie.giteaplugin.api.dto.TimelineEvent
 import com.github.hypercookie.giteaplugin.pullrequest.details.toDate
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactable
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsComponentFactory
-import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsViewModelImpl
+import com.github.hypercookie.giteaplugin.pullrequest.reactions.giteaReactionsViewModelOrNull
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
 import com.github.hypercookie.giteaplugin.util.giteaAction
@@ -65,7 +66,7 @@ object GiteaTimelineComponent {
         val project = data.project
         val avatars = GiteaAvatarIcons.getInstance(project)
         val loader = GiteaTimelineLoader(cs, data)
-        data.reactions.refresh()
+        if (GiteaSettings.getInstance().showReactions) data.reactions.refresh()
 
         val itemsPanel = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply { isOpaque = false }
         // Items are rebuilt on every change; their bindings (reaction pills)
@@ -128,15 +129,15 @@ object GiteaTimelineComponent {
         content: JComponent,
         title: JComponent,
     ): JComponent {
-        val reactionsVm = GiteaReactionsViewModelImpl(cs, reactable, data.currentUser, data.reactions)
+        val reactionsVm = giteaReactionsViewModelOrNull(cs, reactable, data.currentUser) { data.reactions }
         val mainPanel = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply {
             isOpaque = false
             add(content)
-            add(GiteaReactionsComponentFactory.create(cs, reactionsVm))
+            reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
         val actionsPanel = JPanel(ListLayout.horizontal(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP)).apply {
             isOpaque = false
-            add(GiteaReactionsComponentFactory.createAddReactionButton(cs, reactionsVm))
+            reactionsVm?.let { add(GiteaReactionsComponentFactory.createAddReactionButton(cs, it)) }
         }
         return CodeReviewChatItemUIUtil.build(FULL, { size -> avatars.getIcon(user, size) }, mainPanel) {
             iconTooltip = user?.displayName()
@@ -200,7 +201,7 @@ object GiteaTimelineComponent {
     /** One inline review comment under its review: location, OUTDATED tag
      * when it was made on an older commit, and the body. */
     private fun inlineComment(cs: CoroutineScope, comment: com.github.hypercookie.giteaplugin.api.dto.PullReviewComment, data: GiteaPullRequestReviewData): JComponent {
-        val reactionsVm = GiteaReactionsViewModelImpl(cs, GiteaReactable.Comment(comment.id), data.currentUser, data.reactions)
+        val reactionsVm = giteaReactionsViewModelOrNull(cs, GiteaReactable.Comment(comment.id), data.currentUser) { data.reactions }
         val line = comment.position?.takeIf { it > 0 } ?: comment.originalPosition
         val header = JPanel(ListLayout.horizontal(com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP)).apply {
             isOpaque = false
@@ -211,14 +212,14 @@ object GiteaTimelineComponent {
             if (comment.resolver != null) {
                 add(com.intellij.collaboration.ui.CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.resolved.tag")))
             }
-            add(GiteaReactionsComponentFactory.createAddReactionButton(cs, reactionsVm))
+            reactionsVm?.let { add(GiteaReactionsComponentFactory.createAddReactionButton(cs, it)) }
         }
         return JPanel(ListLayout.vertical(2)).apply {
             isOpaque = false
             border = JBUI.Borders.emptyLeft(8)
             add(header)
             add(GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body)))
-            add(GiteaReactionsComponentFactory.create(cs, reactionsVm))
+            reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
     }
 

@@ -4,7 +4,7 @@ import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactable
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsComponentFactory
-import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsViewModelImpl
+import com.github.hypercookie.giteaplugin.pullrequest.reactions.giteaReactionsViewModelOrNull
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaNewCommentViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
@@ -140,10 +140,10 @@ object GiteaReviewEditorComponents {
         firstInOutdatedThread: Boolean,
     ): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
-        val reactionsVm = GiteaReactionsViewModelImpl(cs, GiteaReactable.Comment(comment.id), data.currentUser, data.reactions)
+        val reactionsVm = giteaReactionsViewModelOrNull(cs, GiteaReactable.Comment(comment.id), data.currentUser) { data.reactions }
         val body = verticalPanel(CodeReviewTimelineUIUtil.VERTICAL_GAP).apply {
             add(GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body)))
-            add(GiteaReactionsComponentFactory.create(cs, reactionsVm))
+            reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
         val author = comment.user
         return CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, body) {
@@ -157,7 +157,7 @@ object GiteaReviewEditorComponents {
                 }
             }
             val actions = horizontalPanel(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP).apply {
-                add(GiteaReactionsComponentFactory.createAddReactionButton(cs, reactionsVm))
+                reactionsVm?.let { add(GiteaReactionsComponentFactory.createAddReactionButton(cs, it)) }
             }
             withHeader(title, actions)
         }
