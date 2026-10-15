@@ -9,6 +9,7 @@ import com.github.hypercookie.giteaplugin.api.dto.GitCommit
 import com.github.hypercookie.giteaplugin.api.dto.GitCommitWithFiles
 import com.github.hypercookie.giteaplugin.api.dto.GiteaIssue
 import com.github.hypercookie.giteaplugin.api.dto.GiteaLabel
+import com.github.hypercookie.giteaplugin.api.dto.GiteaRepository
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.IssueComment
 import com.github.hypercookie.giteaplugin.api.dto.PullReview
@@ -92,6 +93,11 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     // --- Auth -----------------------------------------------------------
 
     suspend fun getCurrentUser(): GiteaUser = get("/api/v1/user")
+
+    // --- Repositories -----------------------------------------------------
+
+    suspend fun getRepository(owner: String, repo: String): GiteaRepository =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}")
 
     // --- Pull requests ----------------------------------------------------
 
