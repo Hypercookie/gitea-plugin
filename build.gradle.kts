@@ -1,5 +1,6 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import java.time.Duration
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -132,7 +133,7 @@ tasks.test {
     }
     // A hung test should fail the build, not hold a CI runner for an hour;
     // the event log names the test that never finished.
-    timeout = java.time.Duration.ofMinutes(20)
+    timeout = Duration.ofMinutes(20)
     testLogging {
         events("started", "passed", "skipped", "failed")
     }
