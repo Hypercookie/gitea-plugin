@@ -140,10 +140,10 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
         requestRefresh()
     }
 
-    /** Re-fetches [data]'s pull request in every live holder of it: the
-     * pull request tab, diff viewers opened from it and the current-branch
-     * session each keep their own comments when the pull request isn't the
-     * checked-out one. */
+    /** Re-fetches [data]'s pull request in every live holder of it. Views
+     * usually share one holder, but a pull request tab opened before its
+     * branch was checked out keeps its own next to the current-branch
+     * session, and a diff viewer that outlives its tab loads its own. */
     fun refreshPullRequest(data: GiteaPullRequestReviewData) {
         liveData.filter { it === data || (it.repo == data.repo && it.number == data.number) }.forEach { it.reload() }
     }
