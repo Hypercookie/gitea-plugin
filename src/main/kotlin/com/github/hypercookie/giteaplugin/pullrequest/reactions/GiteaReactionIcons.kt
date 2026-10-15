@@ -43,9 +43,10 @@ internal class GiteaReactionIcons(
         }),
     )
 
-    override fun getIcon(key: String, iconSize: Int): Icon {
-        val unicode = GiteaEmoji.unicode(key)
+    override fun getIcon(key: String?, iconSize: Int): Icon {
+        val unicode = key?.let(GiteaEmoji::unicode)
         return when {
+            key == null -> IconUtil.resizeSquared(AllIcons.Nodes.Unknown, iconSize)
             unicode != null -> CodeReviewReactionsUIUtil.createUnicodeEmojiIcon(unicode, iconSize)
             isCustom(key) -> customIcons.getIcon(key, iconSize)
             else -> IconUtil.resizeSquared(AllIcons.Nodes.Unknown, iconSize)
