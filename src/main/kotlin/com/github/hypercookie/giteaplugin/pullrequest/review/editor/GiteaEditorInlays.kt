@@ -24,6 +24,11 @@ sealed class GiteaEditorInlay : CodeReviewInlayModel {
     val visibleState = MutableStateFlow(true)
     override val isVisible: StateFlow<Boolean> get() = visibleState
 
+    /** Whether the inlay's component is in its editor now; set by
+     * `GiteaReviewInEditorController.renderReview`. Comment navigation
+     * waits for it before measuring where to scroll. */
+    val shownState = MutableStateFlow(false)
+
     /** The comment's own line was changed; [line] is then the start of
      * the block that replaced it (see `LineMapping.placeComment`). */
     val outdatedState = MutableStateFlow(false)

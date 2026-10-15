@@ -19,6 +19,7 @@ import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.tools.simple.SimpleDiffViewer
 import com.intellij.diff.tools.simple.SimpleOnesideDiffViewer
 import com.intellij.diff.tools.util.base.DiffViewerListener
+import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.diff.util.Side
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.util.Disposer
@@ -27,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -55,9 +57,13 @@ class GiteaCommentDiffExtension : DiffExtension() {
         Disposer.register(viewer) { cs.cancel() }
 
         // Reuse the current-branch session when it is the same PR, so
-        // comments and pending state are shared with open editors.
+        // comments and pending state are shared with open editors; else the
+        // pull request tab's data, so switching files shows the comments
+        // and file contents already loaded instead of fetching them again.
+        // Only a diff outliving its tab loads its own.
         val session = GiteaReviewSessionService.getInstance(project).session.value
         val data = session?.takeIf { it.repo == ctx.repo && it.number == ctx.pullRequest.number }
+            ?: ctx.reviewData?.takeIf { it.cs.isActive }
             ?: GiteaPullRequestReviewData(project, cs, ctx.repo, ctx.client, ctx.pullRequest, ctx.pendingStore)
 
         val editors = when (viewer) {
@@ -84,7 +90,9 @@ class GiteaCommentDiffExtension : DiffExtension() {
         }
         request.getUserData(GiteaDiffCommentNavigation.PENDING_REVEAL_KEY)?.let {
             request.putUserData(GiteaDiffCommentNavigation.PENDING_REVEAL_KEY, null)
-            commentViewer.reveal(it)
+            // The scroll target set with the reveal is for this opening
+            // only; left on the request, every later visit would go there.
+            commentViewer.reveal(it) { request.putUserData(DiffUserDataKeys.SCROLL_TO_LINE, null) }
         }
     }
 
