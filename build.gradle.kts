@@ -92,11 +92,20 @@ intellijPlatform {
     pluginVerification {
         // Gate for the "public IntelliJ APIs only" rule: the verifier
         // reports @ApiStatus.Internal, experimental and deprecated usages.
-        // recommended() checks the latest release of every IDE line from
-        // sinceBuild on (no untilBuild is set), so new IDE releases are
-        // picked up without editing this file.
+        // Without -PverifyIdeLine, the latest release of every IDE line from
+        // sinceBuild on (no untilBuild is set). CI runs one line per job:
+        // -PverifyIdeLine=253 checks the latest 2025.3.x, and
+        // -PverifyIdeLine=latest the newest release.
         ides {
-            recommended()
+            val line = providers.gradleProperty("verifyIdeLine").orNull
+            when (line) {
+                null -> recommended()
+                "latest" -> latest()
+                else -> latest {
+                    sinceBuild = line
+                    untilBuild = "$line.*"
+                }
+            }
         }
         failureLevel = listOf(
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,

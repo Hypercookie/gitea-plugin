@@ -79,19 +79,17 @@ jobs:
           name: tests-result
           path: ${{ github.workspace }}/build/reports/tests
 
+  # One job per IDE release line, so each downloads a single IDE. "latest"
+  # is the newest release, which covers a new line before it is listed here.
   verify:
-    name: Verify plugin
+    name: Verify plugin (${{ matrix.ide }})
     needs: [ build ]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ide: [ "252", "253", "261", "262", "latest" ]
     steps:
-      # verifyPlugin downloads one IDE per release line since 2025.2, which
-      # does not fit in the runner's default free space.
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: true
-          large-packages: true
-
       - name: Fetch Sources
         uses: actions/checkout@v6
 
@@ -107,13 +105,13 @@ jobs:
           cache-read-only: true
 
       - name: Run Plugin Verification tasks
-        run: ./gradlew verifyPlugin
+        run: ./gradlew verifyPlugin -PverifyIdeLine=${{ matrix.ide }}
 
       - name: Collect Plugin Verifier Result
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: pluginVerifier-result
+          name: pluginVerifier-result-${{ matrix.ide }}
           path: ${{ github.workspace }}/build/reports/pluginVerifier
 
   releaseDraft:
