@@ -59,6 +59,39 @@ class LineMappingTest {
     }
 
     @Test
+    fun commentOnUnchangedLineIsPlacedExactly() {
+        assertEquals(CommentPlacement(2, isOutdated = false), LineMapping.placeComment(blocks, 2, lastLine = 9))
+        assertEquals(CommentPlacement(6, isOutdated = false), LineMapping.placeComment(blocks, 5, lastLine = 9))
+    }
+
+    @Test
+    fun commentOnChangedLineIsOutdatedAtBlockStart() {
+        assertEquals(CommentPlacement(3, isOutdated = true), LineMapping.placeComment(blocks, 3, lastLine = 9))
+        assertEquals(CommentPlacement(3, isOutdated = true), LineMapping.placeComment(blocks, 4, lastLine = 9))
+    }
+
+    @Test
+    fun commentOnDeletedLineIsOutdatedAtFollowingLine() {
+        assertEquals(CommentPlacement(8, isOutdated = true), LineMapping.placeComment(blocks, 7, lastLine = 9))
+    }
+
+    @Test
+    fun commentOnLineDeletedAtEndOfFileStaysOnLastLine() {
+        // 5-line file, side 2 deletes the last two lines.
+        val deletion = listOf(ChangedBlock(3, 5, 3, 3))
+        assertEquals(CommentPlacement(2, isOutdated = true), LineMapping.placeComment(deletion, 4, lastLine = 2))
+        assertEquals(CommentPlacement(0, isOutdated = true), LineMapping.placeComment(listOf(ChangedBlock(0, 1, 0, 0)), 0, lastLine = -1))
+    }
+
+    @Test
+    fun undoingAnEditMakesCommentCurrentAgain() {
+        // Edit: the commented line 4 is replaced by two lines; undo: no changes left.
+        val edited = listOf(ChangedBlock(4, 5, 4, 6))
+        assertEquals(CommentPlacement(4, isOutdated = true), LineMapping.placeComment(edited, 4, lastLine = 6))
+        assertEquals(CommentPlacement(4, isOutdated = false), LineMapping.placeComment(emptyList(), 4, lastLine = 5))
+    }
+
+    @Test
     fun prChangesIgnoreLocalEditsOutsideThem() {
         // PR changed head lines 2..3; user inserted 3 lines at document line 0.
         val baseToHead = listOf(ChangedBlock(2, 3, 2, 4))

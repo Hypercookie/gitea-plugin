@@ -28,6 +28,7 @@ import com.intellij.util.ui.JBUI
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -48,26 +49,37 @@ object GiteaReviewEditorComponents {
     private val COMPACT = CodeReviewChatItemUIUtil.ComponentType.COMPACT
 
     fun create(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay): JComponent = when (inlay) {
-        is GiteaEditorInlay.Thread -> createThread(cs, project, inlay.vm)
-        is GiteaEditorInlay.Pending -> createPending(project, inlay)
+        is GiteaEditorInlay.Thread -> createThread(cs, project, inlay)
+        is GiteaEditorInlay.Pending -> createPending(cs, project, inlay)
         is GiteaEditorInlay.NewComment -> createNewComment(cs, project, inlay.vm)
     }
 
     // --- Thread ------------------------------------------------------------
 
-    private fun createThread(cs: CoroutineScope, project: Project, vm: GiteaThreadViewModel): JComponent {
+    private fun createThread(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay.Thread): JComponent {
+        val vm = inlay.vm
         val avatars = GiteaAvatarIcons.getInstance(project)
         val commentsPanel = verticalPanel(0)
-        cs.bindOnEdt(vm.thread.map { it.comments }.distinctUntilChanged()) { comments ->
+        val comments = vm.thread.map { it.comments }.distinctUntilChanged()
+        cs.bindOnEdt(combine(comments, inlay.outdatedState) { c, outdated -> c to outdated }) { (comments, outdated) ->
             commentsPanel.removeAll()
             comments.forEachIndexed { index, comment ->
-                commentsPanel.add(createComment(project, comment, firstInResolvedThread = index == 0 && vm.thread.value.isResolved))
+                val first = index == 0
+                commentsPanel.add(
+                    createComment(
+                        project,
+                        comment,
+                        firstInResolvedThread = first && vm.thread.value.isResolved,
+                        firstInOutdatedThread = first && outdated,
+                    ),
+                )
             }
             commentsPanel.revalidate()
             commentsPanel.repaint()
         }
 
-        val replyActions = createReplyActionsPanel(cs, vm).apply {
+        val collapsedRow = createCollapsedRow(vm.thread.value.comments.first().user, inlay)
+        val replyActions = createReplyActionsPanel(cs, inlay).apply {
             border = JBUI.Borders.empty(8, COMPACT.fullLeftShift)
         }
         val replyField = createReplyField(cs, vm, avatars)
@@ -75,19 +87,40 @@ object GiteaReviewEditorComponents {
         val content = verticalPanel(0).apply {
             name = "Gitea Thread in Editor Panel ${vm.id}"
             border = JBUI.Borders.empty(CodeReviewCommentUIUtil.getInlayPadding(COMPACT))
+            add(collapsedRow)
             add(commentsPanel)
             add(replyActions)
             add(replyField)
         }
-        cs.bindOnEdt(vm.isWritingReply) { writing ->
-            replyActions.isVisible = !writing
-            replyField.isVisible = writing
+        cs.bindOnEdt(combine(vm.isWritingReply, inlay.collapsedState) { writing, collapsed -> writing to collapsed }) { (writing, collapsed) ->
+            collapsedRow.isVisible = collapsed
+            commentsPanel.isVisible = !collapsed
+            replyActions.isVisible = !collapsed && !writing
+            replyField.isVisible = !collapsed && writing
             content.revalidate()
         }
         return CodeReviewCommentUIUtil.createEditorInlayPanel(content)
     }
 
-    private fun createComment(project: Project, comment: PullReviewComment, firstInResolvedThread: Boolean): JComponent {
+    /** Stand-in for a collapsed outdated comment: author, OUTDATED tag and
+     * a link that expands it. Same tag as the GitHub plugin's outdated
+     * threads (`GHPRTimelineThreadComponentFactory`). */
+    private fun createCollapsedRow(author: GiteaUser?, inlay: GiteaEditorInlay): JComponent =
+        horizontalPanel(CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP).apply {
+            if (author != null) add(CodeReviewTimelineUIUtil.createTitleTextPane(author.presentableName(), null, null))
+            add(outdatedTag())
+            add(ActionLink("Show outdated comment") { inlay.collapsedState.value = false }.apply { isFocusPainted = false })
+        }
+
+    private fun outdatedTag(): JComponent =
+        CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.outdated.tag"))
+
+    private fun createComment(
+        project: Project,
+        comment: PullReviewComment,
+        firstInResolvedThread: Boolean,
+        firstInOutdatedThread: Boolean,
+    ): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
         val body = GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body))
         val author = comment.user
@@ -96,6 +129,7 @@ object GiteaReviewEditorComponents {
             maxContentWidth = null
             val title = horizontalPanel(CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP).apply {
                 add(CodeReviewTimelineUIUtil.createTitleTextPane(author?.presentableName() ?: "unknown", author?.htmlUrl(), comment.createdAt.toDate()))
+                if (firstInOutdatedThread) add(outdatedTag())
                 if (firstInResolvedThread) {
                     add(CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.resolved.tag")))
                 }
@@ -104,7 +138,9 @@ object GiteaReviewEditorComponents {
         }
     }
 
-    private fun createReplyActionsPanel(cs: CoroutineScope, vm: GiteaThreadViewModel): JComponent {
+    private fun createReplyActionsPanel(cs: CoroutineScope, inlay: GiteaEditorInlay.Thread): JComponent {
+        val vm = inlay.vm
+        val collapseLink = createCollapseLink(cs, inlay)
         val replyLink = ActionLink(CollaborationToolsBundle.message("review.comments.reply.action")) { vm.startWritingReply() }.apply {
             isFocusPainted = false
         }
@@ -115,8 +151,16 @@ object GiteaReviewEditorComponents {
         return horizontalPanel(CodeReviewTimelineUIUtil.Thread.Replies.ActionsFolded.HORIZONTAL_GROUP_GAP).apply {
             add(replyLink)
             add(resolveLink)
+            add(collapseLink)
         }
     }
+
+    /** Collapses an expanded outdated comment again; hidden while current. */
+    private fun createCollapseLink(cs: CoroutineScope, inlay: GiteaEditorInlay): JComponent =
+        ActionLink("Hide outdated comment") { inlay.collapsedState.value = true }.apply {
+            isFocusPainted = false
+            bindVisibility(cs, inlay.outdatedState)
+        }
 
     private fun createResolveAction(cs: CoroutineScope, vm: GiteaThreadViewModel): Action =
         giteaAction(CodeReviewCommentUIUtil.getResolveToggleActionText(vm.isResolved.value)) { vm.changeResolvedState() }.apply {
@@ -147,7 +191,7 @@ object GiteaReviewEditorComponents {
 
     // --- Pending comment ---------------------------------------------------
 
-    private fun createPending(project: Project, inlay: GiteaEditorInlay.Pending): JComponent {
+    private fun createPending(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay.Pending): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
         val body = GiteaMarkdown.createPane(GiteaMarkdown.toHtml(inlay.comment.body))
         val author = inlay.author.value
@@ -158,15 +202,29 @@ object GiteaReviewEditorComponents {
                 // Author like a posted comment, plus the PENDING tag (GitHub shows the same).
                 if (author != null) add(CodeReviewTimelineUIUtil.createTitleTextPane(author.presentableName(), null, null))
                 add(CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.pending.tag")))
+                add(outdatedTag().apply { bindVisibility(cs, inlay.outdatedState) })
             }
             val actions = horizontalPanel(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP).apply {
                 add(CodeReviewCommentUIUtil.createDeleteCommentIconButton { inlay.onDiscard() })
             }
             withHeader(title, actions)
         }
+        val collapsedRow = createCollapsedRow(author, inlay)
+        val collapseActions = horizontalPanel(0).apply {
+            border = JBUI.Borders.empty(8, COMPACT.fullLeftShift, 0, 0)
+            add(createCollapseLink(cs, inlay))
+        }
         val content = verticalPanel(0).apply {
             border = JBUI.Borders.empty(CodeReviewCommentUIUtil.getInlayPadding(COMPACT))
+            add(collapsedRow)
             add(item)
+            add(collapseActions)
+        }
+        cs.bindOnEdt(combine(inlay.outdatedState, inlay.collapsedState) { outdated, collapsed -> outdated to collapsed }) { (outdated, collapsed) ->
+            collapsedRow.isVisible = collapsed
+            item.isVisible = !collapsed
+            collapseActions.isVisible = outdated && !collapsed
+            content.revalidate()
         }
         return CodeReviewCommentUIUtil.createEditorInlayPanel(content)
     }

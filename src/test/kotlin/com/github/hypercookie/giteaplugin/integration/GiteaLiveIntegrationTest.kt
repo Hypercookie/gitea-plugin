@@ -88,10 +88,11 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
             val threadInlays = withTimeout(TIMEOUT) {
                 model.inlays.first { inlays -> inlays.count { it is GiteaEditorInlay.Thread } == readmeThreads.size }
             }.filterIsInstance<GiteaEditorInlay.Thread>()
+            // Outdated threads stay at the start of the block that replaced their line.
             val placed = threadInlays.filter { it.line.value != null }
-            val outdated = threadInlays.size - placed.size
-            println("placed: ${placed.size}, outdated (hidden): $outdated, lines: ${controls.linesWithComments.sorted()}")
-            assertTrue("some threads placed", placed.isNotEmpty())
+            val outdated = threadInlays.count { it.outdatedState.value }
+            println("placed: ${placed.size}, outdated: $outdated, lines: ${controls.linesWithComments.sorted()}")
+            assertEquals("every thread placed", threadInlays.size, placed.size)
             // Threads anchored at the head commit map 1:1 onto the head content.
             readmeThreads.filter { it.commitId == data.pullRequest.value.head.sha }.forEach { thread ->
                 val inlay = threadInlays.single { it.vm.id == thread.id }
@@ -101,7 +102,9 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
 
             // Insert two lines at the top: placed threads shift by 2, the new
             // lines can't take comments.
-            val before = placed.associate { it.vm.id to it.line.value!! }
+            // Only exactly placed threads: an outdated one at line 0 doesn't move.
+            val current = placed.filter { !it.outdatedState.value }
+            val before = current.associate { it.vm.id to it.line.value!! }
             ApplicationManager.getApplication().invokeAndWait {
                 WriteCommandAction.runWriteCommandAction(project) { document.insertString(0, "local 1\nlocal 2\n") }
             }
@@ -111,7 +114,7 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
             assertFalse(shifted.isLineCommentable(1))
             assertTrue(shifted.isLineCommentable(2))
             withTimeout(TIMEOUT) {
-                while (placed.any { it.line.value != before[it.vm.id]!! + 2 }) kotlinx.coroutines.delay(50)
+                while (current.any { it.line.value != before[it.vm.id]!! + 2 }) kotlinx.coroutines.delay(50)
             }
         }
     }

@@ -24,6 +24,21 @@ sealed class GiteaEditorInlay : CodeReviewInlayModel {
     val visibleState = MutableStateFlow(true)
     override val isVisible: StateFlow<Boolean> get() = visibleState
 
+    /** The comment's own line was changed; [line] is then the start of
+     * the block that replaced it (see `LineMapping.placeComment`). */
+    val outdatedState = MutableStateFlow(false)
+
+    /** An outdated comment shows only a one-line summary until expanded.
+     * Unlike [hiddenState] the inlay stays in the editor. */
+    val collapsedState = MutableStateFlow(false)
+
+    /** Sets [outdatedState] and collapses or expands on a change of it;
+     * [keepExpanded] (a reply being written) skips collapsing. */
+    fun updateOutdated(outdated: Boolean, keepExpanded: Boolean = false) {
+        collapsedState.value = collapsedAfter(outdatedState.value, outdated, collapsedState.value, keepExpanded)
+        outdatedState.value = outdated
+    }
+
     class Thread(val vm: GiteaThreadViewModel) : GiteaEditorInlay() {
         override val key: Any = "thread:${vm.id}"
     }
@@ -39,5 +54,16 @@ sealed class GiteaEditorInlay : CodeReviewInlayModel {
 
     class NewComment(val vm: GiteaNewCommentViewModel) : GiteaEditorInlay() {
         override val key: Any = "new:${vm.side}:${vm.line}"
+    }
+
+    companion object {
+        /** Collapsed state after an outdated update: collapse when a comment
+         * becomes outdated (unless [keepExpanded]), expand when it becomes
+         * current again, otherwise keep what the user chose. */
+        fun collapsedAfter(wasOutdated: Boolean, outdated: Boolean, collapsed: Boolean, keepExpanded: Boolean): Boolean = when {
+            !outdated -> false
+            !wasOutdated -> !keepExpanded
+            else -> collapsed
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.github.hypercookie.giteaplugin.pullrequest.review.editor
 
 import com.github.hypercookie.giteaplugin.pullrequest.review.ChangedBlock
+import com.github.hypercookie.giteaplugin.pullrequest.review.CommentPlacement
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaNewCommentViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaThreadViewModel
@@ -81,6 +82,8 @@ class GiteaReviewEditorModel(
         val anchorToDoc: Map<String, List<ChangedBlock>>,
         val baseText: String?,
         val prChanges: List<ChangedBlock>,
+        /** Last line of the document the mappings were computed for. */
+        val lastDocLine: Int,
     ) {
         val docToRef: List<ChangedBlock> = LineMapping.inverse(refToDoc)
     }
@@ -172,7 +175,7 @@ class GiteaReviewEditorModel(
             val prChanges = baseText?.let {
                 LineMapping.prChangesInDocument(LineMapping.compare(it, refText), refToDoc)
             }.orEmpty()
-            Mappings(refToDoc, anchors, baseText, prChanges)
+            Mappings(refToDoc, anchors, baseText, prChanges, lastDocLine = docText.count { it == '\n' })
         }
     } catch (e: com.intellij.diff.comparison.DiffTooBigException) {
         thisLogger().info("File too big to map review comments: $path", e)
@@ -217,11 +220,18 @@ class GiteaReviewEditorModel(
         }
     }
 
-    /** Document line for a thread, or null if its line was changed since
-     * the comment's commit (Gitea has no outdated flag; ledger G10). */
-    private fun Mappings.docLine(thread: ReviewThread): Int? {
+    /** Document placement of a thread, outdated if its line was changed
+     * since the comment's commit (Gitea has no outdated flag; ledger G10). */
+    private fun Mappings.placement(thread: ReviewThread): CommentPlacement {
         val blocks = thread.commitId?.let { anchorToDoc[it] } ?: refToDoc
-        return LineMapping.transfer(blocks, thread.line)
+        return LineMapping.placeComment(blocks, thread.line, lastDocLine)
+    }
+
+    /** Shows [inlay] at [placement] in editor lines; outdated is decided in
+     * this side's document lines, before the editor-line mapping. */
+    private fun GiteaEditorInlay.place(placement: CommentPlacement?, lines: EditorLineTransfer, keepExpanded: Boolean = false) {
+        lineState.value = placement?.line?.let(lines::toEditor)
+        if (placement != null) updateOutdated(placement.isOutdated, keepExpanded)
     }
 
     private fun applySnapshot(snapshot: Snapshot) {
@@ -234,7 +244,7 @@ class GiteaReviewEditorModel(
         for (thread in fileThreads) {
             val inlay = threadVms.getOrPut(thread.id) { GiteaEditorInlay.Thread(GiteaThreadViewModel(cs, data, thread)) }
             inlay.vm.update(thread)
-            inlay.lineState.value = m?.docLine(thread)?.let(lines::toEditor)
+            inlay.place(m?.placement(thread), lines, keepExpanded = inlay.vm.isWritingReply.value)
         }
 
         val filePending = snapshot.pending.filter {
@@ -247,7 +257,7 @@ class GiteaReviewEditorModel(
                 GiteaEditorInlay.Pending(comment, data.currentUser) { data.pendingStore.removeComment(comment) }
             }
             val refLine = ((if (side == ReviewSide.NEW) comment.newPosition else comment.oldPosition) - 1).toInt()
-            inlay.lineState.value = m?.let { LineMapping.transfer(it.refToDoc, refLine) }?.let(lines::toEditor)
+            inlay.place(m?.let { LineMapping.placeComment(it.refToDoc, refLine, it.lastDocLine) }, lines)
         }
 
         for (inlay in snapshot.newComments.values) {

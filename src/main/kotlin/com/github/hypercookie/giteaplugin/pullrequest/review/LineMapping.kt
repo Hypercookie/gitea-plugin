@@ -16,6 +16,9 @@ data class ChangedBlock(val start1: Int, val end1: Int, val start2: Int, val end
     fun swapped() = ChangedBlock(start2, end2, start1, end1)
 }
 
+/** Side-2 line a review comment is shown on, and whether its own line is gone. */
+data class CommentPlacement(val line: Int, val isOutdated: Boolean)
+
 object LineMapping {
 
     /** Changed blocks from [before] to [after], via the platform diff engine. */
@@ -49,6 +52,19 @@ object LineMapping {
             shift = block.end2 - block.end1
         }
         return line + shift
+    }
+
+    /**
+     * Where a comment on side-1 [line] is shown on side 2, whose last line
+     * is [lastLine]. A line with an unchanged counterpart goes there; a
+     * changed or deleted one is outdated and stays at the start of the
+     * block that replaced it, like GitHub's web UI. Gitea has no outdated
+     * flag of its own (migration ledger G10).
+     */
+    fun placeComment(blocks: List<ChangedBlock>, line: Int, lastLine: Int): CommentPlacement {
+        transfer(blocks, line)?.let { return CommentPlacement(it, isOutdated = false) }
+        // A deletion at the end of the file starts past the last line.
+        return CommentPlacement(transferClamped(blocks, line).coerceIn(0, maxOf(lastLine, 0)), isOutdated = true)
     }
 
     fun inverse(blocks: List<ChangedBlock>): List<ChangedBlock> = blocks.map { it.swapped() }
