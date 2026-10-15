@@ -23,10 +23,8 @@ data class PullReview(
     val official: Boolean = false,
     val dismissed: Boolean = false,
     val stale: Boolean = false,
-    @SerialName("comments_count") val commentsCount: Int = 0,
     @SerialName("commit_id") val commitId: String? = null,
     @SerialName("html_url") val htmlUrl: String? = null,
-    @SerialName("submitted_at") val submittedAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
 )
 
@@ -40,7 +38,6 @@ data class PullReviewComment(
     val position: Long? = null,
     @SerialName("original_position") val originalPosition: Long? = null,
     @SerialName("commit_id") val commitId: String? = null,
-    @SerialName("diff_hunk") val diffHunk: String? = null,
     val user: GiteaUser? = null,
     @SerialName("pull_request_review_id") val reviewId: Long? = null,
     @SerialName("created_at") val createdAt: String? = null,

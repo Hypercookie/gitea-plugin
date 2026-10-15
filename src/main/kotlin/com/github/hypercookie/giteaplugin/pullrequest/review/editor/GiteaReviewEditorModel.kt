@@ -49,9 +49,9 @@ import kotlin.coroutines.cancellation.CancellationException
  *
  * Structure follows the GitHub plugin's `GHPRReviewFileEditorModel`. The
  * line shifting it gets from the internal `ReviewInEditorUtil` is done by
- * [LineMapping] (migration ledger I6), and the changes model it delegates to
+ * [LineMapping], and the changes model it delegates to
  * the internal `MutableCodeReviewEditorGutterChangesModel` is implemented
- * here directly (I7).
+ * here directly.
  *
  * @param basePath the file's path at the merge base. When it equals
  *   [path], the PR's changed files decide (a renamed file's previous path,
@@ -221,7 +221,7 @@ class GiteaReviewEditorModel(
     }
 
     /** Document placement of a thread, outdated if its line was changed
-     * since the comment's commit (Gitea has no outdated flag; ledger G10). */
+     * since the comment's commit (Gitea has no outdated flag). */
     private fun Mappings.placement(thread: ReviewThread): CommentPlacement {
         val blocks = thread.commitId?.let { anchorToDoc[it] } ?: refToDoc
         return LineMapping.placeComment(blocks, thread.line, lastDocLine)

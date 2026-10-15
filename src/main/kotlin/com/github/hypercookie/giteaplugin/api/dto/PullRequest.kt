@@ -32,7 +32,6 @@ data class PullRequest(
     val additions: Int? = null,
     val deletions: Int? = null,
     val comments: Int? = null,
-    @SerialName("review_comments") val reviewComments: Int? = null,
     /** Common ancestor of head and base; the "before" side of the PR's own
      * changes (`base.sha` would also include unrelated target-branch work). */
     @SerialName("merge_base") val mergeBase: String? = null,

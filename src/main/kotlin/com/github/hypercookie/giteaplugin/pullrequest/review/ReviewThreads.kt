@@ -29,7 +29,7 @@ data class ReviewThread(
     val id: Long get() = comments.first().id
 
     /** Gitea tracks resolution on each comment; the first comment's
-     * `resolver` stands for the conversation (migration ledger G9). */
+     * `resolver` stands for the conversation. */
     val resolver: GiteaUser? get() = comments.first().resolver
     val isResolved: Boolean get() = resolver != null
 }

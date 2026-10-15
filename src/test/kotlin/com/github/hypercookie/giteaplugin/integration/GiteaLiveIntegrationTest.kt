@@ -31,7 +31,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
 /**
- * Runs the migrated view models against the local Gitea dev instance
+ * Runs the view models against the local Gitea dev instance
  * (`plugindev/pr-test`, see docs/local-gitea-dev-instance.md). Gradle only
  * runs this class when `GITEA_DEV_TOKEN` is set (see `tasks.test` in
  * build.gradle.kts), so CI needs no Gitea server:

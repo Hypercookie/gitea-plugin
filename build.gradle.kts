@@ -31,14 +31,12 @@ dependencies {
     // avoids shipping/duplicating a second copy on the plugin classpath.
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
-    // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
         intellijIdea("2025.2.6.2")
         bundledPlugin("Git4Idea")
         // Shared code review UI the bundled GitHub/GitLab plugins are built
-        // on (list, details, review in editor, comments, reactions).
-        // Public, non-@Internal API only — see
-        // docs/plan/collab-tools-migration-plan.md.
+        // on (list, details, review in editor, comments). Public,
+        // non-@Internal API only; verifyPlugin enforces this.
         bundledModule("intellij.platform.collaborationTools")
         // collaborationTools' own module dependencies; without them on the
         // compile classpath, Git4Idea's GitRepository supertypes stop
@@ -94,8 +92,20 @@ intellijPlatform {
     pluginVerification {
         // Gate for the "public IntelliJ APIs only" rule: the verifier
         // reports @ApiStatus.Internal, experimental and deprecated usages.
+        // Without -PverifyIdeLine, the latest release of every IDE line from
+        // sinceBuild on (no untilBuild is set). CI runs one line per job:
+        // -PverifyIdeLine=253 checks the latest 2025.3.x, and
+        // -PverifyIdeLine=latest the newest release.
         ides {
-            create("IU", "2025.2.6.2")
+            val line = providers.gradleProperty("verifyIdeLine").orNull
+            when (line) {
+                null -> recommended()
+                "latest" -> latest()
+                else -> latest {
+                    sinceBuild = line
+                    untilBuild = "$line.*"
+                }
+            }
         }
         failureLevel = listOf(
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,

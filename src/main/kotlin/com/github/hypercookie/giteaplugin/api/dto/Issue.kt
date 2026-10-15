@@ -30,7 +30,7 @@ data class IssueRepository(
 /** An issue as returned by `GET /repos/{owner}/{repo}/issues` and
  * `GET /repos/issues/search`. With `type=pulls`, every result is a pull
  * request; the list view uses these because those endpoints support text
- * search and assignee filters that `/pulls` lacks (migration ledger G8). */
+ * search and assignee filters that `/pulls` lacks. */
 @Serializable
 data class GiteaIssue(
     val id: Long,

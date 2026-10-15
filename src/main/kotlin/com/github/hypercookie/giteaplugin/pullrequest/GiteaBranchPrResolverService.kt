@@ -14,8 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Resolves "the open PR for whatever branch is currently checked out," so
  * comments can show up in a regular editor no matter how the user got onto
- * that branch (checked it out from our PR list, or via plain git) — see
- * docs/plan/pr-review-feature-plan.md, "Architecture pivot."
+ * that branch (checked it out from our PR list, or via plain git).
  *
  * Works on the git repository the [GiteaRepoContext] came from, not the
  * project's first one, and matches through the branch's upstream (see
