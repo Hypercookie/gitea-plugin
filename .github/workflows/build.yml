@@ -84,11 +84,13 @@ jobs:
     needs: [ build ]
     runs-on: ubuntu-latest
     steps:
+      # verifyPlugin downloads one IDE per release line since 2025.2, which
+      # does not fit in the runner's default free space.
       - name: Maximize Build Space
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
-          tool-cache: false
-          large-packages: false
+          tool-cache: true
+          large-packages: true
 
       - name: Fetch Sources
         uses: actions/checkout@v6
