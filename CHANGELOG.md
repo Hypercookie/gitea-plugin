@@ -3,6 +3,8 @@
 # Gitea Changelog
 
 ## [Unreleased]
+
+## [0.1.0-beta] - 2026-10-15
 ### Added
 - Gitea accounts with token login, stored in the IDE password safe.
 - Pull Requests tool window with search, quick filters, filters and paging.
@@ -15,3 +17,6 @@
 - A notification after pushing a branch with no open pull request, opening Gitea's page to create one.
 - Commit status checks in a "Gitea Commit Checks" column of the Git log.
 - Editable pull request diffs and Jump to Source while the pull request branch is checked out.
+
+[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v0.1.0-beta...HEAD
+[0.1.0-beta]: https://github.com/Hypercookie/gitea-plugin/commits/v0.1.0-beta
