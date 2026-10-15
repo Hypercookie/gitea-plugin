@@ -1,5 +1,8 @@
 package com.github.hypercookie.giteaplugin.pullrequest.review.editor
 
+import com.github.hypercookie.giteaplugin.pullrequest.review.ChangedBlock
+import com.github.hypercookie.giteaplugin.pullrequest.review.CommentPlacement
+import com.github.hypercookie.giteaplugin.pullrequest.review.LineMapping
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterControlsModel
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorModel
@@ -47,6 +50,15 @@ class UnifiedLineTransferTest {
         assertNull(newLines.fromEditor(6))
         assertEquals(3, newLines.fromEditor(4))
         assertEquals(3, oldLines.fromEditor(4))
+    }
+
+    @Test
+    fun outdatedPlacementIsDecidedInSideLinesThenMapped() {
+        // A head comment on line 4 ("e"); locally "e" was deleted again, so
+        // the new side's document ends at line 3 ("d").
+        val placement = LineMapping.placeComment(listOf(ChangedBlock(4, 5, 4, 4)), 4, lastLine = 3)
+        assertEquals(CommentPlacement(3, isOutdated = true), placement)
+        assertEquals(4, newLines.toEditor(placement.line))
     }
 
     @Test
