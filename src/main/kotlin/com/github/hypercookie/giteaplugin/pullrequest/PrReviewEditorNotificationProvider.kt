@@ -30,7 +30,10 @@ import javax.swing.JComponent
  *   commits, or the PR got new commits). Comment positions are mapped onto
  *   local edits ([com.github.hypercookie.giteaplugin.pullrequest.review.LineMapping]),
  *   so unsaved edits no longer warrant a warning; this matches the GitHub
- *   plugin's "local branch is out of sync" state.
+ *   plugin's "local branch is out of sync" state. The text names the local
+ *   branch and says whether it is ahead, behind or diverged
+ *   ([GiteaOutOfSyncBanner]), from counts the session service computes in
+ *   the background.
  *
  * See docs/plan/pr-review-feature-plan.md, "UI pass," Phase 20 and Phase 14.
  *
@@ -50,17 +53,23 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
         // SlowOperations log during manual testing when this used to call
         // getToken()/resolveForCurrentBranch() synchronously). Only reads
         // the already-resolved review session, which carries its client.
-        val data = GiteaReviewSessionService.getInstance(project).session.value ?: return null
-        val repoContext = data.repo
+        val sessions = GiteaReviewSessionService.getInstance(project)
+        val data = sessions.session.value ?: return null
+        val sync = sessions.branchSync.value ?: return null
         val pr = data.pullRequest.value
         val store = data.pendingStore
         val hasPending = store.pendingComments.isNotEmpty()
 
+        // Only files of the repository the session was resolved for, and
+        // only while that branch is still checked out (a checkout is seen
+        // here before the debounced re-resolution catches up).
         val repo = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file) ?: return null
-        if (repoContext.gitRoot != null && repoContext.gitRoot != repo.root) return null
-        val isStale = repo.currentRevision != null && repo.currentRevision != pr.head.sha
+        if (repo.root.path != sync.rootPath || sync.prNumber != pr.number) return null
+        val liveBranch = repo.currentBranchName
+        if (!GiteaOutOfSyncBanner.isSessionCurrent(sync.localBranch, liveBranch)) return null
+        val outOfSync = GiteaOutOfSyncBanner.message(sync, liveBranch, repo.currentRevision, pr)
 
-        if (!hasPending && !isStale) return null
+        if (!hasPending && outOfSync == null) return null
 
         return Function {
             val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
@@ -68,10 +77,10 @@ class PrReviewEditorNotificationProvider : EditorNotificationProvider {
                 border = JBUI.Borders.customLineBottom(JBColor.border())
             }
 
-            if (isStale) {
+            if (outOfSync != null) {
                 panel.add(
                     JBLabel(
-                        "Pull request #${pr.number} exists for current branch ${pr.head.ref}, but local branch is out of sync with remote",
+                        outOfSync,
                         AllIcons.General.Warning,
                         JBLabel.LEFT,
                     ).apply { border = JBUI.Borders.empty(2, 8) },

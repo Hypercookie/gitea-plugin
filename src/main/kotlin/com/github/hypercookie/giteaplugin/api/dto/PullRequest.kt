@@ -8,6 +8,8 @@ data class PrBranchInfo(
     val label: String? = null,
     val ref: String,
     val sha: String,
+    /** Repository the branch lives in; differs from the base's for fork PRs. */
+    @SerialName("repo_id") val repoId: Long? = null,
 )
 
 @Serializable
