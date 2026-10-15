@@ -15,6 +15,7 @@ import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.PlatformCoreDataKeys
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -154,7 +155,9 @@ internal class GiteaDiffCommentViewer(
     /** Scrolls to and focuses the thread of [reveal]; [onDone] runs after
      * that, or once the thread wasn't found in time. */
     fun reveal(reveal: PendingReveal, onDone: () -> Unit = {}) {
-        cs.launch(Dispatchers.Main) {
+        // EDT, not Main: moving the caret and scrolling need the
+        // write-intent lock, which Main doesn't hold after a suspension.
+        cs.launch(Dispatchers.EDT) {
             try {
                 doReveal(reveal)
             } finally {
