@@ -48,6 +48,9 @@ like them.
   the diff's context menu.
 - The timeline opens in an editor tab with the description, comments, reviews,
   pushed commits and other events, and a field for new comments.
+- Reactions show as pills under the description and each comment. Hover a pill
+  to see who reacted, click it to add or remove your own reaction, or pick a
+  new one with the smiley in the comment's header.
 
 ### Review in the editor
 
@@ -62,6 +65,8 @@ like them.
 - The same comments appear in the side-by-side, unified and one-sided diff
   viewers.
 - Typing `@` in a comment suggests users to mention.
+- Review comments show reactions, which you can add and remove as in the
+  timeline.
 - A banner above the editor shows when a review is pending, and when the
   local branch is ahead of, behind or diverged from the pull request.
 - The pull request is found through the branch's upstream, so local branches
@@ -133,9 +138,12 @@ The archive is written to `build/distributions/`. Install it with
 ## Known limitations
 
 - Pull requests from forks cannot be checked out.
-- Editing and deleting comments, reactions, requesting reviewers, editing
+- Editing and deleting comments, requesting reviewers, editing
   labels and assignees, and creating, merging or closing pull requests are not
   supported yet.
+- Gitea returns no reactions with comments, so they load with one request per
+  comment. Other people's new reactions appear after refreshing the pull
+  request or reopening the timeline.
 - Files cannot be marked as viewed, and comments cannot span several lines,
   because Gitea's API does not support either.
 - The timeline does not show the code snippet of review threads.
@@ -174,6 +182,7 @@ Source layout under `src/main/kotlin/com/github/hypercookie/giteaplugin`:
 | `pullrequest/list`          | Pull request list, search and filters                        |
 | `pullrequest/details`       | Pull request tab: commits, branch, files, checks, diffs      |
 | `pullrequest/timeline`      | Timeline editor tab                                          |
+| `pullrequest/reactions`     | Reactions on comments and the description, reaction picker   |
 | `pullrequest/review`        | Review data, threads, line mapping, submit review popup      |
 | `pullrequest/review/editor` | Review in the editor: comments and gutter                    |
 | `pullrequest/diff`          | Comments in the diff viewer                                  |

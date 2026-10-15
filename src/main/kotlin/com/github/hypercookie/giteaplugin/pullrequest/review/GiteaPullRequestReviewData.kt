@@ -10,6 +10,7 @@ import com.github.hypercookie.giteaplugin.api.dto.PullRequest
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
 import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStore
+import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsService
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaPullRequestMentionSource
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.intellij.openapi.diagnostic.thisLogger
@@ -73,6 +74,11 @@ class GiteaPullRequestReviewData(
     /** `@` completion candidates for comment fields of this pull request. */
     val mentions: GiteaPullRequestMentionSource by lazy { GiteaPullRequestMentionSource(this) }
 
+    /** Reactions on this pull request's comments and description. */
+    val reactions: GiteaReactionsService by lazy {
+        GiteaReactionsService(cs, client, repo.owner, repo.repo, { number }, repo.account.serverUrl)
+    }
+
     val owner: String get() = repo.owner
     val repoName: String get() = repo.repo
     val number: Long get() = _pullRequest.value.number
@@ -100,8 +106,9 @@ class GiteaPullRequestReviewData(
         }
     }
 
-    /** Re-fetches the pull request and its comments. */
+    /** Re-fetches the pull request, its comments and their reactions. */
     fun reload() {
+        reactions.refresh()
         cs.launch {
             runCatching { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)
             reloadComments()
