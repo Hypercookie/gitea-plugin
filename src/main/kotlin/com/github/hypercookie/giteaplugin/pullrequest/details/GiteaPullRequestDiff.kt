@@ -9,12 +9,14 @@ import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.chains.SimpleDiffRequestChain
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileTypes.FileTypeManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Opens pull request file diffs in the platform diff viewer, with file
@@ -43,8 +45,8 @@ object GiteaPullRequestDiff {
     private suspend fun createRequest(data: GiteaPullRequestReviewData, change: RefComparisonChange): SimpleDiffRequest {
         val beforePath = change.filePathBefore?.let { GiteaChangePaths.relative(data, it) }
         val afterPath = change.filePathAfter?.let { GiteaChangePaths.relative(data, it) }
-        val beforeText = beforePath?.let { data.fileContent(it, change.revisionNumberBefore.asString()) }
-        val afterText = afterPath?.let { data.fileContent(it, change.revisionNumberAfter.asString()) }
+        val beforeText = beforePath?.let { loadText(data, it, change.revisionNumberBefore.asString()) }
+        val afterText = afterPath?.let { loadText(data, it, change.revisionNumberAfter.asString()) }
 
         val name = afterPath ?: beforePath.orEmpty()
         val fileType = FileTypeManager.getInstance().getFileTypeByFileName(name)
@@ -59,6 +61,19 @@ object GiteaPullRequestDiff {
             )
         }
     }
+
+    /** File text, or null (shown as an empty side) when it is missing or
+     * failed to load. A failure is logged rather than failing the whole
+     * chain, and isn't cached, so reopening the diff retries. */
+    private suspend fun loadText(data: GiteaPullRequestReviewData, path: String, ref: String): String? =
+        try {
+            data.fileContent(path, ref)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            thisLogger().warn("Failed to load $path at $ref for the diff of #${data.number}", e)
+            null
+        }
 }
 
 /** Repository-relative paths <-> [com.intellij.openapi.vcs.FilePath]s under

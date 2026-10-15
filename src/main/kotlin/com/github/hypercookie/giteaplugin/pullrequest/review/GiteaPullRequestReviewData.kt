@@ -2,6 +2,7 @@ package com.github.hypercookie.giteaplugin.pullrequest.review
 
 import kotlinx.coroutines.delay
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
+import com.github.hypercookie.giteaplugin.api.dto.ChangedFile
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
@@ -13,6 +14,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaPullRe
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -23,7 +25,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Everything review-related for one open pull request, as flows the
@@ -53,7 +58,17 @@ class GiteaPullRequestReviewData(
     private val _currentUser = MutableStateFlow<GiteaUser?>(null)
     val currentUser: StateFlow<GiteaUser?> = _currentUser.asStateFlow()
 
-    private val fileContents = ConcurrentHashMap<Pair<String, String>, Deferred<String?>>()
+    private val fileContents = ConcurrentHashMap<Pair<String, String>, Deferred<Result<String?>>>()
+
+    /** Bounds concurrent file content requests (to 8): opening the diff chain
+     * of a big pull request asks for two versions of every changed file at once. */
+    private val fileFetchPermits = Semaphore(8)
+
+    private val changedFilesLock = Any()
+
+    /** Changed files by new path, with the (head, merge base) pair they
+     * were fetched for; see [changedFiles]. Guarded by [changedFilesLock]. */
+    private var changedFilesCache: Pair<Pair<String, String?>, Deferred<Result<Map<String, ChangedFile>>>>? = null
 
     /** `@` completion candidates for comment fields of this pull request. */
     val mentions: GiteaPullRequestMentionSource by lazy { GiteaPullRequestMentionSource(this) }
@@ -99,7 +114,11 @@ class GiteaPullRequestReviewData(
     fun update(pr: PullRequest) {
         val headChanged = pr.head.sha != _pullRequest.value.head.sha
         _pullRequest.value = pr
-        if (headChanged) cs.launch { reloadComments() }
+        if (headChanged) {
+            // [changedFiles] checks the key anyway; this just drops the stale list.
+            synchronized(changedFilesLock) { changedFilesCache = null }
+            cs.launch { reloadComments() }
+        }
     }
 
     suspend fun reloadComments() {
@@ -108,12 +127,58 @@ class GiteaPullRequestReviewData(
             .onFailure { thisLogger().warn("Failed to load review comments for #$number", it) }
     }
 
-    /** File text at [ref], cached for the lifetime of this PR; null when
-     * the file doesn't exist at that ref. */
-    suspend fun fileContent(path: String, ref: String): String? =
-        fileContents.computeIfAbsent(path to ref) {
-            cs.async { runCatching { client.getFileContentOrNull(owner, repoName, path, ref) }.getOrNull() }
-        }.await()
+    /**
+     * File text at [ref] with line separators normalized to `\n`, which is
+     * what IntelliJ documents use (a raw CRLF text diffed against a document
+     * has every line changed). Null when the file doesn't exist at that ref.
+     *
+     * Successful results, "doesn't exist" included, are cached for the
+     * lifetime of this PR. A failed request (timeout, rate limit, server
+     * error) is not cached, so the next call retries.
+     *
+     * @throws Exception the request's failure, so callers can tell a missing
+     *   file from one that couldn't be loaded.
+     */
+    suspend fun fileContent(path: String, ref: String): String? {
+        val key = path to ref
+        val deferred = fileContents.computeIfAbsent(key) {
+            cs.async {
+                runCatching {
+                    fileFetchPermits.withPermit { client.getFileContentOrNull(owner, repoName, path, ref) }
+                        ?.let(StringUtil::convertLineSeparators)
+                }
+            }
+        }
+        return deferred.await().getOrElse { e ->
+            fileContents.remove(key, deferred)
+            if (e !is CancellationException) thisLogger().info("Failed to load $path at $ref for #$number", e)
+            throw e
+        }
+    }
+
+    /**
+     * The pull request's changed files by new path (`filename`), fetched
+     * once per head commit and merge base. Lets the editor find a renamed
+     * file's previous path and tell an added file from a failed fetch.
+     * Failures are not cached.
+     */
+    suspend fun changedFiles(): Map<String, ChangedFile> {
+        val pr = _pullRequest.value
+        val key = pr.head.sha to pr.mergeBase
+        val deferred = synchronized(changedFilesLock) {
+            changedFilesCache?.takeIf { it.first == key }?.second
+                ?: cs.async {
+                    runCatching { client.getPullRequestFiles(owner, repoName, pr.number).associateBy { it.filename } }
+                }.also { changedFilesCache = key to it }
+        }
+        return deferred.await().getOrElse { e ->
+            synchronized(changedFilesLock) {
+                if (changedFilesCache?.second === deferred) changedFilesCache = null
+            }
+            if (e !is CancellationException) thisLogger().info("Failed to load changed files of #${pr.number}", e)
+            throw e
+        }
+    }
 
     suspend fun reply(thread: ReviewThread, body: String) {
         client.replyToComment(owner, repoName, number, thread.id, body)
