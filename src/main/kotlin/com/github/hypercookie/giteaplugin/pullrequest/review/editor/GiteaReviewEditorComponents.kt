@@ -2,8 +2,12 @@ package com.github.hypercookie.giteaplugin.pullrequest.review.editor
 
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
+import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactable
+import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsComponentFactory
+import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsViewModelImpl
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaNewCommentViewModel
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaThreadViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
@@ -12,6 +16,7 @@ import com.github.hypercookie.giteaplugin.util.bindName
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
 import com.github.hypercookie.giteaplugin.util.bindVisibility
 import com.github.hypercookie.giteaplugin.util.giteaAction
+import com.github.hypercookie.giteaplugin.util.giteaChildScope
 import com.intellij.collaboration.messages.CollaborationToolsBundle
 import com.intellij.collaboration.ui.CollaborationToolsUIUtil
 import com.intellij.collaboration.ui.codereview.CodeReviewChatItemUIUtil
@@ -26,6 +31,7 @@ import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.panels.ListLayout
 import com.intellij.util.ui.JBUI
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -61,13 +67,20 @@ object GiteaReviewEditorComponents {
         val avatars = GiteaAvatarIcons.getInstance(project)
         val commentsPanel = verticalPanel(0)
         val comments = vm.thread.map { it.comments }.distinctUntilChanged()
+        // Comments are rebuilt on every change; their bindings (reaction
+        // pills) live in a scope that is replaced with them.
+        var commentsCs: CoroutineScope? = null
         cs.bindOnEdt(combine(comments, inlay.outdatedState) { c, outdated -> c to outdated }) { (comments, outdated) ->
+            commentsCs?.cancel()
+            val ccs = cs.giteaChildScope("Gitea thread comments").also { commentsCs = it }
             commentsPanel.removeAll()
             comments.forEachIndexed { index, comment ->
                 val first = index == 0
                 commentsPanel.add(
                     createComment(
+                        ccs,
                         project,
+                        vm.data,
                         comment,
                         firstInResolvedThread = first && vm.thread.value.isResolved,
                         firstInOutdatedThread = first && outdated,
@@ -115,14 +128,23 @@ object GiteaReviewEditorComponents {
     private fun outdatedTag(): JComponent =
         CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.outdated.tag"))
 
+    /** One comment of a thread: body with reaction pills below and the add
+     * reaction button in the header, as the GitHub plugin's
+     * `GHPRReviewThreadCommentComponentFactory` builds it. */
     private fun createComment(
+        cs: CoroutineScope,
         project: Project,
+        data: GiteaPullRequestReviewData,
         comment: PullReviewComment,
         firstInResolvedThread: Boolean,
         firstInOutdatedThread: Boolean,
     ): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
-        val body = GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body))
+        val reactionsVm = GiteaReactionsViewModelImpl(cs, GiteaReactable.Comment(comment.id), data.currentUser, data.reactions)
+        val body = verticalPanel(CodeReviewTimelineUIUtil.VERTICAL_GAP).apply {
+            add(GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body)))
+            add(GiteaReactionsComponentFactory.create(cs, reactionsVm))
+        }
         val author = comment.user
         return CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, body) {
             iconTooltip = author?.presentableName()
@@ -134,7 +156,10 @@ object GiteaReviewEditorComponents {
                     add(CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.resolved.tag")))
                 }
             }
-            withHeader(title, null)
+            val actions = horizontalPanel(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP).apply {
+                add(GiteaReactionsComponentFactory.createAddReactionButton(cs, reactionsVm))
+            }
+            withHeader(title, actions)
         }
     }
 
