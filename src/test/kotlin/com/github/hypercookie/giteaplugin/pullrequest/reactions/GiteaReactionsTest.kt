@@ -116,8 +116,15 @@ class GiteaReactionsTest : BasePlatformTestCase() {
     }
 
     fun `test an existing reaction returned again is not counted twice`() = runBlocking {
-        respond("/api/v1/repos/o/r/issues/1/reactions") { method, _ ->
-            if (method == "GET") 200 to "[${reaction(1, "me", "heart")}]" else 200 to reaction(1, "me", "heart")
+        // Paged like Gitea: page 1 holds the reaction, later pages are empty.
+        server.createContext("/api/v1/repos/o/r/issues/1/reactions") { exchange ->
+            val body = when {
+                exchange.requestMethod != "GET" -> reaction(1, "me", "heart")
+                exchange.requestURI.query.orEmpty().contains("page=1&") -> "[${reaction(1, "me", "heart")}]"
+                else -> "[]"
+            }.toByteArray()
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
         }
         val service = service()
         val flow = service.reactions(GiteaReactable.PullRequest)
