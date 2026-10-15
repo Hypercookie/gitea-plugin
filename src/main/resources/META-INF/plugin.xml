@@ -11,6 +11,7 @@
           <li>Review in the editor: see review threads next to the code of the checked-out pull request branch, reply to and resolve them, and add new comments from the gutter.</li>
           <li>Collect comments in a pending review and submit it as approval, comment or change request.</li>
           <li>Check out a pull request branch from the list.</li>
+          <li>See the status checks of each commit in a column of the Git log.</li>
         </ul>
         <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Tested with Gitea 1.27.</p>
         <p>Requires the Git plugin.</p>
@@ -21,6 +22,7 @@
     <dependencies>
         <module name="intellij.platform.collaborationTools"/>
         <module name="intellij.platform.vcs.impl"/>
+        <module name="intellij.platform.vcs.log.impl"/>
     </dependencies>
 
 
@@ -35,6 +37,7 @@
         <typedHandler implementation="com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionTypedHandler"/>
         <editorFactoryListener implementation="com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewInEditorController"/>
         <editorNotificationProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider"/>
+        <vcsLogCommitStatusProvider implementation="com.github.hypercookie.giteaplugin.log.GiteaCommitStatusProvider"/>
         <notificationGroup id="Gitea" displayType="BALLOON" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <projectConfigurable
                 parentId="vcs"
