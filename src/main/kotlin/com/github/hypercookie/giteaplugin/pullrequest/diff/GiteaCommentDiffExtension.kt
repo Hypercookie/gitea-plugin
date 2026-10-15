@@ -19,6 +19,7 @@ import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.tools.simple.SimpleDiffViewer
 import com.intellij.diff.tools.simple.SimpleOnesideDiffViewer
 import com.intellij.diff.tools.util.base.DiffViewerListener
+import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.diff.util.Side
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.util.Disposer
@@ -89,7 +90,9 @@ class GiteaCommentDiffExtension : DiffExtension() {
         }
         request.getUserData(GiteaDiffCommentNavigation.PENDING_REVEAL_KEY)?.let {
             request.putUserData(GiteaDiffCommentNavigation.PENDING_REVEAL_KEY, null)
-            commentViewer.reveal(it)
+            // The scroll target set with the reveal is for this opening
+            // only; left on the request, every later visit would go there.
+            commentViewer.reveal(it) { request.putUserData(DiffUserDataKeys.SCROLL_TO_LINE, null) }
         }
     }
 
