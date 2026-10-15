@@ -11,3 +11,4 @@
 - Review threads in the editor and the diff viewer: reply, resolve, add comments.
 - Pending reviews, submitted as approval, comment or change request.
 - Branch checkout from the pull request list.
+- Commit status checks in a "Gitea Commit Checks" column of the Git log.

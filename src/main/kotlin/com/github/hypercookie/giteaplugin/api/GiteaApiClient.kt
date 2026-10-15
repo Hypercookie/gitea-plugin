@@ -174,8 +174,10 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     suspend fun getCommitWithFiles(owner: String, repo: String, sha: String): GitCommitWithFiles =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/git/commits/${enc(sha)}?files=true&stat=false&verification=false")
 
-    suspend fun getCombinedStatus(owner: String, repo: String, ref: String): CombinedCommitStatus =
-        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/commits/${enc(ref)}/status")
+    /** [limit] caps the contexts listed in `statuses` (Gitea pages them, 30
+     * by default); the combined `state` always covers all of them. */
+    suspend fun getCombinedStatus(owner: String, repo: String, ref: String, limit: Int? = null): CombinedCommitStatus =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/commits/${enc(ref)}/status" + (limit?.let { "?limit=$it" } ?: ""))
 
     suspend fun getPullRequest(owner: String, repo: String, index: Long): PullRequest =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index")
