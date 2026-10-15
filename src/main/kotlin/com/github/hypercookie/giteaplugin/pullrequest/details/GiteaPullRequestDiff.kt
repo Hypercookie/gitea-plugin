@@ -1,14 +1,19 @@
 package com.github.hypercookie.giteaplugin.pullrequest.details
 
+import com.github.hypercookie.giteaplugin.pullrequest.diff.CommentNavigation
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GITEA_DIFF_CHAIN_KEY
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GITEA_DIFF_COMMENT_CONTEXT_KEY
 import com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaDiffCommentContext
+import com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaDiffCommentNavigation
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.intellij.collaboration.util.RefComparisonChange
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.chains.SimpleDiffRequestChain
+import com.intellij.diff.contents.EmptyContent
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.diff.util.DiffUserDataKeys
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileTypes.FileTypeManager
 import kotlinx.coroutines.Dispatchers
@@ -36,10 +41,21 @@ object GiteaPullRequestDiff {
             withContext(Dispatchers.Main) {
                 val chain = SimpleDiffRequestChain(requests, selectedIndex.coerceIn(0, requests.lastIndex)).apply {
                     putUserData(GITEA_DIFF_CHAIN_KEY, true)
+                    putUserData(GiteaDiffCommentNavigation.KEY, GiteaDiffCommentNavigation(requests, requests.map(::navigationFile)))
+                    // Shown in the toolbar after the platform's navigation arrows.
+                    putUserData(DiffUserDataKeys.CONTEXT_ACTIONS, COMMENT_NAVIGATION_ACTIONS.mapNotNull(ActionManager.getInstance()::getAction))
                 }
                 DiffManager.getInstance().showDiff(data.project, chain, com.intellij.diff.DiffDialogHints.DEFAULT)
             }
         }
+    }
+
+    private val COMMENT_NAVIGATION_ACTIONS = listOf("Gitea.Diff.Review.PreviousComment", "Gitea.Diff.Review.NextComment")
+
+    private fun navigationFile(request: SimpleDiffRequest): CommentNavigation.File {
+        val ctx = request.getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY)!!
+        val (before, after) = request.contents
+        return CommentNavigation.File(ctx.path, ctx.basePath, hasNew = after !is EmptyContent, hasOld = before !is EmptyContent)
     }
 
     private suspend fun createRequest(data: GiteaPullRequestReviewData, change: RefComparisonChange): SimpleDiffRequest {

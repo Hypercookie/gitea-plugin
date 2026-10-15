@@ -46,6 +46,17 @@
                 displayName="Gitea"/>
     </extensions>
 
+    <actions>
+        <action id="Gitea.Diff.Review.PreviousComment" class="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaPreviousCommentAction"
+                text="Previous Comment" description="Go to the previous review comment of the pull request" icon="AllIcons.General.ChevronUp"/>
+        <action id="Gitea.Diff.Review.NextComment" class="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaNextCommentAction"
+                text="Next Comment" description="Go to the next review comment of the pull request" icon="AllIcons.General.ChevronDown"/>
+        <action id="Gitea.Diff.Review.IncludeResolvedComments" class="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaIncludeResolvedCommentsAction"
+                text="Include Resolved Comments in Navigation">
+            <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
+        </action>
+    </actions>
+
     <applicationListeners>
         <listener class="com.github.hypercookie.giteaplugin.GiteaPluginUnloadListener"
                   topic="com.intellij.ide.plugins.DynamicPluginListener"/>

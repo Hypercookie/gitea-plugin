@@ -128,6 +128,10 @@ object GiteaPullRequestDetailsComponent {
                     tree.installPopupHandler(
                         DefaultActionGroup(
                             ActionManager.getInstance().getAction("Diff.ShowDiff"),
+                            // "Jump to Source" (F4), as in the GitHub plugin's changes popup: opens the
+                            // local files of the selected changes, from the tree's NAVIGATABLE_ARRAY
+                            // (new path, or old path of a deleted file). Hidden when none exists locally.
+                            ActionManager.getInstance().getAction("EditSource"),
                             Separator.getInstance(),
                             ActionManager.getInstance().getAction("ExpandAll"),
                             ActionManager.getInstance().getAction("CollapseAll"),
