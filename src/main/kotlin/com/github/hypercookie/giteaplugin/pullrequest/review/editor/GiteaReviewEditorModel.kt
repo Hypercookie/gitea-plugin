@@ -5,6 +5,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaNewCommentView
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaThreadViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.LineMapping
+import com.github.hypercookie.giteaplugin.pullrequest.review.PullRequestBase
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewThread
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterActionableChangesModel
@@ -38,6 +39,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Review state of one file in one editor: which threads, pending comments
@@ -50,6 +52,9 @@ import kotlinx.coroutines.withContext
  * the internal `MutableCodeReviewEditorGutterChangesModel` is implemented
  * here directly (I7).
  *
+ * @param basePath the file's path at the merge base. When it equals
+ *   [path], the PR's changed files decide (a renamed file's previous path,
+ *   or empty for an added file); see [PullRequestBase].
  * @param side which comment side this editor shows: [ReviewSide.NEW] for the
  *   working copy and the diff viewer's head editor, [ReviewSide.OLD] for the
  *   diff viewer's base editor.
@@ -158,17 +163,53 @@ class GiteaReviewEditorModel(
             } else {
                 emptyMap()
             }
-            val baseText = if (showChanges) data.fileContent(basePath, pr.mergeBase ?: pr.base.sha) else null
-            val prChanges = if (showChanges) {
-                LineMapping.prChangesInDocument(LineMapping.compare(baseText.orEmpty(), refText), refToDoc)
-            } else {
-                emptyList()
-            }
+            val baseText = if (showChanges) loadBaseText(pr.mergeBase ?: pr.base.sha) else null
+            val prChanges = baseText?.let {
+                LineMapping.prChangesInDocument(LineMapping.compare(it, refText), refToDoc)
+            }.orEmpty()
             Mappings(refToDoc, anchors, baseText, prChanges)
         }
     } catch (e: com.intellij.diff.comparison.DiffTooBigException) {
         thisLogger().info("File too big to map review comments: $path", e)
         null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // A file fetch failed (logged by the review data); retried on the
+        // next recompute since failures aren't cached.
+        thisLogger().info("Failed to map review comments: $path", e)
+        null
+    }
+
+    /**
+     * Merge-base text of this file for the PR change markers: empty when the
+     * PR added the file, null when it can't be known (fetch failed, or the
+     * base is missing although the PR doesn't list the file as added). Null
+     * means no markers, which beats marking the whole file as changed.
+     */
+    private suspend fun loadBaseText(mergeBase: String): String? {
+        val base = if (basePath != path) {
+            PullRequestBase.At(basePath)
+        } else {
+            val file = try {
+                data.changedFiles()[path]
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            PullRequestBase.of(file, path)
+        }
+        return when (base) {
+            PullRequestBase.Added -> ""
+            is PullRequestBase.At -> try {
+                data.fileContent(base.path, mergeBase)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 
     /** Document line for a thread, or null if its line was changed since
