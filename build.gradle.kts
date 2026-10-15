@@ -13,6 +13,13 @@ version = providers.gradleProperty("version").get()
 
 kotlin {
     jvmToolchain(21)
+    compilerOptions {
+        // Kotlin 2.2+ defaults to ENABLE, which emits compatibility bridges in
+        // classes for inherited interface defaults. On platform interfaces
+        // like ToolWindowFactory those bridges count as overrides of
+        // @ApiStatus.Internal methods and fail verifyPlugin.
+        jvmDefault = org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode.NO_COMPATIBILITY
+    }
 }
 
 dependencies {
