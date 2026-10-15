@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -55,9 +56,13 @@ class GiteaCommentDiffExtension : DiffExtension() {
         Disposer.register(viewer) { cs.cancel() }
 
         // Reuse the current-branch session when it is the same PR, so
-        // comments and pending state are shared with open editors.
+        // comments and pending state are shared with open editors; else the
+        // pull request tab's data, so switching files shows the comments
+        // and file contents already loaded instead of fetching them again.
+        // Only a diff outliving its tab loads its own.
         val session = GiteaReviewSessionService.getInstance(project).session.value
         val data = session?.takeIf { it.repo == ctx.repo && it.number == ctx.pullRequest.number }
+            ?: ctx.reviewData?.takeIf { it.cs.isActive }
             ?: GiteaPullRequestReviewData(project, cs, ctx.repo, ctx.client, ctx.pullRequest, ctx.pendingStore)
 
         val editors = when (viewer) {

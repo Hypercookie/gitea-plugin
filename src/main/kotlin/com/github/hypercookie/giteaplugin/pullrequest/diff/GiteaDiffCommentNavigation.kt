@@ -154,8 +154,13 @@ internal class GiteaDiffCommentViewer(
             inlay.hiddenState.value = false
             inlay.visibleState.value = true
             inlay.collapsedState.value = false
-            // Let an expanded inlay lay out before measuring it.
-            if (!wasShown) delay(LAYOUT_DELAY_MS)
+            // The line is known before the inlay is in the editor (it is
+            // added in a later EDT event); scrolling then would measure
+            // without it and the comment would appear after the jump.
+            val wasInEditor = inlay.shownState.value
+            if (!wasInEditor) withTimeoutOrNull(RENDER_TIMEOUT_MS) { inlay.shownState.first { it } }
+            // Let an expanded or just added inlay lay out before measuring it.
+            if (!wasShown || !wasInEditor) delay(LAYOUT_DELAY_MS)
             scrollTo(editor, line)
             IdeFocusManager.getInstance(data.project).requestFocus(editor.contentComponent, true)
             HintManager.getInstance().showInformationHint(editor, reveal.text)
@@ -192,6 +197,7 @@ internal class GiteaDiffCommentViewer(
     private companion object {
         const val REVEAL_TIMEOUT_MS = 15_000L
         const val LAYOUT_DELAY_MS = 50L
+        const val RENDER_TIMEOUT_MS = 1_000L
     }
 }
 

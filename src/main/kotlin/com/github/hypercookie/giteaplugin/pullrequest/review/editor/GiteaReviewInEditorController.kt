@@ -26,6 +26,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.awt.event.HierarchyEvent
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -99,7 +100,11 @@ class GiteaReviewInEditorController : EditorFactoryListener {
             cs.launch(Dispatchers.Main) { CodeReviewEditorGutterControlsRenderer.render(model, editor) }
             cs.launch(Dispatchers.Main) {
                 editor.renderInlays(model.inlays, HashingUtil.mappingStrategy(GiteaEditorInlay::key)) { inlay ->
-                    CodeReviewComponentInlayRenderer(GiteaReviewEditorComponents.create(this, data.project, inlay))
+                    val component = GiteaReviewEditorComponents.create(this, data.project, inlay)
+                    component.addHierarchyListener { e ->
+                        if (e.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) inlay.shownState.value = component.isShowing
+                    }
+                    CodeReviewComponentInlayRenderer(component)
                 }
             }
         }
