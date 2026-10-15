@@ -99,9 +99,18 @@ like them.
 
 ## Installation
 
-Plugin archives are attached to each
-[GitHub release](https://github.com/Hypercookie/gitea-plugin/releases). To
-build from source instead:
+The plugin is in beta. Version 0.1.0-beta is the first release.
+
+1. Download `gitea-plugin-0.1.0-beta.zip` from the
+   [0.1.0-beta release](https://github.com/Hypercookie/gitea-plugin/releases/tag/v0.1.0-beta).
+   Pre-releases are listed on the
+   [releases page](https://github.com/Hypercookie/gitea-plugin/releases) but
+   not under "Latest".
+2. In the IDE, open <kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>⚙</kbd> |
+   <kbd>Install Plugin from Disk...</kbd>, select the downloaded archive (don't
+   unzip it) and restart the IDE.
+
+To build from source instead:
 
 ```shell
 git clone https://github.com/Hypercookie/gitea-plugin.git
@@ -109,9 +118,7 @@ cd gitea-plugin
 ./gradlew buildPlugin
 ```
 
-The archive is written to `build/distributions/`. Install it with
-<kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>⚙</kbd> |
-<kbd>Install Plugin from Disk...</kbd>.
+The archive is written to `build/distributions/`; install it the same way.
 
 ## Getting started
 
