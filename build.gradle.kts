@@ -130,6 +130,12 @@ tasks.test {
     if (!giteaToken.isPresent) {
         exclude("**/integration/**")
     }
+    // A hung test should fail the build, not hold a CI runner for an hour;
+    // the event log names the test that never finished.
+    timeout = java.time.Duration.ofMinutes(20)
+    testLogging {
+        events("started", "passed", "skipped", "failed")
+    }
 }
 
 changelog {
