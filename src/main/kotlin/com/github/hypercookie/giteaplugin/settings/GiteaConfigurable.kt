@@ -19,6 +19,7 @@ import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.dsl.builder.Align
+import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
 import icons.CollaborationToolsIcons
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,8 @@ import javax.swing.JComponent
 /**
  * Settings | Version Control | Gitea: the platform's accounts list (add via
  * token login dialog, edit token, remove, set project default), the same
- * page shape as the GitLab plugin's `GitLabSettingsConfigurable`.
+ * page shape as the GitLab plugin's `GitLabSettingsConfigurable`, followed by
+ * the IDE-wide feature switches of [GiteaSettings].
  */
 class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea") {
 
@@ -49,11 +51,51 @@ class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea
         val actionsController = GiteaAccountsPanelActionsController(project, accountsModel)
         val panelFactory = AccountsPanelFactory(scope, accountManager, defaultAccountHolder, accountsModel)
 
+        val settings = GiteaSettings.getInstance()
         return panel {
             row {
                 panelFactory.accountsPanelCell(this, detailsProvider, actionsController).align(Align.FILL)
             }.resizableRow()
+            group("Features") {
+                row {
+                    checkBox("Show commit checks in the Git log")
+                        .bindSelected(settings::commitChecksInLog)
+                        .comment("Adds the Gitea Commit Checks column. When off, no commit statuses are fetched.")
+                }
+                row {
+                    checkBox("Show review comments in the editor for the checked-out pull request branch")
+                        .bindSelected(settings::reviewInEditor)
+                        .comment("Also the editor banner for unsubmitted comments and an out-of-date branch. When off, the plugin no longer looks up the current branch's pull request on git changes.")
+                }
+                row {
+                    checkBox("Show reactions on comments")
+                        .bindSelected(settings::showReactions)
+                        .comment("Each comment needs one request for its reactions. Applies to pull requests opened afterwards.")
+                }
+                row {
+                    checkBox("Suggest creating a pull request after pushing a branch")
+                        .bindSelected(settings::suggestPullRequestAfterPush)
+                }
+                row {
+                    checkBox("Reload open pull requests when the IDE window regains focus")
+                        .bindSelected(settings::refreshOnFrameActivation)
+                }
+            }
+            group("Debug") {
+                row {
+                    checkBox("Show Gitea API request counter in the status bar")
+                        .bindSelected(settings::showRequestCounter)
+                        .comment("Counts every request sent to a Gitea server since the IDE started.")
+                }
+            }
         }
+    }
+
+    override fun apply() {
+        val settings = GiteaSettings.getInstance()
+        val before = settings.state
+        super.apply()
+        settings.notifyChanged(before)
     }
 }
 

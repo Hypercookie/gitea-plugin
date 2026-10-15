@@ -3,6 +3,9 @@
 # Gitea Changelog
 
 ## [Unreleased]
+### Added
+- Settings to turn off the commit checks column, review comments in the editor, reactions, the pull request suggestion after a push and reloading on window focus; turning a feature off also stops its requests.
+- An opt-in debug widget in the status bar that counts the Gitea API requests sent since the IDE started.
 
 ## [0.1.0-beta] - 2026-10-15
 ### Added

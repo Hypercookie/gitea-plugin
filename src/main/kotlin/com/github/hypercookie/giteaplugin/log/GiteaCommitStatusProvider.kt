@@ -6,6 +6,7 @@ import com.github.hypercookie.giteaplugin.accounts.GiteaProjectDefaultAccountHol
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.intellij.collaboration.ui.icon.CIBuildStatusIcons
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
@@ -40,7 +41,8 @@ import javax.swing.Icon
  * reports for each commit, like the GitHub plugin's column in IntelliJ
  * Ultimate. Offered for log roots whose remote maps to a configured Gitea
  * account; only the rows the platform asks for are loaded, through
- * [GiteaCommitStatusCache].
+ * [GiteaCommitStatusCache]. [GiteaSettings.commitChecksInLog] turns the
+ * column and its requests off.
  */
 class GiteaCommitStatusProvider : VcsCommitExternalStatusProvider.WithColumn<GiteaCommitStatus>() {
 
@@ -51,7 +53,8 @@ class GiteaCommitStatusProvider : VcsCommitExternalStatusProvider.WithColumn<Git
     override val isColumnEnabledByDefault: Boolean = true
 
     override fun isColumnAvailable(project: Project, roots: Collection<VirtualFile>): Boolean =
-        GiteaRepoLinkService.getInstance(project).findAllMatches().any { it.gitRoot in roots }
+        GiteaSettings.getInstance().commitChecksInLog &&
+            GiteaRepoLinkService.getInstance(project).findAllMatches().any { it.gitRoot in roots }
 
     override fun getExternalStatusColumnService(): VcsLogExternalStatusColumnService<GiteaCommitStatus> =
         service<GiteaCommitStatusService>()
@@ -106,8 +109,8 @@ private class GiteaCommitStatusLoader(
 
     override fun loadData(commits: List<CommitId>, onChange: (Map<CommitId, GiteaCommitStatus>) -> Unit) {
         current?.cancel()
-        if (commits.isEmpty()) {
-            // The column was hidden.
+        if (commits.isEmpty() || !GiteaSettings.getInstance().commitChecksInLog) {
+            // The column was hidden, or turned off in the settings.
             cache.release(this)
             return
         }
@@ -134,6 +137,7 @@ private class GiteaCommitStatusLoader(
 
         val keys = commitsByKey.keys.toList()
         repeat(MAX_REFRESH_ROUNDS) {
+            if (!GiteaSettings.getInstance().commitChecksInLog) return
             val next = cache.load(this, keys, { key -> targetByKey.getValue(key).client.getCombinedStatus(key.owner, key.repo, key.sha, STATUS_LIMIT) }) { key, checks ->
                 cs.launch { deliver(mapOf(loaded(key, checks)), onChange) }
             } ?: return
