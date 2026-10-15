@@ -41,6 +41,17 @@ private val errorJson = Json { ignoreUnknownKeys = true }
 
 private const val MAX_RAW_ERROR_LENGTH = 300
 
+/** Gitea's default `MAX_RESPONSE_ITEMS`; larger limits are capped to it. */
+private const val PAGE_LIMIT = 50
+
+/** Empty timeline pages in a row that end the timeline; tolerates runs of
+ * up to (n - 1) * [PAGE_LIMIT] inline code comments, which Gitea filters out
+ * of each page after paging (see `getAllPages`). */
+private const val TIMELINE_EMPTY_PAGES_TO_END = 4
+
+/** Safety net against a server that never reports the last page. */
+private const val MAX_PAGES = 200
+
 /**
  * Builds a readable message for a failed request. Gitea answers API errors
  * with `{"message": "...", "url": "<swagger link>"}` (e.g. `review event
@@ -101,7 +112,7 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
             if (!sort.isNullOrBlank()) append("&sort=${enc(sort)}")
             if (!poster.isNullOrBlank()) append("&poster=${enc(poster)}")
         }
-        return get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls?$query")
+        return getAllPages("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls?$query")
     }
 
     /** One page of `/pulls`. Used by the list when a sort order is chosen
@@ -154,7 +165,7 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
         get("/api/v1/repos/issues/search?type=pulls&review_requested=true&owner=${enc(owner)}&state=${enc(state)}&page=$page&limit=$limit")
 
     suspend fun listLabels(owner: String, repo: String): List<GiteaLabel> =
-        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/labels?limit=100")
+        getAllPages("/api/v1/repos/${enc(owner)}/${enc(repo)}/labels")
 
     /** Users who can be assigned (and so also review/author) in [repo]. */
     suspend fun listAssignees(owner: String, repo: String): List<GiteaUser> =
@@ -170,16 +181,16 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index")
 
     suspend fun getPullRequestFiles(owner: String, repo: String, index: Long): List<ChangedFile> =
-        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/files")
+        getAllPages("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/files")
 
     suspend fun getPullRequestCommits(owner: String, repo: String, index: Long): List<GitCommit> =
-        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/commits")
+        getAllPages("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/commits")
 
     /** PRs are issues in Gitea's model, so the timeline lives under
      * `/issues/{index}/timeline` — confirmed against a live instance for
      * Phase 27 (see `TimelineEvent` doc comment). */
     suspend fun getTimeline(owner: String, repo: String, index: Long): List<TimelineEvent> =
-        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/$index/timeline")
+        getAllPages("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/$index/timeline", TIMELINE_EMPTY_PAGES_TO_END)
 
     /** File text at a given ref, or null if the file doesn't exist there
      * (added/deleted files have one empty side in a diff). */
@@ -211,7 +222,7 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     // --- Reviews & inline comments -----------------------------------------
 
     suspend fun listReviews(owner: String, repo: String, index: Long): List<PullReview> =
-        get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/reviews")
+        getAllPages("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/reviews")
 
     suspend fun listReviewComments(owner: String, repo: String, index: Long, reviewId: Long): List<PullReviewComment> =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/reviews/$reviewId/comments")
@@ -251,12 +262,38 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
         .header("Accept", "application/json")
         .timeout(Duration.ofSeconds(15))
 
-    private suspend inline fun <reified T> get(path: String): T = withContext(Dispatchers.IO) {
-        val response = httpClient.send(
+    private suspend inline fun <reified T> get(path: String): T = decode(send(path))
+
+    private suspend fun send(path: String): HttpResponse<String> = withContext(Dispatchers.IO) {
+        httpClient.send(
             requestBuilder(path).GET().build(),
             HttpResponse.BodyHandlers.ofString(),
         )
-        decode(response)
+    }
+
+    /**
+     * Every item of a paginated list endpoint. Gitea pages lists even when
+     * no `page`/`limit` is sent (30 items by default, at most 50 per page —
+     * `/api/v1/settings/api`), so a plain [get] silently drops the rest.
+     * Stops on `X-HasMore: false`, which only some endpoints send, else
+     * after [emptyPagesToEnd] empty pages in a row. `X-Total-Count` isn't
+     * usable as a stop condition: the timeline drops inline code comments
+     * after paging, so there it counts only the current page's items, and a
+     * page of nothing but code comments comes back empty (`null`) mid-list.
+     */
+    private suspend inline fun <reified T> getAllPages(path: String, emptyPagesToEnd: Int = 1): List<T> {
+        val separator = if ('?' in path) '&' else '?'
+        val items = mutableListOf<T>()
+        var emptyPages = 0
+        for (page in 1..MAX_PAGES) {
+            val response = send("$path${separator}page=$page&limit=$PAGE_LIMIT")
+            val pageItems = decode<List<T>?>(response).orEmpty()
+            items += pageItems
+            emptyPages = if (pageItems.isEmpty()) emptyPages + 1 else 0
+            val hasMore = response.headers().firstValue("X-HasMore").map { it.toBoolean() }.orElse(true)
+            if (!hasMore || emptyPages >= emptyPagesToEnd) break
+        }
+        return items
     }
 
     private suspend inline fun <reified B, reified T> post(path: String, body: B): T = withContext(Dispatchers.IO) {
