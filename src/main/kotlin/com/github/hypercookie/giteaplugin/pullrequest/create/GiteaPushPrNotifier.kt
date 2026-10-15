@@ -5,6 +5,7 @@ import com.github.hypercookie.giteaplugin.accounts.GiteaProjectDefaultAccountHol
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.ide.BrowserUtil
 import com.intellij.notification.NotificationAction
@@ -31,6 +32,7 @@ import kotlinx.coroutines.launch
 class GiteaPushPrNotifier(private val project: Project) : GitPushListener {
 
     override fun onCompleted(repository: GitRepository, pushResult: GitPushRepoResult) {
+        if (!GiteaSettings.getInstance().suggestPullRequestAfterPush) return
         if (pushResult.type !in SUGGEST_FOR) return
         val pushed = GiteaPushPrSuggestion.pushedBranch(pushResult.sourceBranch, pushResult.targetBranch, pushResult.targetRemote)
             ?: return

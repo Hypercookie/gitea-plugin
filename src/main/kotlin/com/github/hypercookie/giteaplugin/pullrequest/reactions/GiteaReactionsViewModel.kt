@@ -2,6 +2,7 @@ package com.github.hypercookie.giteaplugin.pullrequest.reactions
 
 import com.github.hypercookie.giteaplugin.api.dto.GiteaReaction
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
 import com.intellij.collaboration.ui.icon.IconsProvider
 import com.intellij.openapi.diagnostic.logger
@@ -84,3 +85,13 @@ internal class GiteaReactionsViewModelImpl(
         val LOG = logger<GiteaReactionsViewModelImpl>()
     }
 }
+
+/** A reactions view model for [reactable], or null when reactions are turned
+ * off in the settings; the reactions service then never fetches anything. */
+internal fun giteaReactionsViewModelOrNull(
+    cs: CoroutineScope,
+    reactable: GiteaReactable,
+    currentUser: StateFlow<GiteaUser?>,
+    reactionsService: () -> GiteaReactionsService,
+): GiteaReactionsViewModel? =
+    if (GiteaSettings.getInstance().showReactions) GiteaReactionsViewModelImpl(cs, reactable, currentUser, reactionsService()) else null

@@ -13,7 +13,7 @@
           <li>After pushing a branch without an open pull request, get a notification that opens Gitea's page to create one.</li>
           <li>See the status checks of each commit in a column of the Git log.</li>
         </ul>
-        <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Tested with Gitea 1.27.</p>
+        <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Features that contact the server on their own, such as the commit checks column, can be turned off there. Tested with Gitea 1.27.</p>
         <p>Requires the Git plugin.</p>
     ]]></description>
 
@@ -41,6 +41,8 @@
         <notificationGroup id="Gitea" displayType="BALLOON" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <notificationGroup id="Gitea Pull Request Suggestions" displayType="BALLOON"
                            icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
+        <statusBarWidgetFactory id="Gitea.RequestCounter"
+                                implementation="com.github.hypercookie.giteaplugin.debug.GiteaRequestCounterWidgetFactory"/>
         <projectConfigurable
                 parentId="vcs"
                 instance="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
@@ -67,6 +69,8 @@
     <applicationListeners>
         <listener class="com.github.hypercookie.giteaplugin.GiteaPluginUnloadListener"
                   topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+        <listener class="com.github.hypercookie.giteaplugin.debug.GiteaRequestCounterSettingsListener"
+                  topic="com.github.hypercookie.giteaplugin.settings.GiteaSettingsListener"/>
     </applicationListeners>
 
 </idea-plugin>
