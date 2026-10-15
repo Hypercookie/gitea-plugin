@@ -48,6 +48,14 @@ class GiteaBranchPrResolverService(private val project: Project) {
         return GiteaBranchKey(repository.root.path, context.owner, context.repo, branch, tracked)
     }
 
+    /** Whether [pr]'s branch is checked out in [context]'s repository,
+     * matched like the current-branch session ([GiteaBranchPrMatcher]).
+     * No network or credential access. */
+    fun isCheckedOut(context: GiteaRepoContext, pr: PullRequest): Boolean {
+        val key = currentBranchKey(context) ?: return false
+        return GiteaBranchPrMatcher.match(key.localBranch, key.tracked, listOf(pr)) != null
+    }
+
     /** Whether any of [remote]'s URLs points at [context]'s repository. */
     private fun isRemoteOf(remote: GitRemote, context: GiteaRepoContext): Boolean {
         val server = GiteaUrlUtil.parseServerUrl(context.account.serverUrl) ?: return false

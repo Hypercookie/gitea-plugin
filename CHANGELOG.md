@@ -12,3 +12,4 @@
 - Pending reviews, submitted as approval, comment or change request.
 - Branch checkout from the pull request list.
 - Commit status checks in a "Gitea Commit Checks" column of the Git log.
+- Editable pull request diffs and Jump to Source while the pull request branch is checked out.
