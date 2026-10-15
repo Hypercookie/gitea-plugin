@@ -54,6 +54,9 @@ GitHub and GitLab plugins use, so it looks and behaves like them.
 - "View Timeline" opens the timeline in an editor tab: the description,
   comments, reviews, pushed commits and other events, with a field for new
   comments.
+- Reactions show as pills under the description and each comment, with who
+  reacted on hover. Click a pill to add or remove your reaction, or the smiley
+  in a comment's header to pick a new one from the reactions the server allows.
 
 ### Review in the editor
 
@@ -64,6 +67,7 @@ GitHub and GitLab plugins use, so it looks and behaves like them.
   are added or removed above it. Threads whose line was changed since the
   comment was written are hidden.
 - Reply to a thread and resolve or unresolve it inline.
+- See, add and remove reactions on review comments, as in the timeline.
 - Hover the gutter to add a comment on a line. A new comment can start or
   extend a pending review, or be posted on its own ("Add Single Comment").
 - The same comments are shown in the pull request diff viewer, on both sides.
@@ -151,6 +155,7 @@ Source layout under `src/main/kotlin/com/github/hypercookie/giteaplugin`:
 | `pullrequest/list`        | Pull request list, search and filters                                          |
 | `pullrequest/details`     | Pull request tab: header, commits, branch, changes tree, status, diffs        |
 | `pullrequest/timeline`    | Timeline editor tab                                                            |
+| `pullrequest/reactions`   | Reactions on comments and the description: data, pills, picker                |
 | `pullrequest/review`      | Review data, thread grouping, line mapping, submit review popup               |
 | `pullrequest/review/editor` | Review in the editor: model, inlays, gutter                                  |
 | `pullrequest/diff`        | Diff viewer extension that shows comments in the diff viewer                  |
@@ -177,9 +182,12 @@ Further documentation:
 
 - Checkout only works for pull requests whose branch is in the same repository.
   Pull requests from forks are not supported.
-- Editing and deleting comments, reactions, requesting reviewers, editing
+- Editing and deleting comments, requesting reviewers, editing
   labels and assignees, creating, merging and closing pull requests are not
   implemented.
+- Gitea returns no reactions with comments, so they load with one request per
+  comment after the comments appear. Other people's new reactions show up
+  after "Refresh Pull Request" or when the timeline is reopened.
 - Files cannot be marked as viewed and comments cannot span several lines;
   Gitea's API has no support for either.
 - Review threads are not shown with their code snippet in the timeline.

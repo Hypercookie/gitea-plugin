@@ -5,10 +5,13 @@ import com.github.hypercookie.giteaplugin.api.dto.CreateIssueCommentOption
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewCommentReplyOptions
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
 import com.github.hypercookie.giteaplugin.api.dto.CombinedCommitStatus
+import com.github.hypercookie.giteaplugin.api.dto.EditReactionOption
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
 import com.github.hypercookie.giteaplugin.api.dto.GitCommitWithFiles
 import com.github.hypercookie.giteaplugin.api.dto.GiteaIssue
 import com.github.hypercookie.giteaplugin.api.dto.GiteaLabel
+import com.github.hypercookie.giteaplugin.api.dto.GiteaReaction
+import com.github.hypercookie.giteaplugin.api.dto.GiteaUISettings
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.IssueComment
 import com.github.hypercookie.giteaplugin.api.dto.PullReview
@@ -250,6 +253,35 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     suspend fun unresolveComment(owner: String, repo: String, commentId: Long) =
         postNoBody("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/comments/$commentId/unresolve")
 
+    // --- Reactions ------------------------------------------------------------
+
+    /** Reactions the server accepts and its custom emoji. */
+    suspend fun getUISettings(): GiteaUISettings = get("/api/v1/settings/ui")
+
+    /** Reactions on a top-level or review comment. Review (code) comments
+     * have no endpoint of their own; the issue-comment one works for them
+     * (probed against 1.27.3, docs/plan/parity-gap-analysis.md). Not paged. */
+    suspend fun listCommentReactions(owner: String, repo: String, commentId: Long): List<GiteaReaction> =
+        get<List<GiteaReaction>?>("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/comments/$commentId/reactions").orEmpty()
+
+    /** Adds [content]; answers 201 with the new reaction, or 200 with the
+     * existing one if the user already reacted with it. */
+    suspend fun addCommentReaction(owner: String, repo: String, commentId: Long, content: String): GiteaReaction =
+        post("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/comments/$commentId/reactions", EditReactionOption(content))
+
+    suspend fun removeCommentReaction(owner: String, repo: String, commentId: Long, content: String) =
+        deleteWithBody("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/comments/$commentId/reactions", EditReactionOption(content))
+
+    /** Reactions on the pull request itself (its description). Paged. */
+    suspend fun listIssueReactions(owner: String, repo: String, index: Long): List<GiteaReaction> =
+        getAllPages("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/$index/reactions")
+
+    suspend fun addIssueReaction(owner: String, repo: String, index: Long, content: String): GiteaReaction =
+        post("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/$index/reactions", EditReactionOption(content))
+
+    suspend fun removeIssueReaction(owner: String, repo: String, index: Long, content: String) =
+        deleteWithBody("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/$index/reactions", EditReactionOption(content))
+
     // --- HTTP plumbing ----------------------------------------------------
 
     private fun enc(segment: String): String = URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20")
@@ -314,6 +346,18 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
         val response = httpClient.send(
             requestBuilder(path)
                 .POST(HttpRequest.BodyPublishers.noBody())
+                .build(),
+            HttpResponse.BodyHandlers.ofString(),
+        )
+        checkStatus(response)
+    }
+
+    /** DELETE with a JSON body and no response body (removing a reaction). */
+    private suspend inline fun <reified B> deleteWithBody(path: String, body: B): Unit = withContext(Dispatchers.IO) {
+        val response = httpClient.send(
+            requestBuilder(path)
+                .header("Content-Type", "application/json")
+                .method("DELETE", HttpRequest.BodyPublishers.ofString(json.encodeToString<B>(body)))
                 .build(),
             HttpResponse.BodyHandlers.ofString(),
         )
