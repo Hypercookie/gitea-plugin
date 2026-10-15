@@ -32,8 +32,6 @@ import javax.swing.JComponent
  *   so unsaved edits no longer warrant a warning; this matches the GitHub
  *   plugin's "local branch is out of sync" state.
  *
- * See docs/plan/pr-review-feature-plan.md, "UI pass," Phase 20 and Phase 14.
- *
  * `PendingReviewStoreService` calls
  * `EditorNotifications.updateAllNotifications()` on every store change, so
  * the pending-changes half of this banner appears/disappears live without

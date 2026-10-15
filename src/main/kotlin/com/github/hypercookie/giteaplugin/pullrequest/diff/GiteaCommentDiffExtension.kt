@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
  * - one-sided ([SimpleOnesideDiffViewer], which the platform picks for an
  *   added or deleted file): the side that exists;
  * - unified ([UnifiedDiffViewer]): both sides in its one editor, see
- *   [GiteaUnifiedReviewEditorModel] (migration ledger I16).
+ *   [GiteaUnifiedReviewEditorModel].
  *
  * Switching the viewer in the diff toolbar creates a new viewer, and the
  * platform calls [onViewerCreated] again for it.

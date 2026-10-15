@@ -51,8 +51,8 @@ data class GiteaPullRequestListItem(
 
 /**
  * Paged pull request list driven by the search panel. Replaces the
- * collaboration tools' internal list loaders (`ReloadablePotentiallyInfiniteListLoader`,
- * migration ledger I4) with a plain page counter.
+ * collaboration tools' internal list loaders (`ReloadablePotentiallyInfiniteListLoader`)
+ * with a plain page counter.
  */
 class GiteaPullRequestListViewModel(
     private val cs: CoroutineScope,

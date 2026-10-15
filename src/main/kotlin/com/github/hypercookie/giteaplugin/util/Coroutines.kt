@@ -13,8 +13,7 @@ import kotlin.coroutines.EmptyCoroutineContext
  * is added on top of the parent's, e.g. a dispatcher.
  *
  * The platform's `com.intellij.platform.util.coroutines.childScope` does the
- * same but carries `@ApiStatus.Internal`/`@Experimental` members (migration
- * ledger I12), so this plugin uses its own.
+ * same but carries `@ApiStatus.Internal`/`@Experimental` members, so this plugin uses its own.
  */
 fun CoroutineScope.giteaChildScope(name: String, context: CoroutineContext = EmptyCoroutineContext): CoroutineScope =
     CoroutineScope(coroutineContext + context + SupervisorJob(coroutineContext.job) + CoroutineName(name))

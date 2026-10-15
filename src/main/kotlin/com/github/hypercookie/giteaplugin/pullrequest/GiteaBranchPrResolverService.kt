@@ -11,8 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Resolves "the open PR for whatever branch is currently checked out," so
  * comments can show up in a regular editor no matter how the user got onto
- * that branch (checked it out from our PR list, or via plain git) — see
- * docs/plan/pr-review-feature-plan.md, "Architecture pivot."
+ * that branch (checked it out from our PR list, or via plain git).
  *
  * Cached per branch name; callers should [invalidate] on branch change
  * ([git4idea.repo.GitRepository.GIT_REPO_CHANGE]) rather than re-fetching on
@@ -25,12 +24,6 @@ class GiteaBranchPrResolverService(private val project: Project) {
 
     fun currentBranchName(): String? =
         GitRepositoryManager.getInstance(project).repositories.firstOrNull()?.currentBranch?.name
-
-    /** Non-suspending, no network/credential access — only returns a PR if
-     * [resolveForCurrentBranch] has already cached one for this branch.
-     * Used by [PrReviewEditorNotificationProvider], which must not touch
-     * `PasswordSafe`/the network from inside its read-action context. */
-    fun peekCachedPr(branch: String): PullRequest? = cacheByBranch[branch]
 
     /**
      * The open PR whose head ref matches the current branch, or null if

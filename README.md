@@ -62,13 +62,21 @@ GitHub and GitLab plugins use, so it looks and behaves like them.
   the pull request are marked in the gutter.
 - Comment positions follow local edits: a thread stays on its line when lines
   are added or removed above it. Threads whose line was changed since the
-  comment was written are hidden.
+  comment was written stay at the changed block, collapsed and tagged
+  OUTDATED.
 - Reply to a thread and resolve or unresolve it inline.
 - Hover the gutter to add a comment on a line. A new comment can start or
   extend a pending review, or be posted on its own ("Add Single Comment").
-- The same comments are shown in the pull request diff viewer, on both sides.
+- The same comments are shown in the pull request diff viewer, in the
+  side-by-side, unified and one-sided viewers.
+- Typing `@` in a comment field suggests users to mention.
 - A banner above the editor shows when a review is pending and when the local
   branch is out of sync with the pull request.
+
+### Git log
+
+- A "Gitea Commit Checks" column in the Git log shows the commit status of
+  each commit; clicking it opens the check or the commit page.
 
 ### Submitting reviews
 
@@ -159,19 +167,12 @@ Source layout under `src/main/kotlin/com/github/hypercookie/giteaplugin`:
 | `util`                    | Coroutine scopes and small UI helpers                                          |
 
 The plugin uses only public IntelliJ Platform API. `./gradlew verifyPlugin`
-fails the build on any use of `@ApiStatus.Internal` API.
+checks the plugin against the latest release of every IDE version since
+2025.2 and fails the build on compatibility problems or any use of
+`@ApiStatus.Internal` API.
 
-Further documentation:
-
-- `docs/plan/pr-review-feature-plan.md`: feature plan, implementation notes and
-  status of each phase.
-- `docs/plan/collab-tools-migration-plan.md`: the move to the platform's code
-  review components, including the list of parts implemented in this plugin
-  because no public API or Gitea API exists for them.
-- `docs/plan/parity-gap-analysis.md`: comparison with the GitHub and GitLab
-  plugins.
-- `docs/local-gitea-dev-instance.md`: setting up a local Gitea instance in
-  Docker for manual testing.
+`docs/local-gitea-dev-instance.md` describes a local Gitea instance in Docker
+for manual testing and the live integration tests.
 
 ## Known limitations
 
@@ -184,8 +185,6 @@ Further documentation:
   Gitea's API has no support for either.
 - Review threads are not shown with their code snippet in the timeline.
 - Timeline tabs are not restored after an IDE restart.
-- Several features have not yet been tested in a running IDE. See the plan
-  documents for details.
 
 ## License
 

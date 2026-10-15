@@ -4,12 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /** One entry from `GET .../issues/{index}/timeline` (PRs are issues in
- * Gitea's model). Confirmed against a live 1.27.3 instance for Phase 27 —
- * real data only ever produced `type` values `pull_push`, `review`, and
- * `comment` for our fixture PRs; other types (`label`, `assignee`,
- * `milestone`, title-change, etc.) are decoded defensively but rendered via
- * a generic fallback in `TimelinePanel`, not special-cased, since we have no
- * real data to verify their shape against yet. */
+ * Gitea's model). Fields not every event type carries are optional. */
 @Serializable
 data class TimelineEvent(
     val id: Long,

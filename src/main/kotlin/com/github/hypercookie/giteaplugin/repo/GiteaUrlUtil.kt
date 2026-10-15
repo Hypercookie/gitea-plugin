@@ -13,8 +13,7 @@ data class ParsedGitUrl(val host: String, val pathSegments: List<String>)
  * gitlab.com which are recognizable by a fixed hostname alone. So matching a
  * local git remote to a configured Gitea account can't rely on hostname
  * detection the way GitHub/GitLab plugins do — it has to compare against the
- * account's full configured base URL (host + path prefix). See
- * docs/research/github-gitlab-plugin-features.md §9.
+ * account's full configured base URL (host + path prefix).
  */
 object GiteaUrlUtil {
 
