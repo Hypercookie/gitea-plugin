@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -133,6 +134,12 @@ class GiteaCommitStatusCache(
     private val serverBackoff = HashMap<String, Backoff>()
     private val repoPause = HashMap<Triple<String, String, String>, Long>()
     private val semaphore = Semaphore(policy.maxConcurrent)
+
+    /** Requests are dispatched one at a time, in start order, so they queue
+     * on the fair [semaphore] middle rows first; on a multi-threaded
+     * dispatcher they'd race for it. Only the bookkeeping runs here: the
+     * HTTP call itself switches to the IO dispatcher. */
+    private val requestDispatcher = Dispatchers.Default.limitedParallelism(1)
     private var tokens = policy.burstSize.toDouble()
     private var tokensAt = clock()
     private val requests = AtomicInteger()
@@ -234,7 +241,7 @@ class GiteaCommitStatusCache(
     /** Under [lock]. */
     private fun newRequest(key: GiteaCommitStatusKey, fetch: suspend (GiteaCommitStatusKey) -> CombinedCommitStatus): InFlight {
         val request = InFlight(HashSet())
-        request.deferred = scope.async(start = CoroutineStart.LAZY) {
+        request.deferred = scope.async(requestDispatcher, start = CoroutineStart.LAZY) {
             try {
                 semaphore.withPermit {
                     awaitToken()
