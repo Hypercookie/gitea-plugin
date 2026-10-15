@@ -7,6 +7,7 @@ import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewComponentInlayRenderer
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterChangesRenderer
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterControlsRenderer
+import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorModel
 import com.intellij.collaboration.ui.codereview.editor.renderInlays
 import com.intellij.collaboration.util.HashingUtil
 import com.intellij.openapi.editor.Editor
@@ -79,14 +80,28 @@ class GiteaReviewInEditorController : EditorFactoryListener {
             showChanges: Boolean = true,
         ): Nothing {
             val model = GiteaReviewEditorModel(cs, data, path, basePath, side, editor.document, showChanges)
-            cs.launch(Dispatchers.Main) { CodeReviewEditorGutterControlsRenderer.render(model, editor) }
             if (showChanges) cs.launch(Dispatchers.Main) { CodeReviewEditorGutterChangesRenderer.render(model, editor) }
+            renderReview(cs, data, editor, model)
+            awaitCancellation()
+        }
+
+        /**
+         * Gutter comment controls and inlays of [model] in [editor] until
+         * [cs] is cancelled. Shared with the unified diff viewer, which
+         * renders a [GiteaUnifiedReviewEditorModel].
+         */
+        fun renderReview(
+            cs: CoroutineScope,
+            data: GiteaPullRequestReviewData,
+            editor: EditorEx,
+            model: CodeReviewEditorModel<GiteaEditorInlay>,
+        ) {
+            cs.launch(Dispatchers.Main) { CodeReviewEditorGutterControlsRenderer.render(model, editor) }
             cs.launch(Dispatchers.Main) {
                 editor.renderInlays(model.inlays, HashingUtil.mappingStrategy(GiteaEditorInlay::key)) { inlay ->
                     CodeReviewComponentInlayRenderer(GiteaReviewEditorComponents.create(this, data.project, inlay))
                 }
             }
-            awaitCancellation()
         }
     }
 }

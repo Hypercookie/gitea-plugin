@@ -60,6 +60,9 @@ import kotlin.coroutines.cancellation.CancellationException
  *   diff viewer's base editor.
  * @param showChanges whether to compute PR change markers (working copy
  *   only; a diff viewer already shows the diff).
+ * @param editorLines where lines of [document] are in the editor that shows
+ *   this model; differs from identity only in the unified diff viewer,
+ *   where [document] is one side's file and the editor shows both sides.
  */
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class GiteaReviewEditorModel(
@@ -70,6 +73,7 @@ class GiteaReviewEditorModel(
     private val side: ReviewSide,
     private val document: Document,
     private val showChanges: Boolean,
+    private val editorLines: StateFlow<EditorLineTransfer> = MutableStateFlow(EditorLineTransfer.Identity),
 ) : CodeReviewEditorModel<GiteaEditorInlay>, CodeReviewEditorGutterActionableChangesModel {
 
     private class Mappings(
@@ -129,8 +133,8 @@ class GiteaReviewEditorModel(
         }
 
         cs.launch(Dispatchers.Main) {
-            combine(mappings, data.threads, data.pending, newComments) { m, threads, pending, new ->
-                Snapshot(m, threads, pending, new)
+            combine(mappings, data.threads, data.pending, newComments, editorLines) { m, threads, pending, new, lines ->
+                Snapshot(m, threads, pending, new, lines)
             }.collect(::applySnapshot)
         }
     }
@@ -140,6 +144,7 @@ class GiteaReviewEditorModel(
         val threads: List<ReviewThread>,
         val pending: List<com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment>,
         val newComments: Map<Int, GiteaEditorInlay.NewComment>,
+        val lines: EditorLineTransfer,
     )
 
     private suspend fun computeMappings(threads: List<ReviewThread>): Mappings? = try {
@@ -221,6 +226,7 @@ class GiteaReviewEditorModel(
 
     private fun applySnapshot(snapshot: Snapshot) {
         val m = snapshot.mappings
+        val lines = snapshot.lines
         val fileThreads = snapshot.threads.filter { it.path == path && it.side == side }
 
         val liveIds = fileThreads.mapTo(HashSet()) { it.id }
@@ -228,7 +234,7 @@ class GiteaReviewEditorModel(
         for (thread in fileThreads) {
             val inlay = threadVms.getOrPut(thread.id) { GiteaEditorInlay.Thread(GiteaThreadViewModel(cs, data, thread)) }
             inlay.vm.update(thread)
-            inlay.lineState.value = m?.docLine(thread)
+            inlay.lineState.value = m?.docLine(thread)?.let(lines::toEditor)
         }
 
         val filePending = snapshot.pending.filter {
@@ -241,11 +247,11 @@ class GiteaReviewEditorModel(
                 GiteaEditorInlay.Pending(comment, data.currentUser) { data.pendingStore.removeComment(comment) }
             }
             val refLine = ((if (side == ReviewSide.NEW) comment.newPosition else comment.oldPosition) - 1).toInt()
-            inlay.lineState.value = m?.let { LineMapping.transfer(it.refToDoc, refLine) }
+            inlay.lineState.value = m?.let { LineMapping.transfer(it.refToDoc, refLine) }?.let(lines::toEditor)
         }
 
         for (inlay in snapshot.newComments.values) {
-            inlay.lineState.value = m?.let { LineMapping.transfer(it.refToDoc, inlay.vm.line) }
+            inlay.lineState.value = m?.let { LineMapping.transfer(it.refToDoc, inlay.vm.line) }?.let(lines::toEditor)
         }
 
         (threadVms.values + pendingInlays.values + snapshot.newComments.values).forEach {
@@ -260,6 +266,7 @@ class GiteaReviewEditorModel(
                 linesWithComments = (threadVms.values + pendingInlays.values).mapNotNullTo(HashSet()) { inlay -> inlay.lineState.value },
                 linesWithNewComments = snapshot.newComments.values.mapNotNullTo(HashSet()) { inlay -> inlay.lineState.value },
                 docToRef = it.docToRef,
+                lines = lines,
             )
         }
     }
@@ -268,15 +275,19 @@ class GiteaReviewEditorModel(
         override val linesWithComments: Set<Int>,
         override val linesWithNewComments: Set<Int>,
         private val docToRef: List<ChangedBlock>,
+        private val lines: EditorLineTransfer,
     ) : CodeReviewEditorGutterControlsModel.ControlsState {
         /** Lines the user edited locally have no counterpart in the PR, so
-         * a comment there can't be anchored. */
-        override fun isLineCommentable(lineIdx: Int): Boolean = LineMapping.transfer(docToRef, lineIdx) != null
+         * a comment there can't be anchored; neither can a unified diff
+         * line of the other side. */
+        override fun isLineCommentable(lineIdx: Int): Boolean =
+            lines.fromEditor(lineIdx)?.let { LineMapping.transfer(docToRef, it) } != null
     }
 
     override fun requestNewComment(lineIdx: Int) {
         val m = mappings.value ?: return
-        val refLine = LineMapping.transfer(m.docToRef, lineIdx) ?: return
+        val docLine = editorLines.value.fromEditor(lineIdx) ?: return
+        val refLine = LineMapping.transfer(m.docToRef, docLine) ?: return
         val current = newComments.value
         current[refLine]?.let {
             it.vm.requestFocus()
@@ -289,7 +300,8 @@ class GiteaReviewEditorModel(
 
     override fun cancelNewComment(lineIdx: Int) {
         val m = mappings.value ?: return
-        LineMapping.transfer(m.docToRef, lineIdx)?.let(::removeNewComment)
+        val docLine = editorLines.value.fromEditor(lineIdx) ?: return
+        LineMapping.transfer(m.docToRef, docLine)?.let(::removeNewComment)
     }
 
     private fun removeNewComment(refLine: Int) {
