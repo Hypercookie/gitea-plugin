@@ -1,5 +1,7 @@
-# Publishes to JetBrains Marketplace when a release is published. Needs the
-# secrets PUBLISH_TOKEN, CERTIFICATE_CHAIN, PRIVATE_KEY and PRIVATE_KEY_PASSWORD.
+# Attaches the plugin archive to a GitHub release when it is published, then
+# publishes it to JetBrains Marketplace (a version like 0.1.0-beta goes to the
+# beta channel). Marketplace publishing needs the secrets PUBLISH_TOKEN,
+# CERTIFICATE_CHAIN, PRIVATE_KEY and PRIVATE_KEY_PASSWORD.
 
 name: Release
 on:
@@ -51,6 +53,14 @@ jobs:
 
           ./gradlew patchChangelog --release-note-file=$RELEASE_NOTE
 
+      - name: Build Plugin
+        run: ./gradlew buildPlugin
+
+      - name: Upload Release Asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.event.release.tag_name }} ./build/distributions/*
+
       - name: Publish Plugin
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
@@ -58,11 +68,6 @@ jobs:
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
         run: ./gradlew publishPlugin
-
-      - name: Upload Release Asset
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.event.release.tag_name }} ./build/distributions/*
 
       - name: Create Pull Request
         if: ${{ github.event.release.body != '' }}
@@ -75,6 +80,11 @@ jobs:
 
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
+
+          # Nothing to do when the release commit already patched CHANGELOG.md.
+          if git diff --quiet; then
+            exit 0
+          fi
 
           git checkout -b $BRANCH
           git commit -am "Changelog update - $VERSION"
