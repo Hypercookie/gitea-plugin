@@ -9,6 +9,8 @@ import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchPrResolverServi
 import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchSync
 import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStoreService
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
+import com.github.hypercookie.giteaplugin.settings.GiteaSettingsListener
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -80,8 +82,16 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
         com.intellij.openapi.application.ApplicationManager.getApplication().messageBus.connect(cs).subscribe(
             com.intellij.openapi.application.ApplicationActivationListener.TOPIC,
             object : com.intellij.openapi.application.ApplicationActivationListener {
-                override fun applicationActivated(ideFrame: com.intellij.openapi.wm.IdeFrame) = refreshAllData()
+                override fun applicationActivated(ideFrame: com.intellij.openapi.wm.IdeFrame) {
+                    if (GiteaSettings.getInstance().refreshOnFrameActivation) refreshAllData()
+                }
             },
+        )
+        // Turning review in the editor off drops the session (and with it the
+        // inlays); turning it on looks the pull request up again.
+        com.intellij.openapi.application.ApplicationManager.getApplication().messageBus.connect(cs).subscribe(
+            GiteaSettingsListener.TOPIC,
+            GiteaSettingsListener { before, after -> if (before.reviewInEditor != after.reviewInEditor) requestRefresh() },
         )
         project.messageBus.connect(cs).subscribe(
             GitRepository.GIT_REPO_CHANGE,
@@ -130,11 +140,21 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
         requestRefresh()
     }
 
+    /** Re-fetches [data]'s pull request in every live holder of it. Views
+     * usually share one holder, but a pull request tab opened before its
+     * branch was checked out keeps its own next to the current-branch
+     * session, and a diff viewer that outlives its tab loads its own. */
+    fun refreshPullRequest(data: GiteaPullRequestReviewData) {
+        liveData.filter { it === data || (it.repo == data.repo && it.number == data.number) }.forEach { it.reload() }
+    }
+
     fun requestRefresh() {
         refreshRequests.tryEmit(Unit)
     }
 
     private suspend fun refresh() {
+        // Turned off in the settings: no lookups, and no review in editors.
+        if (!GiteaSettings.getInstance().reviewInEditor) return clear()
         val repoContext = GiteaRepoLinkService.getInstance(project).resolveDefault() ?: return clear()
         val resolver = GiteaBranchPrResolverService.getInstance(project)
         val repository = resolver.repositoryFor(repoContext) ?: return clear()

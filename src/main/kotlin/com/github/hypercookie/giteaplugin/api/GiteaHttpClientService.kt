@@ -3,6 +3,10 @@ package com.github.hypercookie.giteaplugin.api
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.net.http.HttpClient
 import java.time.Duration
 
@@ -19,6 +23,9 @@ import java.time.Duration
  * root that keeps its client, and through it the plugin class loader,
  * reachable. [dispose] (on plugin unload or IDE shutdown) stops the client,
  * and dropping the service instance drops the last reference to it.
+ *
+ * It also counts the API requests sent since the IDE started (or since the
+ * plugin was loaded), for the debug status bar widget.
  */
 @Service(Service.Level.APP)
 class GiteaHttpClientService : Disposable {
@@ -26,6 +33,15 @@ class GiteaHttpClientService : Disposable {
     val client: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .build()
+
+    private val _requestCount = MutableStateFlow(0L)
+
+    /** Gitea API requests sent so far, whatever their outcome. */
+    val requestCount: StateFlow<Long> = _requestCount.asStateFlow()
+
+    fun countRequest() {
+        _requestCount.update { it + 1 }
+    }
 
     override fun dispose() {
         client.shutdownNow()

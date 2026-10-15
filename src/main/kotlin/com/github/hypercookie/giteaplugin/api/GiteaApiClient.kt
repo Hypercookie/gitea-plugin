@@ -28,7 +28,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.net.URI
 import java.net.URLEncoder
-import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
@@ -88,7 +87,7 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
 
     // Looked up per request, not held: see GiteaHttpClientService for why
     // the client is shared and why it must not live in a static field.
-    private val httpClient: HttpClient get() = GiteaHttpClientService.getInstance().client
+    private val httpService: GiteaHttpClientService get() = GiteaHttpClientService.getInstance()
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -302,10 +301,15 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     private suspend inline fun <reified T> get(path: String): T = decode(send(path))
 
     private suspend fun send(path: String): HttpResponse<String> = withContext(Dispatchers.IO) {
-        httpClient.send(
-            requestBuilder(path).GET().build(),
-            HttpResponse.BodyHandlers.ofString(),
-        )
+        execute(requestBuilder(path).GET().build())
+    }
+
+    /** Every request of this client goes through here, so the debug request
+     * counter sees all of them. Blocking; call on the IO dispatcher. */
+    private fun execute(request: HttpRequest): HttpResponse<String> {
+        val service = httpService
+        service.countRequest()
+        return service.client.send(request, HttpResponse.BodyHandlers.ofString())
     }
 
     /**
@@ -334,35 +338,32 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
     }
 
     private suspend inline fun <reified B, reified T> post(path: String, body: B): T = withContext(Dispatchers.IO) {
-        val response = httpClient.send(
+        val response = execute(
             requestBuilder(path)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json.encodeToString<B>(body)))
                 .build(),
-            HttpResponse.BodyHandlers.ofString(),
         )
         decode(response)
     }
 
     /** For endpoints with no request or response body (resolve/unresolve). */
     private suspend fun postNoBody(path: String): Unit = withContext(Dispatchers.IO) {
-        val response = httpClient.send(
+        val response = execute(
             requestBuilder(path)
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build(),
-            HttpResponse.BodyHandlers.ofString(),
         )
         checkStatus(response)
     }
 
     /** DELETE with a JSON body and no response body (removing a reaction). */
     private suspend inline fun <reified B> deleteWithBody(path: String, body: B): Unit = withContext(Dispatchers.IO) {
-        val response = httpClient.send(
+        val response = execute(
             requestBuilder(path)
                 .header("Content-Type", "application/json")
                 .method("DELETE", HttpRequest.BodyPublishers.ofString(json.encodeToString<B>(body)))
                 .build(),
-            HttpResponse.BodyHandlers.ofString(),
         )
         checkStatus(response)
     }

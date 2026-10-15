@@ -7,10 +7,11 @@ import com.github.hypercookie.giteaplugin.api.dto.TimelineEvent
 import com.github.hypercookie.giteaplugin.pullrequest.details.toDate
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactable
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsComponentFactory
-import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsViewModelImpl
+import com.github.hypercookie.giteaplugin.pullrequest.reactions.giteaReactionsViewModelOrNull
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
 import com.github.hypercookie.giteaplugin.util.giteaAction
@@ -34,11 +35,8 @@ import com.intellij.util.text.DateFormatUtil
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.awt.BorderLayout
 import javax.swing.JComponent
@@ -64,49 +62,31 @@ object GiteaTimelineComponent {
     private val SECONDARY = CodeReviewChatItemUIUtil.ComponentType.FULL_SECONDARY
     private val json = Json { ignoreUnknownKeys = true }
 
-    private sealed interface Loaded {
-        data class Items(val events: List<TimelineEvent>, val commits: List<GitCommit>) : Loaded
-        data class Error(val error: Throwable) : Loaded
-        data object Loading : Loaded
-    }
-
     fun create(cs: CoroutineScope, data: GiteaPullRequestReviewData): JComponent {
         val project = data.project
         val avatars = GiteaAvatarIcons.getInstance(project)
-        val state = MutableStateFlow<Loaded>(Loaded.Loading)
-
-        fun reload() {
-            data.reactions.refresh()
-            cs.launch {
-                state.value = runCatching {
-                    coroutineScope {
-                        val events = async { data.client.getTimeline(data.owner, data.repoName, data.number) }
-                        val commits = async { data.client.getPullRequestCommits(data.owner, data.repoName, data.number) }
-                        Loaded.Items(events.await(), commits.await())
-                    }
-                }.getOrElse { Loaded.Error(it) }
-            }
-        }
+        val loader = GiteaTimelineLoader(cs, data)
+        if (GiteaSettings.getInstance().showReactions) data.reactions.refresh()
 
         val itemsPanel = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply { isOpaque = false }
         // Items are rebuilt on every change; their bindings (reaction pills)
         // live in a scope that is replaced with them.
         var itemsCs: CoroutineScope? = null
-        cs.bindOnEdt(kotlinx.coroutines.flow.combine(state, data.comments) { loaded, _ -> loaded }) { loaded ->
+        cs.bindOnEdt(kotlinx.coroutines.flow.combine(loader.state, data.comments, data.pullRequest) { loaded, _, _ -> loaded }) { loaded ->
             itemsCs?.cancel()
             val ics = cs.giteaChildScope("Gitea timeline items").also { itemsCs = it }
             itemsPanel.removeAll()
             itemsPanel.add(description(ics, avatars, data))
             when (loaded) {
-                Loaded.Loading -> itemsPanel.add(JBLabel("Loading…").apply { border = JBUI.Borders.empty(8) })
-                is Loaded.Error -> itemsPanel.add(
+                GiteaTimelineLoader.State.Loading -> itemsPanel.add(JBLabel("Loading…").apply { border = JBUI.Borders.empty(8) })
+                is GiteaTimelineLoader.State.Error -> itemsPanel.add(
                     JPanel(ListLayout.horizontal(8)).apply {
                         isOpaque = false
                         add(JBLabel("Can't load timeline items", AllIcons.General.Error, JBLabel.LEFT))
-                        add(ActionLink("Retry") { reload() })
+                        add(ActionLink("Retry") { loader.reload() })
                     },
                 )
-                is Loaded.Items -> {
+                is GiteaTimelineLoader.State.Items -> {
                     val commitsBySha = loaded.commits.associateBy { it.sha }
                     val commentsByReview = data.comments.value.groupBy { it.reviewId }
                     loaded.events.mapNotNull { item(ics, avatars, it, commitsBySha, commentsByReview, data) }.forEach(itemsPanel::add)
@@ -115,9 +95,7 @@ object GiteaTimelineComponent {
             itemsPanel.revalidate()
             itemsPanel.repaint()
         }
-        reload()
-
-        val newComment = newCommentField(cs, data, avatars) { reload() }
+        val newComment = newCommentField(cs, data, avatars) { loader.reload() }
         val content = JPanel(ListLayout.vertical(0)).apply {
             isOpaque = false
             border = JBUI.Borders.empty(CodeReviewTimelineUIUtil.VERT_PADDING, 0)
@@ -151,15 +129,15 @@ object GiteaTimelineComponent {
         content: JComponent,
         title: JComponent,
     ): JComponent {
-        val reactionsVm = GiteaReactionsViewModelImpl(cs, reactable, data.currentUser, data.reactions)
+        val reactionsVm = giteaReactionsViewModelOrNull(cs, reactable, data.currentUser) { data.reactions }
         val mainPanel = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply {
             isOpaque = false
             add(content)
-            add(GiteaReactionsComponentFactory.create(cs, reactionsVm))
+            reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
         val actionsPanel = JPanel(ListLayout.horizontal(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP)).apply {
             isOpaque = false
-            add(GiteaReactionsComponentFactory.createAddReactionButton(cs, reactionsVm))
+            reactionsVm?.let { add(GiteaReactionsComponentFactory.createAddReactionButton(cs, it)) }
         }
         return CodeReviewChatItemUIUtil.build(FULL, { size -> avatars.getIcon(user, size) }, mainPanel) {
             iconTooltip = user?.displayName()
@@ -223,7 +201,7 @@ object GiteaTimelineComponent {
     /** One inline review comment under its review: location, OUTDATED tag
      * when it was made on an older commit, and the body. */
     private fun inlineComment(cs: CoroutineScope, comment: com.github.hypercookie.giteaplugin.api.dto.PullReviewComment, data: GiteaPullRequestReviewData): JComponent {
-        val reactionsVm = GiteaReactionsViewModelImpl(cs, GiteaReactable.Comment(comment.id), data.currentUser, data.reactions)
+        val reactionsVm = giteaReactionsViewModelOrNull(cs, GiteaReactable.Comment(comment.id), data.currentUser) { data.reactions }
         val line = comment.position?.takeIf { it > 0 } ?: comment.originalPosition
         val header = JPanel(ListLayout.horizontal(com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP)).apply {
             isOpaque = false
@@ -234,14 +212,14 @@ object GiteaTimelineComponent {
             if (comment.resolver != null) {
                 add(com.intellij.collaboration.ui.CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.resolved.tag")))
             }
-            add(GiteaReactionsComponentFactory.createAddReactionButton(cs, reactionsVm))
+            reactionsVm?.let { add(GiteaReactionsComponentFactory.createAddReactionButton(cs, it)) }
         }
         return JPanel(ListLayout.vertical(2)).apply {
             isOpaque = false
             border = JBUI.Borders.emptyLeft(8)
             add(header)
             add(GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body)))
-            add(GiteaReactionsComponentFactory.create(cs, reactionsVm))
+            reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
     }
 

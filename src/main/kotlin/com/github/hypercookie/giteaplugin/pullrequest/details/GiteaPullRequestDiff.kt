@@ -101,7 +101,7 @@ object GiteaPullRequestDiff {
         return SimpleDiffRequest("#${pr.number}: $name", before, after, change.revisionNumberBefore.toShortString(), afterTitle).apply {
             putUserData(
                 GITEA_DIFF_COMMENT_CONTEXT_KEY,
-                GiteaDiffCommentContext(data.repo, data.client, pr, afterPath ?: name, beforePath ?: name, data.pendingStore),
+                GiteaDiffCommentContext(data.repo, data.client, pr, afterPath ?: name, beforePath ?: name, data.pendingStore, data),
             )
         }
     }
