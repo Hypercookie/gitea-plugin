@@ -13,7 +13,7 @@ import javax.swing.JComponent
  * Flow-to-Swing bindings and an Action factory. The collaboration tools
  * module has equivalents (`bindVisibilityIn`, `bindTextIn`, `swingAction`
  * in `com.intellij.collaboration.ui.util`), but their files are marked
- * `@ApiStatus.Internal` (migration ledger I12), so this plugin keeps its own.
+ * `@ApiStatus.Internal`, so this plugin keeps its own.
  */
 
 /** Runs [apply] on the EDT for every value of [flow] while [cs] is alive. */

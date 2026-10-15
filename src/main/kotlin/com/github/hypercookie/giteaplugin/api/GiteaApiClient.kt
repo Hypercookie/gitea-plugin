@@ -11,6 +11,7 @@ import com.github.hypercookie.giteaplugin.api.dto.GitCommitWithFiles
 import com.github.hypercookie.giteaplugin.api.dto.GiteaIssue
 import com.github.hypercookie.giteaplugin.api.dto.GiteaLabel
 import com.github.hypercookie.giteaplugin.api.dto.GiteaReaction
+import com.github.hypercookie.giteaplugin.api.dto.GiteaRepository
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUISettings
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.IssueComment
@@ -78,9 +79,8 @@ internal fun giteaErrorMessage(statusCode: Int, body: String?): String {
 }
 
 /**
- * Gitea REST API client (`/api/v1`). Endpoint shapes confirmed against a live
- * Gitea 1.27.3 instance's `/swagger.v1.json` — see
- * docs/plan/pr-review-feature-plan.md Phase 2 for the spike notes.
+ * Gitea REST API client (`/api/v1`). Endpoint shapes checked against a
+ * Gitea 1.27.3 instance's `/swagger.v1.json`.
  */
 class GiteaApiClient(serverUrl: String, private val token: String) {
 
@@ -96,10 +96,14 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
 
     suspend fun getCurrentUser(): GiteaUser = get("/api/v1/user")
 
+    // --- Repositories -----------------------------------------------------
+
+    suspend fun getRepository(owner: String, repo: String): GiteaRepository =
+        get("/api/v1/repos/${enc(owner)}/${enc(repo)}")
+
     // --- Pull requests ----------------------------------------------------
 
-    /** `sort`/`poster` map directly to Gitea's `/pulls` query params (confirmed
-     * against `/swagger.v1.json` for Phase 26 — `sort` enum: oldest,
+    /** `sort`/`poster` map directly to Gitea's `/pulls` query params (`sort` enum: oldest,
      * recentupdate, recentclose, leastupdate, mostcomment, leastcomment,
      * priority; `poster` filters by PR author login). Both optional/null to
      * keep existing callers unchanged. */
@@ -192,8 +196,7 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
         getAllPages("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/commits")
 
     /** PRs are issues in Gitea's model, so the timeline lives under
-     * `/issues/{index}/timeline` — confirmed against a live instance for
-     * Phase 27 (see `TimelineEvent` doc comment). */
+     * `/issues/{index}/timeline`. */
     suspend fun getTimeline(owner: String, repo: String, index: Long): List<TimelineEvent> =
         getAllPages("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/$index/timeline", TIMELINE_EMPTY_PAGES_TO_END)
 

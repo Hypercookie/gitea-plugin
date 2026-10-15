@@ -1,4 +1,3 @@
-<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.hypercookie.giteaplugin</id>
     <name>Gitea</name>
@@ -11,6 +10,7 @@
           <li>Review in the editor: see review threads next to the code of the checked-out pull request branch, reply to and resolve them, and add new comments from the gutter.</li>
           <li>Collect comments in a pending review and submit it as approval, comment or change request.</li>
           <li>Check out a pull request branch from the list.</li>
+          <li>After pushing a branch without an open pull request, get a notification that opens Gitea's page to create one.</li>
           <li>See the status checks of each commit in a column of the Git log.</li>
         </ul>
         <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Tested with Gitea 1.27.</p>
@@ -39,6 +39,8 @@
         <editorNotificationProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider"/>
         <vcsLogCommitStatusProvider implementation="com.github.hypercookie.giteaplugin.log.GiteaCommitStatusProvider"/>
         <notificationGroup id="Gitea" displayType="BALLOON" icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
+        <notificationGroup id="Gitea Pull Request Suggestions" displayType="BALLOON"
+                           icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <projectConfigurable
                 parentId="vcs"
                 instance="com.github.hypercookie.giteaplugin.settings.GiteaConfigurable"
@@ -56,6 +58,11 @@
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
         </action>
     </actions>
+
+    <projectListeners>
+        <listener class="com.github.hypercookie.giteaplugin.pullrequest.create.GiteaPushPrNotifier"
+                  topic="git4idea.push.GitPushListener"/>
+    </projectListeners>
 
     <applicationListeners>
         <listener class="com.github.hypercookie.giteaplugin.GiteaPluginUnloadListener"

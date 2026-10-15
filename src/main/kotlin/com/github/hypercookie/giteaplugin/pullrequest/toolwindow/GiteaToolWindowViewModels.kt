@@ -88,9 +88,6 @@ class GiteaToolWindowViewModel(private val cs: CoroutineScope, val project: Proj
 
     private var projectScope: CoroutineScope? = null
 
-    private val _connecting = MutableStateFlow(false)
-    val connecting: StateFlow<Boolean> = _connecting.asStateFlow()
-
     init {
         connect()
     }
@@ -98,23 +95,18 @@ class GiteaToolWindowViewModel(private val cs: CoroutineScope, val project: Proj
     /** Re-resolves the repository and account, e.g. after settings change. */
     fun connect() {
         cs.launch(Dispatchers.IO) {
-            _connecting.value = true
-            try {
-                val repo = GiteaRepoLinkService.getInstance(project).resolveDefault()
-                val token = repo?.let { GiteaAccountManager.getInstance().getToken(it.account) }
-                val current = _projectVm.value
-                if (repo == null || token.isNullOrBlank()) {
-                    replace(null)
-                    return@launch
-                }
-                if (current != null && current.repo == repo) return@launch
-                val client = GiteaApiClient(repo.account.serverUrl, token)
-                val user = runCatching { client.getCurrentUser() }.getOrNull()
-                val scope = cs.giteaChildScope("Gitea project ${repo.owner}/${repo.repo}")
-                replace(GiteaProjectViewModel(scope, project, repo, client, user), scope)
-            } finally {
-                _connecting.value = false
+            val repo = GiteaRepoLinkService.getInstance(project).resolveDefault()
+            val token = repo?.let { GiteaAccountManager.getInstance().getToken(it.account) }
+            val current = _projectVm.value
+            if (repo == null || token.isNullOrBlank()) {
+                replace(null)
+                return@launch
             }
+            if (current != null && current.repo == repo) return@launch
+            val client = GiteaApiClient(repo.account.serverUrl, token)
+            val user = runCatching { client.getCurrentUser() }.getOrNull()
+            val scope = cs.giteaChildScope("Gitea project ${repo.owner}/${repo.repo}")
+            replace(GiteaProjectViewModel(scope, project, repo, client, user), scope)
         }
     }
 

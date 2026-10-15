@@ -131,7 +131,7 @@ class GiteaSubmitReviewViewModel(
 
 /**
  * The "Submit Review" popup. Mirrors the platform's
- * `CodeReviewSubmitPopupHandler` (internal, migration ledger I10) and the
+ * `CodeReviewSubmitPopupHandler` (internal) and the
  * GitHub plugin's `GHPRSubmitReviewPopup`: title with pending count,
  * discard and close buttons, a review body editor, an error line, and
  * Approve / Request Changes / Comment.
@@ -225,7 +225,7 @@ object GiteaSubmitReviewPopup {
         // HTTP 422 on submit.
         val buttons = buildList<JComponent> {
             // GitHub draws Approve with the green `InstallButton`, which is
-            // `@ApiStatus.Internal` (migration ledger I20); the platform's
+            // `@ApiStatus.Internal`; the platform's
             // default-button style marks it as the primary action instead.
             add(
                 primaryButton("Approve").apply {

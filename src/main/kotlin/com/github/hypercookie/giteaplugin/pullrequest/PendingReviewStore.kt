@@ -7,10 +7,9 @@ import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
 
 /**
  * Comments the user has queued for this PR's review but not yet submitted —
- * one instance per opened PR detail tab, shared across every diff viewer
- * opened for that PR (so pending comments persist if a file's diff is closed
- * and reopened, and Phase 9's submit action can see comments added from any
- * file). Purely in-memory; nothing here touches the network until submit.
+ * one instance per PR (see [PendingReviewStoreService]), shared by the
+ * editor, the diff viewers and the submit popup, so pending comments
+ * persist when a file is closed and reopened. Purely in-memory; nothing here touches the network until submit.
  */
 class PendingReviewStore {
 

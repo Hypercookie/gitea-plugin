@@ -135,8 +135,8 @@ class GiteaPullRequestChangesViewModel(
 
 /**
  * Changes tree model. Own implementation of the platform's internal
- * `CodeReviewChangeListViewModelBase` (migration ledger I5). Files are
- * never "viewed" (Gitea has no API for it, G4); the discussion count is
+ * `CodeReviewChangeListViewModelBase`. Files are
+ * never "viewed" (Gitea has no API for it); the discussion count is
  * the number of unresolved threads on the file.
  */
 class GiteaChangeListViewModel(
@@ -223,7 +223,7 @@ class GiteaPullRequestBranchesViewModel(
 
 /**
  * Status rows: conflicts and CI. Gitea reports commit statuses, not check
- * runs; each status becomes one CI job (migration ledger G11). Gitea
+ * runs; each status becomes one CI job. Gitea
  * statuses carry no "required" flag, so all are treated as required.
  */
 class GiteaPullRequestStatusViewModel(

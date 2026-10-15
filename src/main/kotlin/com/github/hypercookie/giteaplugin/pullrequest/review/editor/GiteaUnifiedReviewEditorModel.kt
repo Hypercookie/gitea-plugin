@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.stateIn
  * A new comment goes to the new side wherever the new version has the line
  * (added and unchanged lines), and to the old side only on deleted lines,
  * like Gitea's web diff. Takes the place of the GitLab plugin's
- * `UnifiedCodeReviewItemPosition` handling (migration ledger I16).
+ * `UnifiedCodeReviewItemPosition` handling.
  *
  * Either model is null when that side of the diff is empty (an added or
  * deleted file).

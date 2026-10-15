@@ -14,8 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Resolves "the open PR for whatever branch is currently checked out," so
  * comments can show up in a regular editor no matter how the user got onto
- * that branch (checked it out from our PR list, or via plain git) — see
- * docs/plan/pr-review-feature-plan.md, "Architecture pivot."
+ * that branch (checked it out from our PR list, or via plain git).
  *
  * Works on the git repository the [GiteaRepoContext] came from, not the
  * project's first one, and matches through the branch's upstream (see
@@ -46,6 +45,14 @@ class GiteaBranchPrResolverService(private val project: Project) {
             GiteaTrackedBranch(info.remoteBranch.nameForRemoteOperations, isRemoteOf(info.remote, context))
         }
         return GiteaBranchKey(repository.root.path, context.owner, context.repo, branch, tracked)
+    }
+
+    /** Whether [pr]'s branch is checked out in [context]'s repository,
+     * matched like the current-branch session ([GiteaBranchPrMatcher]).
+     * No network or credential access. */
+    fun isCheckedOut(context: GiteaRepoContext, pr: PullRequest): Boolean {
+        val key = currentBranchKey(context) ?: return false
+        return GiteaBranchPrMatcher.match(key.localBranch, key.tracked, listOf(pr)) != null
     }
 
     /** Whether any of [remote]'s URLs points at [context]'s repository. */

@@ -7,7 +7,7 @@ package com.github.hypercookie.giteaplugin.pullrequest.review.editor
  * viewer, whose one editor interleaves the old and new versions.
  *
  * Own replacement for the official plugins' unified-viewer line helpers,
- * which are internal (migration ledger I16).
+ * which are internal.
  */
 interface EditorLineTransfer {
 

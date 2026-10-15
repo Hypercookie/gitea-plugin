@@ -53,9 +53,9 @@ import javax.swing.ScrollPaneConstants
  *
  * Each review lists its inline comments (file, line, body; OUTDATED when
  * written on an older commit than the PR head, since Gitea has no outdated
- * flag, ledger G10; the editor instead checks whether the line itself
+ * flag; the editor instead checks whether the line itself
  * changed). GitHub additionally renders the diff hunk
- * with the internal `TimelineDiffComponentFactory` (migration ledger I11);
+ * with the internal `TimelineDiffComponentFactory`;
  * here the hunk is not shown.
  */
 object GiteaTimelineComponent {
