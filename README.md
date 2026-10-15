@@ -40,7 +40,12 @@ like them.
 - Each pull request opens in its own tab with its commits, source branch,
   changed files, commit status checks, merge conflicts and pending reviewers.
 - Open the diff of the whole pull request or of a single commit in the IDE's
-  diff viewer.
+  diff viewer, or use **Jump to Source** (<kbd>F4</kbd>) in the changed files
+  to open the local file.
+- **Previous Comment** and **Next Comment** in the diff toolbar step through
+  the review threads of the pull request, across files. Resolved threads are
+  skipped unless **Include Resolved Comments in Navigation** is turned on in
+  the diff's context menu.
 - The timeline opens in an editor tab with the description, comments, reviews,
   pushed commits and other events, and a field for new comments.
 
@@ -57,8 +62,10 @@ like them.
 - The same comments appear in the side-by-side, unified and one-sided diff
   viewers.
 - Typing `@` in a comment suggests users to mention.
-- A banner above the editor shows when a review is pending and when the local
-  branch is out of sync with the pull request.
+- A banner above the editor shows when a review is pending, and when the
+  local branch is ahead of, behind or diverged from the pull request.
+- The pull request is found through the branch's upstream, so local branches
+  with a different name work, and multi-root projects are supported.
 
 ### Submitting reviews
 
