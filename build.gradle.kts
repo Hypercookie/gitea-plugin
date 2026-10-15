@@ -15,6 +15,13 @@ version = providers.gradleProperty("version").get()
 kotlin {
     jvmToolchain(21)
     compilerOptions {
+        // Plugins run on the IDE's bundled Kotlin stdlib (2.2 in 2025.2, the
+        // sinceBuild line), not the compiler's. Newer API levels emit
+        // bytecode that stdlib can't read: Kotlin 2.4 writes coroutine
+        // debug metadata v2, which 2.2's DebugProbes reject, so every
+        // resumed coroutine dies and its caller waits forever.
+        apiVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2
+        languageVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2
         // Kotlin 2.2+ defaults to ENABLE, which emits compatibility bridges in
         // classes for inherited interface defaults. On platform interfaces
         // like ToolWindowFactory those bridges count as overrides of
