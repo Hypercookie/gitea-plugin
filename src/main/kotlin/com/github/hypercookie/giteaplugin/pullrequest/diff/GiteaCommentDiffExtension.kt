@@ -4,6 +4,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestRev
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.pullrequest.review.editor.EditorLineTransfer
+import com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaEditorInlay
 import com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewEditorModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewInEditorController
 import com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaUnifiedReviewEditorModel
@@ -26,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -37,7 +39,7 @@ import kotlinx.coroutines.launch
  * - one-sided ([SimpleOnesideDiffViewer], which the platform picks for an
  *   added or deleted file): the side that exists;
  * - unified ([UnifiedDiffViewer]): both sides in its one editor, see
- *   [GiteaUnifiedReviewEditorModel] (migration ledger I16).
+ *   [GiteaUnifiedReviewEditorModel].
  *
  * Switching the viewer in the diff toolbar creates a new viewer, and the
  * platform calls [onViewerCreated] again for it.
@@ -58,22 +60,48 @@ class GiteaCommentDiffExtension : DiffExtension() {
         val data = session?.takeIf { it.repo == ctx.repo && it.number == ctx.pullRequest.number }
             ?: GiteaPullRequestReviewData(project, cs, ctx.repo, ctx.client, ctx.pullRequest, ctx.pendingStore)
 
-        when (viewer) {
-            is SimpleDiffViewer -> {
-                showSide(cs, data, ctx, viewer.getEditor2() as? EditorEx, ReviewSide.NEW)
-                showSide(cs, data, ctx, viewer.getEditor1() as? EditorEx, ReviewSide.OLD)
+        val editors = when (viewer) {
+            is SimpleDiffViewer -> listOfNotNull(
+                showSide(cs, data, ctx, viewer.getEditor2() as? EditorEx, ReviewSide.NEW),
+                showSide(cs, data, ctx, viewer.getEditor1() as? EditorEx, ReviewSide.OLD),
+            )
+            is SimpleOnesideDiffViewer -> listOfNotNull(showSide(cs, data, ctx, viewer.editor, viewer.side.reviewSide))
+            is UnifiedDiffViewer -> listOf(showUnified(cs, data, ctx, viewer))
+            else -> return
+        }
+        if (GiteaDiffCommentNavigation.of(diffContext) != null) registerNavigation(viewer, request, GiteaDiffCommentViewer(cs, data, editors))
+    }
+
+    /** Makes [commentViewer] the target of comment navigation for [request]
+     * while [viewer] shows it, and reveals the thread a navigation from
+     * another file asked for. */
+    private fun registerNavigation(viewer: FrameDiffTool.DiffViewer, request: DiffRequest, commentViewer: GiteaDiffCommentViewer) {
+        request.putUserData(GiteaDiffCommentNavigation.VIEWER_KEY, commentViewer)
+        Disposer.register(viewer) {
+            if (request.getUserData(GiteaDiffCommentNavigation.VIEWER_KEY) === commentViewer) {
+                request.putUserData(GiteaDiffCommentNavigation.VIEWER_KEY, null)
             }
-            is SimpleOnesideDiffViewer -> showSide(cs, data, ctx, viewer.editor, viewer.side.reviewSide)
-            is UnifiedDiffViewer -> showUnified(cs, data, ctx, viewer)
+        }
+        request.getUserData(GiteaDiffCommentNavigation.PENDING_REVEAL_KEY)?.let {
+            request.putUserData(GiteaDiffCommentNavigation.PENDING_REVEAL_KEY, null)
+            commentViewer.reveal(it)
         }
     }
 
-    private fun showSide(cs: CoroutineScope, data: GiteaPullRequestReviewData, ctx: GiteaDiffCommentContext, editor: EditorEx?, side: ReviewSide) {
-        if (editor == null) return
+    /** Review UI of one side in [editor], like `GiteaReviewInEditorController.showReview`
+     * but without change markers; returns the editor with its inlays for navigation. */
+    private fun showSide(
+        cs: CoroutineScope,
+        data: GiteaPullRequestReviewData,
+        ctx: GiteaDiffCommentContext,
+        editor: EditorEx?,
+        side: ReviewSide,
+    ): Pair<EditorEx, StateFlow<Collection<GiteaEditorInlay>>>? {
+        if (editor == null) return null
         val path = if (side == ReviewSide.NEW) ctx.path else ctx.basePath
-        cs.launch(Dispatchers.Main) {
-            GiteaReviewInEditorController.showReview(this, data, editor, path, ctx.basePath, side, showChanges = false)
-        }
+        val model = GiteaReviewEditorModel(cs, data, path, ctx.basePath, side, editor.document, showChanges = false)
+        GiteaReviewInEditorController.renderReview(cs, data, editor, model)
+        return editor to model.inlays
     }
 
     /**
@@ -84,7 +112,12 @@ class GiteaCommentDiffExtension : DiffExtension() {
      * controls and inlays are rendered again; models, threads and comment
      * drafts stay.
      */
-    private fun showUnified(cs: CoroutineScope, data: GiteaPullRequestReviewData, ctx: GiteaDiffCommentContext, viewer: UnifiedDiffViewer) {
+    private fun showUnified(
+        cs: CoroutineScope,
+        data: GiteaPullRequestReviewData,
+        ctx: GiteaDiffCommentContext,
+        viewer: UnifiedDiffViewer,
+    ): Pair<EditorEx, StateFlow<Collection<GiteaEditorInlay>>> {
         val contents = viewer.request.contents
         val sides = Side.entries.filter { side -> side.select(contents) !is EmptyContent }
         val lines = sides.associateWith { MutableStateFlow<EditorLineTransfer>(EditorLineTransfer.None) }
@@ -99,18 +132,19 @@ class GiteaCommentDiffExtension : DiffExtension() {
             }
         })
 
+        fun model(side: Side): GiteaReviewEditorModel? {
+            val transfer = lines[side] ?: return null
+            val reviewSide = side.reviewSide
+            val path = if (reviewSide == ReviewSide.NEW) ctx.path else ctx.basePath
+            return GiteaReviewEditorModel(cs, data, path, ctx.basePath, reviewSide, viewer.getDocument(side), showChanges = false, transfer)
+        }
+        val model = GiteaUnifiedReviewEditorModel(cs, model(Side.RIGHT), model(Side.LEFT))
         cs.launch(Dispatchers.Main) {
-            fun model(side: Side): GiteaReviewEditorModel? {
-                val transfer = lines[side] ?: return null
-                val reviewSide = side.reviewSide
-                val path = if (reviewSide == ReviewSide.NEW) ctx.path else ctx.basePath
-                return GiteaReviewEditorModel(this, data, path, ctx.basePath, reviewSide, viewer.getDocument(side), showChanges = false, transfer)
-            }
-            val model = GiteaUnifiedReviewEditorModel(this, model(Side.RIGHT), model(Side.LEFT))
             layout.collectLatest {
                 coroutineScope { GiteaReviewInEditorController.renderReview(this, data, viewer.editor, model) }
             }
         }
+        return viewer.editor to model.inlays
     }
 
     /** Diff sides: the request's right content is the PR head (see [GiteaDiffCommentContext]). */

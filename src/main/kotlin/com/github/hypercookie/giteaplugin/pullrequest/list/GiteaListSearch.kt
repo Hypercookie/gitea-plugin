@@ -14,7 +14,7 @@ import kotlinx.coroutines.CoroutineScope
  * Pull request list filter, the Gitea counterpart of the GitHub plugin's
  * `GHPRListSearchValue`. GitHub's review-state filters (approved, changes
  * requested, reviewed by me...) are left out: Gitea's list endpoints can't
- * filter on review state (migration ledger G6). "Review requests" is kept
+ * filter on review state. "Review requests" is kept
  * as [reviewRequested], served by `/repos/issues/search`.
  */
 data class GiteaListSearchValue(

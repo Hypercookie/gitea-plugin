@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /** One entry from `GET .../pulls/{index}/commits`. Only the fields
- * `TimelinePanel` (Phase 27) actually renders are decoded. */
+ * the plugin uses are decoded. */
 @Serializable
 data class GitCommit(
     val sha: String,

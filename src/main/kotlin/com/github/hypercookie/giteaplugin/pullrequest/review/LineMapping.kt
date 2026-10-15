@@ -10,7 +10,7 @@ import com.intellij.openapi.progress.DumbProgressIndicator
  * `start2 == end2`. Blocks in a list are sorted and don't overlap.
  *
  * Own replacement for the official plugins' `ReviewInEditorUtil` line
- * transfer helpers, which are `@ApiStatus.Internal` (migration ledger I6).
+ * transfer helpers, which are `@ApiStatus.Internal`.
  */
 data class ChangedBlock(val start1: Int, val end1: Int, val start2: Int, val end2: Int) {
     fun swapped() = ChangedBlock(start2, end2, start1, end1)
@@ -59,7 +59,7 @@ object LineMapping {
      * is [lastLine]. A line with an unchanged counterpart goes there; a
      * changed or deleted one is outdated and stays at the start of the
      * block that replaced it, like GitHub's web UI. Gitea has no outdated
-     * flag of its own (migration ledger G10).
+     * flag of its own.
      */
     fun placeComment(blocks: List<ChangedBlock>, line: Int, lastLine: Int): CommentPlacement {
         transfer(blocks, line)?.let { return CommentPlacement(it, isOutdated = false) }

@@ -26,8 +26,7 @@ import javax.swing.JComponent
  * Pull request timeline as an editor tab, like the GitHub plugin's
  * "Pull Request Timeline" editor. GitHub backs it with its own virtual file
  * system (`ghpr://`) so tabs survive an IDE restart; this uses a
- * [LightVirtualFile], so timeline tabs are not restored after a restart
- * (migration ledger I15).
+ * [LightVirtualFile], so timeline tabs are not restored after a restart.
  */
 object GiteaTimelineEditor {
 
