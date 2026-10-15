@@ -57,6 +57,12 @@ jobs:
       matrix:
         ide: [ "252", "253", "261", "262", "latest" ]
     steps:
+      # The restored Gradle cache plus one IDE need more than a runner's
+      # default free space. Removing preinstalled SDKs is quicker than the
+      # full free-disk-space action.
+      - name: Free Disk Space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/lib/android
+
       - name: Fetch Sources
         uses: actions/checkout@v6
 
