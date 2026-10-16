@@ -40,9 +40,14 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
 import java.awt.BorderLayout
+import java.awt.Dimension
+import java.awt.LayoutManager
+import java.awt.Rectangle
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.ScrollPaneConstants
+import javax.swing.Scrollable
+import javax.swing.SwingConstants
 
 /**
  * Timeline content: description, comments, reviews, pushed commits and
@@ -97,7 +102,7 @@ object GiteaTimelineComponent {
             itemsPanel.repaint()
         }
         val newComment = newCommentField(cs, data, avatars) { loader.reload() }
-        val content = JPanel(ListLayout.vertical(0)).apply {
+        val content = WidthTrackingPanel(ListLayout.vertical(0)).apply {
             isOpaque = false
             border = JBUI.Borders.empty(CodeReviewTimelineUIUtil.VERT_PADDING, 0)
             add(itemsPanel)
@@ -114,8 +119,9 @@ object GiteaTimelineComponent {
      * plugin's `GHPRFileEditorComponentFactory.createDescriptionItem`. */
     private fun description(cs: CoroutineScope, avatars: GiteaAvatarIcons, data: GiteaPullRequestReviewData): JComponent {
         val pr = data.pullRequest.value
-        val body = pr.body?.takeIf { it.isNotBlank() }?.let(GiteaMarkdown::toHtml) ?: "<i>No description provided</i>"
-        return reactableChatItem(cs, avatars, data, GiteaReactable.PullRequest, pr.user, GiteaMarkdown.createPane(body), titlePane(pr.user, null, pr.createdAt))
+        val body = pr.body?.takeIf { it.isNotBlank() }?.let(GiteaMarkdown::createBody)
+            ?: GiteaMarkdown.createPane("<i>No description provided</i>")
+        return reactableChatItem(cs, avatars, data, GiteaReactable.PullRequest, pr.user, body, titlePane(pr.user, null, pr.createdAt))
     }
 
     /** A comment-like item: [content] with its reaction pills below, and the
@@ -157,13 +163,13 @@ object GiteaTimelineComponent {
         when (event.type) {
             "comment" -> reactableChatItem(
                 cs, avatars, data, GiteaReactable.Comment(event.id), event.user,
-                GiteaMarkdown.createPane(GiteaMarkdown.toHtml(event.body.orEmpty())), titlePane(event.user, null, event.createdAt),
+                GiteaMarkdown.createBody(event.body.orEmpty()), titlePane(event.user, null, event.createdAt),
             )
             "review" -> {
                 val verb = "reviewed the changes"
                 val inline = commentsByReview[event.reviewId].orEmpty()
                 val content = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply { isOpaque = false }
-                event.body?.takeIf { it.isNotBlank() }?.let { content.add(GiteaMarkdown.createPane(GiteaMarkdown.toHtml(it))) }
+                event.body?.takeIf { it.isNotBlank() }?.let { content.add(GiteaMarkdown.createBody(it)) }
                 inline.forEach { content.add(inlineComment(cs, it, data)) }
                 if (content.componentCount > 0) {
                     chatItem(avatars, FULL, event.user, content, titlePane(event.user, verb, event.createdAt))
@@ -221,7 +227,7 @@ object GiteaTimelineComponent {
             isOpaque = false
             border = JBUI.Borders.emptyLeft(8)
             add(header)
-            add(GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body)))
+            add(GiteaMarkdown.createBody(comment.body))
             reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
     }
@@ -286,4 +292,19 @@ object GiteaTimelineComponent {
         putClientProperty("html.disable", true)
         this.text = text
     }
+}
+
+/**
+ * Timeline content that is always laid out at the scroll pane's width, so
+ * text wraps and code blocks scroll inside it. As a plain panel it took its
+ * preferred width, and without a horizontal scroll bar anything wider than
+ * the view (a long line, a narrow tool window) was cut off on the right.
+ */
+private class WidthTrackingPanel(layout: LayoutManager) : JPanel(layout), Scrollable {
+    override fun getPreferredScrollableViewportSize(): Dimension = preferredSize
+    override fun getScrollableUnitIncrement(visibleRect: Rectangle, orientation: Int, direction: Int): Int = JBUI.scale(16)
+    override fun getScrollableBlockIncrement(visibleRect: Rectangle, orientation: Int, direction: Int): Int =
+        if (orientation == SwingConstants.VERTICAL) visibleRect.height else visibleRect.width
+    override fun getScrollableTracksViewportWidth(): Boolean = true
+    override fun getScrollableTracksViewportHeight(): Boolean = false
 }
