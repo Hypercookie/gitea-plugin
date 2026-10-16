@@ -2,13 +2,15 @@ package com.github.hypercookie.giteaplugin.pullrequest.toolwindow
 
 import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStoreService
 import com.github.hypercookie.giteaplugin.pullrequest.details.GiteaPullRequestDetailsComponent
+import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestListComponent
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
-import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestListComponent
 import com.github.hypercookie.giteaplugin.settings.GiteaConfigurable
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
+import com.github.hypercookie.giteaplugin.util.bindOnEdt
 import com.github.hypercookie.giteaplugin.util.errorPanel
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
+import com.github.hypercookie.giteaplugin.util.runCatchingCancellable
 import com.intellij.collaboration.ui.toolwindow.ReviewTabsComponentFactory
 import com.intellij.collaboration.ui.toolwindow.manageReviewToolwindowTabs
 import com.intellij.icons.AllIcons
@@ -83,7 +85,7 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
         ): JComponent {
             val wrapper = JBPanelWithEmptyText(BorderLayout()).withEmptyText("Loading pull request…")
             cs.launch {
-                val pr = runCatching {
+                val pr = runCatchingCancellable {
                     projectVm.client.getPullRequest(projectVm.repo.owner, projectVm.repo.repo, tabVm.number)
                 }
                 withContext(Dispatchers.Main) {
@@ -94,7 +96,7 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
                         val data = session?.takeIf { s -> s.repo == projectVm.repo && s.number == it.number }
                             ?: GiteaPullRequestReviewData(
                                 projectVm.project, cs, projectVm.repo, projectVm.client, it,
-                                PendingReviewStoreService.getInstance(projectVm.project).storeFor(projectVm.repo.owner, projectVm.repo.repo, it.number),
+                                PendingReviewStoreService.getInstance(projectVm.project).storeFor(projectVm.repo, it.number),
                             )
                         wrapper.add(GiteaPullRequestDetailsComponent.create(cs, data), BorderLayout.CENTER)
                         wrapper.revalidate()
@@ -114,18 +116,22 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
         }
 
         override fun createEmptyTabContent(cs: CoroutineScope): JComponent =
-            JBPanelWithEmptyText().apply {
-                emptyText.appendLine("No Gitea repository connected")
-                emptyText.appendLine(
-                    "Add a Gitea account for this project's remote",
-                    SimpleTextAttributes.GRAYED_ATTRIBUTES,
-                    null,
-                )
-                emptyText.appendLine("Open Settings", SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
-                    ShowSettingsUtil.getInstance().showSettingsDialog(twVm.project, GiteaConfigurable::class.java)
-                    twVm.connect()
+            JBPanelWithEmptyText().also { panel ->
+                cs.bindOnEdt(twVm.notConnectedReason) { reason ->
+                    val hint = when (reason) {
+                        GiteaNotConnectedReason.NO_MATCH -> "Add a Gitea account for this project's remote"
+                        GiteaNotConnectedReason.AMBIGUOUS -> "Several Gitea accounts match this project; choose a default account in Settings"
+                    }
+                    panel.emptyText.clear()
+                    panel.emptyText.appendLine("No Gitea repository connected")
+                    panel.emptyText.appendLine(hint, SimpleTextAttributes.GRAYED_ATTRIBUTES, null)
+                    panel.emptyText.appendLine("Open Settings", SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                        ShowSettingsUtil.getInstance().showSettingsDialog(twVm.project, GiteaConfigurable::class.java)
+                        twVm.connect()
+                    }
+                    panel.emptyText.appendLine("Retry", SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) { twVm.connect() }
+                    panel.repaint()
                 }
-                emptyText.appendLine("Retry", SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) { twVm.connect() }
             }
     }
 }

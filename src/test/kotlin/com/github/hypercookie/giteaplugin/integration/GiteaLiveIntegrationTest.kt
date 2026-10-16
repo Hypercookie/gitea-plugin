@@ -61,6 +61,12 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
 
     private fun client() = GiteaApiClient(serverUrl, token!!)
 
+    /** Gradle only runs this class with a token; run without one (e.g. from
+     * the IDE), a test fails instead of passing without checking anything. */
+    private fun requireToken() {
+        assertNotNull("GITEA_DEV_TOKEN not set; see docs/local-gitea-dev-instance.md", token)
+    }
+
     private fun repo() = GiteaRepoContext(GiteaAccount(name = "plugindev", serverUrl = serverUrl), OWNER, REPO, "$serverUrl/$OWNER/$REPO.git")
 
     private suspend fun data(number: Long): GiteaPullRequestReviewData {
@@ -69,7 +75,7 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
     }
 
     fun testEditorModelPlacesThreadsAndFollowsLocalEdits() {
-        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        requireToken()
         runBlocking {
             val data = data(1)
             withTimeout(TIMEOUT) { data.threads.first { it.isNotEmpty() } }
@@ -120,7 +126,7 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
     }
 
     fun testListViewModelFiltersAndPages() {
-        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        requireToken()
         runBlocking {
             val user = client().getCurrentUser()
             val searchVm = GiteaSearchPanelViewModel(scope, repo(), client(), GiteaListSearchHistoryModel(), user)
@@ -149,7 +155,7 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
     }
 
     fun testChangesViewModelLoadsAllAndSingleCommit() {
-        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        requireToken()
         runBlocking {
             val data = data(1)
             val changesVm = GiteaPullRequestChangesViewModel(scope, data)
@@ -171,7 +177,7 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
      * validation are sent, so no reviews are created.
      */
     fun testSubmitReviewFollowsGiteaReviewRules() {
-        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        requireToken()
         runBlocking {
             val comment = CreatePullReviewComment(body = "note", path = "README.md", newPosition = 1)
             val others = client().getPullRequest(OWNER, REPO, OTHERS_PR)
@@ -218,7 +224,7 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
     }
 
     fun testMergeabilityFollowsGiteaAfterRecheck() {
-        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        requireToken()
         runBlocking {
             // #1 conflicts with main (README.md); #7 merges cleanly.
             val blocked = com.github.hypercookie.giteaplugin.pullrequest.details.GiteaPullRequestStatusViewModel(scope, data(1))
@@ -232,11 +238,12 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
     }
 
     fun testMentionCandidatesForPullRequest() {
-        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        requireToken()
         runBlocking {
             // PR #7 is authored by alice; the token belongs to plugindev.
             val data = data(7)
             withTimeout(TIMEOUT) { data.currentUser.first { it != null } }
+            data.mentions.awaitRepositoryUsers()
             val candidates = data.mentions.candidates()
             println("mention candidates: ${candidates.map { it.user.login to it.priority }}")
             assertEquals("alice", candidates.first().user.login)
@@ -246,7 +253,7 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
     }
 
     fun testCiStatusPollsUntilChecksFinish() {
-        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        requireToken()
         runBlocking {
             val data = data(7)
             val sha = data.pullRequest.value.head.sha
@@ -271,7 +278,7 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
     }
 
     fun testRefreshDropsCommentsDeletedOnServer() {
-        if (token == null) return println("GITEA_DEV_TOKEN not set, skipping")
+        requireToken()
         runBlocking {
             val data = data(7)
             val sha = data.pullRequest.value.head.sha

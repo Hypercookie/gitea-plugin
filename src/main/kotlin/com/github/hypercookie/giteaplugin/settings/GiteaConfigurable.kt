@@ -4,6 +4,7 @@ import com.github.hypercookie.giteaplugin.accounts.GiteaAccount
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
 import com.github.hypercookie.giteaplugin.accounts.GiteaProjectDefaultAccountHolder
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
+import com.github.hypercookie.giteaplugin.util.GiteaImages
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
 import com.intellij.collaboration.auth.AccountDetails
@@ -26,8 +27,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
 import java.awt.Image
-import java.net.URI
-import javax.imageio.ImageIO
 import javax.swing.JComponent
 
 /**
@@ -125,7 +124,7 @@ class GiteaAccountsDetailsProvider(
     }
 
     override suspend fun loadAvatar(account: GiteaAccount, url: String): Image? =
-        withContext(Dispatchers.IO) { runCatching { ImageIO.read(URI(url).toURL()) }.getOrNull() }
+        GiteaImages.load(url)
 }
 
 class GiteaAccountsPanelActionsController(

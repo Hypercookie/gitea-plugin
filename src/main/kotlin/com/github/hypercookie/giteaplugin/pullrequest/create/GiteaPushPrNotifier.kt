@@ -2,17 +2,17 @@ package com.github.hypercookie.giteaplugin.pullrequest.create
 
 import com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager
 import com.github.hypercookie.giteaplugin.accounts.GiteaProjectDefaultAccountHolder
-import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
+import com.github.hypercookie.giteaplugin.util.GiteaBrowser
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
-import com.intellij.ide.BrowserUtil
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.HtmlChunk
 import git4idea.push.GitPushListener
 import git4idea.push.GitPushRepoResult
 import git4idea.repo.GitRepository
@@ -60,19 +60,21 @@ class GiteaPushPrNotifier(private val project: Project) : GitPushListener {
     }
 
     private suspend fun suggest(context: GiteaRepoContext, pushed: GiteaPushedBranch) {
-        val token = GiteaAccountManager.getInstance().getToken(context.account) ?: return
-        val client = GiteaApiClient(context.account.serverUrl, token)
+        val manager = GiteaAccountManager.getInstance()
+        manager.getToken(context.account) ?: return
+        val client = manager.clientFor(context.account)
         val defaultBranch = client.getRepository(context.owner, context.repo).defaultBranch
         if (!GiteaPushPrSuggestion.shouldSuggest(pushed, defaultBranch, client.listPullRequests(context.owner, context.repo))) return
 
         val url = GiteaPushPrSuggestion.compareUrl(context.account.serverUrl, context.owner, context.repo, defaultBranch!!, pushed.remoteBranch)
         NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
             .createNotification(
-                "Pushed ${pushed.localBranch}",
-                "No pull request is open for ${pushed.remoteBranch} in ${context.owner}/${context.repo}.",
+                // Notification text is HTML; branch names may contain < and >.
+                HtmlChunk.text("Pushed ${pushed.localBranch}").toString(),
+                HtmlChunk.text("No pull request is open for ${pushed.remoteBranch} in ${context.owner}/${context.repo}.").toString(),
                 NotificationType.INFORMATION,
             )
-            .addAction(NotificationAction.createSimpleExpiring("Create Pull Request…") { BrowserUtil.browse(url) })
+            .addAction(NotificationAction.createSimpleExpiring("Create Pull Request…") { GiteaBrowser.open(url) })
             .notify(project)
     }
 

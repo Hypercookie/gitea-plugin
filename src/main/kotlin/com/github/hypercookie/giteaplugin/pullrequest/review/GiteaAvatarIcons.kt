@@ -1,6 +1,7 @@
 package com.github.hypercookie.giteaplugin.pullrequest.review
 
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
+import com.github.hypercookie.giteaplugin.util.GiteaImages
 import com.intellij.collaboration.ui.icon.AsyncImageIconsProvider
 import com.intellij.collaboration.ui.icon.CachingIconsProvider
 import com.intellij.collaboration.ui.icon.IconsProvider
@@ -11,11 +12,7 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.ImageUtil
 import icons.CollaborationToolsIcons
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.awt.Image
-import java.net.URI
-import javax.imageio.ImageIO
 import javax.swing.Icon
 
 /**
@@ -30,8 +27,7 @@ class GiteaAvatarIcons(cs: CoroutineScope) : IconsProvider<GiteaUser?> {
     private val delegate = CachingIconsProvider(
         AsyncImageIconsProvider(cs, object : AsyncImageIconsProvider.AsyncImageLoader<String> {
             override suspend fun load(key: String): Image? {
-                val url = key.takeIf { it.isNotBlank() } ?: return null
-                return withContext(Dispatchers.IO) { runCatching { ImageIO.read(URI(url).toURL()) }.getOrNull() }
+                return GiteaImages.load(key)
             }
 
             // Same as the GitHub plugin's avatar loader: a default avatar

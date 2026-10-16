@@ -27,6 +27,7 @@ import com.intellij.collaboration.ui.codereview.comment.CommentInputActionsCompo
 import com.intellij.collaboration.ui.codereview.timeline.comment.CommentTextFieldFactory
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
@@ -182,7 +183,7 @@ object GiteaTimelineComponent {
                     isOpaque = false
                     ids.forEach { sha ->
                         val headline = commits[sha]?.commit?.message?.lineSequence()?.first().orEmpty()
-                        add(JBLabel("<html><code>${sha.take(7)}</code> ${escape(headline)}</html>"))
+                        add(JBLabel("<html><code>${escape(sha.take(7))}</code> ${escape(headline)}</html>"))
                     }
                 }
                 chatItem(avatars, SECONDARY, event.user, list, titlePane(event.user, text, event.createdAt))
@@ -205,7 +206,9 @@ object GiteaTimelineComponent {
         val line = comment.position?.takeIf { it > 0 } ?: comment.originalPosition
         val header = JPanel(ListLayout.horizontal(com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP)).apply {
             isOpaque = false
-            add(JBLabel("${comment.path}:${line ?: "?"}").apply { foreground = UIUtil.getContextHelpForeground() })
+            // A file name is the PR author's to choose and may start with
+            // <html>, which a label would otherwise render (and load images of).
+            add(plainLabel("${comment.path}:${line ?: "?"}").apply { foreground = UIUtil.getContextHelpForeground() })
             if (comment.commitId != null && comment.commitId != data.pullRequest.value.head.sha) {
                 add(com.intellij.collaboration.ui.CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.outdated.tag")))
             }
@@ -276,5 +279,11 @@ object GiteaTimelineComponent {
     /** Full name when set, login otherwise (Gitea's own display rule). */
     private fun GiteaUser.displayName(): String = fullName?.takeIf { it.isNotBlank() } ?: login
 
-    private fun escape(text: String) = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    private fun escape(text: String) = StringUtil.escapeXmlEntities(text)
+
+    /** A label that never renders its text as HTML. */
+    private fun plainLabel(text: String) = JBLabel().apply {
+        putClientProperty("html.disable", true)
+        this.text = text
+    }
 }

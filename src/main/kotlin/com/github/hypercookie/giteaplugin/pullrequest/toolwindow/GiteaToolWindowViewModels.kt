@@ -14,11 +14,18 @@ import com.intellij.collaboration.ui.toolwindow.ReviewTabViewModel
 import com.intellij.collaboration.ui.toolwindow.ReviewToolwindowProjectViewModel
 import com.intellij.collaboration.ui.toolwindow.ReviewToolwindowTabs
 import com.intellij.collaboration.ui.toolwindow.ReviewToolwindowViewModel
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -75,10 +82,24 @@ class GiteaProjectViewModel(
     }
 }
 
+/** Why the tool window has no connected repository. */
+enum class GiteaNotConnectedReason {
+    /** No configured account matches a remote of this project. */
+    NO_MATCH,
+
+    /** Several accounts match and no project default account picks one. */
+    AMBIGUOUS,
+}
+
 /**
  * Tool window state: a connected [GiteaProjectViewModel], or null when no
  * Gitea remote or no token is configured (the platform then shows the
- * empty-state content).
+ * empty-state content, which explains [notConnectedReason]).
+ *
+ * Reconnects whenever accounts are added, changed or removed, so a removed
+ * account's repository disappears from the tool window right away. The
+ * client looks the token up on each request, so a new token for the same
+ * account needs no reconnect.
  */
 class GiteaToolWindowViewModel(private val cs: CoroutineScope, val project: Project) :
     ReviewToolwindowViewModel<GiteaProjectViewModel> {
@@ -86,28 +107,50 @@ class GiteaToolWindowViewModel(private val cs: CoroutineScope, val project: Proj
     private val _projectVm = MutableStateFlow<GiteaProjectViewModel?>(null)
     override val projectVm: StateFlow<GiteaProjectViewModel?> = _projectVm.asStateFlow()
 
+    private val _notConnectedReason = MutableStateFlow(GiteaNotConnectedReason.NO_MATCH)
+    val notConnectedReason: StateFlow<GiteaNotConnectedReason> = _notConnectedReason.asStateFlow()
+
+    private val connectRequests = MutableSharedFlow<Unit>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Only touched by the connect loop, which runs one connect at a time. */
     private var projectScope: CoroutineScope? = null
 
     init {
-        connect()
+        cs.launch(Dispatchers.IO) {
+            merge(connectRequests, GiteaAccountManager.getInstance().accountsState.map { })
+                .collectLatest { connectNow() }
+        }
     }
 
     /** Re-resolves the repository and account, e.g. after settings change. */
     fun connect() {
-        cs.launch(Dispatchers.IO) {
-            val repo = GiteaRepoLinkService.getInstance(project).resolveDefault()
-            val token = repo?.let { GiteaAccountManager.getInstance().getToken(it.account) }
-            val current = _projectVm.value
-            if (repo == null || token.isNullOrBlank()) {
-                replace(null)
-                return@launch
-            }
-            if (current != null && current.repo == repo) return@launch
-            val client = GiteaApiClient(repo.account.serverUrl, token)
-            val user = runCatching { client.getCurrentUser() }.getOrNull()
-            val scope = cs.giteaChildScope("Gitea project ${repo.owner}/${repo.repo}")
-            replace(GiteaProjectViewModel(scope, project, repo, client, user), scope)
+        connectRequests.tryEmit(Unit)
+    }
+
+    private suspend fun connectNow() {
+        val linkService = GiteaRepoLinkService.getInstance(project)
+        val accountManager = GiteaAccountManager.getInstance()
+        val repo = linkService.resolveDefault()
+        if (repo == null || accountManager.getToken(repo.account) == null) {
+            _notConnectedReason.value =
+                if (repo == null && linkService.findAllMatches().size > 1) GiteaNotConnectedReason.AMBIGUOUS
+                else GiteaNotConnectedReason.NO_MATCH
+            replace(null)
+            return
         }
+        if (_projectVm.value?.repo == repo) return
+        val client = accountManager.clientFor(repo.account)
+        val user = try {
+            client.getCurrentUser()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The list still works; only the "me" filters are missing.
+            thisLogger().warn("Failed to load the current Gitea user", e)
+            null
+        }
+        val scope = cs.giteaChildScope("Gitea project ${repo.owner}/${repo.repo}")
+        replace(GiteaProjectViewModel(scope, project, repo, client, user), scope)
     }
 
     private fun replace(vm: GiteaProjectViewModel?, scope: CoroutineScope? = null) {

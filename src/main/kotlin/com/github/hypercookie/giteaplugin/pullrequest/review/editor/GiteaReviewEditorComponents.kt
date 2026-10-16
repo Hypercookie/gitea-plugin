@@ -38,6 +38,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.OffsetDateTime
 import java.util.Date
 import javax.swing.Action
@@ -150,7 +152,7 @@ object GiteaReviewEditorComponents {
             iconTooltip = author?.presentableName()
             maxContentWidth = null
             val title = horizontalPanel(CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP).apply {
-                add(CodeReviewTimelineUIUtil.createTitleTextPane(author?.presentableName() ?: "unknown", author?.htmlUrl(), comment.createdAt.toDate()))
+                add(CodeReviewTimelineUIUtil.createTitleTextPane(author?.presentableName() ?: "unknown", author?.let { profileUrl(data, it) }, comment.createdAt.toDate()))
                 if (firstInOutdatedThread) add(outdatedTag())
                 if (firstInResolvedThread) {
                     add(CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.resolved.tag")))
@@ -297,7 +299,9 @@ object GiteaReviewEditorComponents {
 
     private fun GiteaUser.presentableName(): String = fullName?.takeIf { it.isNotBlank() } ?: login
 
-    private fun GiteaUser.htmlUrl(): String? = null
+    /** The user's profile page on the pull request's server. */
+    private fun profileUrl(data: GiteaPullRequestReviewData, user: GiteaUser): String =
+        "${data.repo.account.serverUrl.trimEnd('/')}/${URLEncoder.encode(user.login, StandardCharsets.UTF_8).replace("+", "%20")}"
 
     private fun String?.toDate(): Date? = this?.let { runCatching { Date.from(OffsetDateTime.parse(it).toInstant()) }.getOrNull() }
 }

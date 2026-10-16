@@ -56,10 +56,12 @@ object GiteaUrlUtil {
 
     /** The (owner, repo) pair — the two path segments immediately after the
      * server's path prefix. Null if [remote] doesn't have exactly that shape
-     * once the prefix is removed (e.g. it points somewhere else on the same host). */
+     * once the prefix is removed (e.g. it points somewhere else on the same host),
+     * or if either is `.` or `..`, which would make API paths like
+     * `/api/v1/repos/../x` that a server or proxy may resolve elsewhere. */
     fun ownerAndRepo(remote: ParsedGitUrl, serverBase: ParsedGitUrl): Pair<String, String>? {
         val remaining = remote.pathSegments.drop(serverBase.pathSegments.size)
-        if (remaining.size != 2) return null
+        if (remaining.size != 2 || remaining.any { it == "." || it == ".." }) return null
         return remaining[0] to remaining[1]
     }
 }

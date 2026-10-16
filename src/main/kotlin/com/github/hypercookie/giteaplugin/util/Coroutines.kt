@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.util
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -17,3 +18,17 @@ import kotlin.coroutines.EmptyCoroutineContext
  */
 fun CoroutineScope.giteaChildScope(name: String, context: CoroutineContext = EmptyCoroutineContext): CoroutineScope =
     CoroutineScope(coroutineContext + context + SupervisorJob(coroutineContext.job) + CoroutineName(name))
+
+/**
+ * [runCatching] for code that suspends: a [CancellationException] is
+ * rethrown instead of becoming a failed [Result], so a cancelled coroutine
+ * stops instead of carrying on as if a request had failed.
+ */
+inline fun <T> runCatchingCancellable(block: () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        Result.failure(e)
+    }

@@ -106,8 +106,10 @@ class GiteaSubmitReviewViewModel(
                     data.owner, data.repoName, data.number,
                     CreatePullReviewOptions(event = event, body = text.value, commitId = data.pullRequest.value.head.sha, comments = pending),
                 )
+                // The submitted comments are real server-side comments now.
+                data.cs.launch { data.reloadComments() }
                 withContext(Dispatchers.Main) {
-                    data.pendingStore.clear()
+                    data.pendingStore.removeAll(pending)
                     NotificationGroupManager.getInstance().getNotificationGroup("Gitea")
                         .createNotification("Review submitted", NotificationType.INFORMATION).notify(data.project)
                     onClose()

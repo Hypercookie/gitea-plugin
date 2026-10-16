@@ -1,5 +1,7 @@
 package com.github.hypercookie.giteaplugin.accounts
 
+import com.github.hypercookie.giteaplugin.api.GiteaApiClient
+import com.github.hypercookie.giteaplugin.api.GiteaApiException
 import com.intellij.collaboration.auth.AccountManagerBase
 import com.intellij.collaboration.auth.AccountsRepository
 import com.intellij.collaboration.auth.PasswordSafeCredentialsRepository
@@ -10,6 +12,7 @@ import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.util.xmlb.annotations.Tag
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Gitea accounts and their tokens, on the collaboration tools'
@@ -28,7 +31,45 @@ class GiteaAccountManager : AccountManagerBase<GiteaAccount, String>(logger<Gite
 
     val accounts: Set<GiteaAccount> get() = accountsState.value
 
-    suspend fun getToken(account: GiteaAccount): String? = findCredentials(account)
+    /** Tokens read from the password safe, by account id. Every API request
+     * asks for its token (see [clientFor]), and the password safe can be a
+     * system keychain call. Dropped whenever accounts or tokens change. */
+    private val tokenCache = ConcurrentHashMap<String, String>()
+
+    /** The account's current token, or null when it has none or the account
+     * was removed. */
+    suspend fun getToken(account: GiteaAccount): String? {
+        if (account !in accounts) return null
+        tokenCache[account.id]?.let { return it }
+        return findCredentials(account)?.takeIf { it.isNotBlank() }?.also { tokenCache[account.id] = it }
+    }
+
+    /**
+     * A client for [account] that looks its token up on every request, so a
+     * new token is used right away and a removed account's token is never
+     * sent again, whoever still holds the client.
+     */
+    fun clientFor(account: GiteaAccount): GiteaApiClient = GiteaApiClient(account.serverUrl) {
+        getToken(account) ?: throw GiteaApiException(401, "No token for Gitea account $account; add it again in Settings | Version Control | Gitea")
+    }
+
+    override suspend fun updateAccount(account: GiteaAccount, credentials: String) {
+        tokenCache.remove(account.id)
+        super.updateAccount(account, credentials)
+        tokenCache.remove(account.id)
+    }
+
+    override suspend fun updateAccounts(accountsWithCredentials: Map<GiteaAccount, String?>) {
+        tokenCache.clear()
+        super.updateAccounts(accountsWithCredentials)
+        tokenCache.clear()
+    }
+
+    override suspend fun removeAccount(account: GiteaAccount) {
+        tokenCache.remove(account.id)
+        super.removeAccount(account)
+        tokenCache.remove(account.id)
+    }
 
     companion object {
         const val SERVICE_NAME = "Gitea"

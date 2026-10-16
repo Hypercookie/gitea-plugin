@@ -9,6 +9,7 @@ import com.intellij.collaboration.auth.ui.login.TokenLoginDialog
 import com.intellij.collaboration.auth.ui.login.TokenLoginInputPanelFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.ui.Messages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URI
@@ -53,7 +54,9 @@ object GiteaLogin {
         val model = GiteaTokenLoginPanelModel(null, isUnique).apply { serverUri = "https://" }
         if (!show(project, parent, model, "Add Gitea Account", serverFieldDisabled = false)) return null
         val login = (model.loginState.value as? LoginModel.LoginState.Connected)?.username ?: return null
-        return GiteaLoginResult(GiteaAccount(name = login, serverUrl = model.normalizedServer()), model.token)
+        val server = model.normalizedServer()
+        if (!confirmInsecure(project, server)) return null
+        return GiteaLoginResult(GiteaAccount(name = login, serverUrl = server), model.token)
     }
 
     fun updateToken(
@@ -69,6 +72,31 @@ object GiteaLogin {
         if (!show(project, parent, model, "Update Gitea Token", serverFieldDisabled = true)) return null
         val login = (model.loginState.value as? LoginModel.LoginState.Connected)?.username ?: return null
         return GiteaLoginResult(GiteaAccount(id = account.id, name = login, serverUrl = model.normalizedServer()), model.token)
+    }
+
+    /**
+     * Over plain `http://` the token travels unencrypted with every request.
+     * That's fine for a local dev instance; anywhere else the user confirms
+     * it. True when the account may be added.
+     */
+    private fun confirmInsecure(project: Project?, server: String): Boolean {
+        if (!isInsecure(server)) return true
+        return Messages.showOkCancelDialog(
+            project,
+            "$server uses plain HTTP, so your access token is sent unencrypted with every request. Use an https:// address if the server supports it.",
+            "Unencrypted Connection",
+            "Add Anyway",
+            Messages.getCancelButton(),
+            Messages.getWarningIcon(),
+        ) == Messages.OK
+    }
+
+    /** Plain HTTP to a host other than this machine. */
+    internal fun isInsecure(server: String): Boolean {
+        val uri = runCatching { URI(server) }.getOrNull() ?: return false
+        if (!uri.scheme.equals("http", ignoreCase = true)) return false
+        val host = uri.host?.lowercase()?.removeSurrounding("[", "]") ?: return true
+        return !(host == "localhost" || host.endsWith(".localhost") || host == "::1" || host.startsWith("127."))
     }
 
     private fun show(project: Project?, parent: JComponent?, model: GiteaTokenLoginPanelModel, title: String, serverFieldDisabled: Boolean): Boolean {

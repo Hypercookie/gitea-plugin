@@ -9,10 +9,12 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestRev
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaSubmitReviewButton
 import com.github.hypercookie.giteaplugin.pullrequest.timeline.GiteaTimelineEditor
+import com.github.hypercookie.giteaplugin.util.GiteaBrowser
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
 import com.github.hypercookie.giteaplugin.util.errorPanel
 import com.github.hypercookie.giteaplugin.util.gap
+import com.github.hypercookie.giteaplugin.util.runCatchingCancellable
 import com.intellij.collaboration.ui.SimpleHtmlPane
 import com.intellij.collaboration.ui.codereview.CodeReviewProgressTreeModelFromDetails
 import com.intellij.collaboration.ui.codereview.changes.CodeReviewChangeListComponentFactory
@@ -44,7 +46,6 @@ import com.intellij.collaboration.ui.codereview.list.search.ChooserPopupUtil
 import com.intellij.collaboration.ui.codereview.list.search.PopupConfig
 import com.intellij.collaboration.ui.codereview.list.search.ShowDirection
 import com.intellij.collaboration.ui.util.popup.PopupItemPresentation
-import com.intellij.ide.BrowserUtil
 import com.intellij.ui.awt.RelativePoint
 import kotlinx.coroutines.flow.collectLatest
 import com.intellij.ui.components.JBLabel
@@ -53,6 +54,7 @@ import com.intellij.ui.components.panels.Wrapper
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.intellij.collaboration.ui.icon.CIBuildStatusIcons
+import com.intellij.openapi.diagnostic.thisLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -157,7 +159,11 @@ object GiteaPullRequestDetailsComponent {
         val states = MutableStateFlow<Map<GiteaUser, ReviewState>>(emptyMap())
         cs.launch {
             data.pullRequest.collect { pr ->
-                val reviews = runCatching { data.client.listReviews(data.owner, data.repoName, pr.number) }.getOrDefault(emptyList())
+                // On failure the reviewer row keeps what it showed; empty would
+                // read as "nobody reviewed".
+                val reviews = runCatchingCancellable { data.client.listReviews(data.owner, data.repoName, pr.number) }
+                    .onFailure { thisLogger().warn("Failed to load reviews of #${pr.number}", it) }
+                    .getOrNull() ?: return@collect
                 val byUser = LinkedHashMap<GiteaUser, ReviewState>()
                 pr.requestedReviewers.orEmpty().forEach { byUser[it] = ReviewState.NEED_REVIEW }
                 reviews.filter { !it.dismissed }.forEach { review ->
@@ -230,7 +236,7 @@ object GiteaPullRequestDetailsComponent {
                     { PopupItemPresentation.Simple(it.name, jobIcon(it.status)) },
                     PopupConfig(title = CollaborationToolsBundle.message("review.details.status.ci.popup.title"), alwaysShowSearchField = false, showDirection = ShowDirection.ABOVE),
                 )
-                job?.detailsUrl?.let(BrowserUtil::browse)
+                job?.detailsUrl?.let(GiteaBrowser::open)
             }
         }
         return row
