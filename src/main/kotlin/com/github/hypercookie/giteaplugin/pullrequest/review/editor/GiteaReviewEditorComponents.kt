@@ -13,12 +13,17 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaThreadViewMode
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
 import com.github.hypercookie.giteaplugin.util.GiteaCodeBlockApply
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
+import com.github.hypercookie.giteaplugin.util.SHIFT_SUBMIT_SHORTCUT
 import com.github.hypercookie.giteaplugin.util.bindEnabled
 import com.github.hypercookie.giteaplugin.util.bindName
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
 import com.github.hypercookie.giteaplugin.util.bindVisibility
 import com.github.hypercookie.giteaplugin.util.giteaAction
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
+import com.github.hypercookie.giteaplugin.util.hideNewLineHint
+import com.github.hypercookie.giteaplugin.util.installShortcut
+import com.github.hypercookie.giteaplugin.util.shiftSubmitShortcutText
+import com.github.hypercookie.giteaplugin.util.submitAction
 import com.intellij.collaboration.messages.CollaborationToolsBundle
 import com.intellij.collaboration.ui.CollaborationToolsUIUtil
 import com.intellij.collaboration.ui.codereview.CodeReviewChatItemUIUtil
@@ -241,7 +246,7 @@ object GiteaReviewEditorComponents {
         val replyVm = vm.replyVm
         val resolveAction = createResolveAction(cs, vm)
         val config = CommentInputActionsComponentFactory.Config(
-            primaryAction = MutableStateFlow(giteaAction(CollaborationToolsBundle.message("review.comments.reply.action")) { replyVm.submitReply() }),
+            primaryAction = MutableStateFlow(replyVm.submitAction(cs, CollaborationToolsBundle.message("review.comments.reply.action")) { replyVm.submitReply() }),
             secondaryActions = MutableStateFlow(emptyList()),
             additionalActions = MutableStateFlow(listOf(resolveAction)),
             cancelAction = MutableStateFlow(giteaAction("") { vm.stopWritingReply() }),
@@ -253,7 +258,7 @@ object GiteaReviewEditorComponents {
         return CodeReviewCommentTextFieldFactory.createIn(cs, replyVm, config, icon) {
             GiteaCommentCodeBlockFilter.mark(it)
             GiteaMentionSource.install(it, vm.data.mentions)
-        }.let {
+        }.hideNewLineHint().let {
             CollaborationToolsUIUtil.wrapWithLimitedSize(it, maxWidth = CodeReviewChatItemUIUtil.TEXT_CONTENT_WIDTH + COMPACT.contentLeftShift)
         }.apply {
             border = JBUI.Borders.empty(COMPACT.inputPaddingInsets)
@@ -305,11 +310,12 @@ object GiteaReviewEditorComponents {
 
     private fun createNewComment(cs: CoroutineScope, project: Project, vm: GiteaNewCommentViewModel): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
-        val primary = vm.hasPendingReview.map { pending ->
-            // Strings from the GitHub plugin's bundle (pull.request.review.editor.*).
-            giteaAction(if (pending) "Add Review Comment" else "Start Review") { vm.addToReview() }
-        }.stateIn(cs, SharingStarted.Eagerly, null)
-        val secondary = MutableStateFlow(listOf(giteaAction("Add Single Comment") { vm.postSingle() }))
+        // Strings from the GitHub plugin's bundle (pull.request.review.editor.*).
+        fun primaryName(pending: Boolean) = if (pending) "Add Review Comment" else "Start Review"
+        val primaryAction = vm.submitAction(cs, primaryName(vm.hasPendingReview.value)) { vm.addToReview() }.apply {
+            bindName(cs, vm.hasPendingReview.map(::primaryName))
+        }
+        val singleAction = vm.submitAction(cs, "Add Single Comment") { vm.postSingle() }
         val cancel = giteaAction("") {
             if (vm.text.value.isBlank() ||
                 MessageDialogBuilder.yesNo(
@@ -321,13 +327,14 @@ object GiteaReviewEditorComponents {
             }
         }
         val config = CommentInputActionsComponentFactory.Config(
-            primaryAction = primary,
-            secondaryActions = secondary,
+            primaryAction = MutableStateFlow(primaryAction),
+            secondaryActions = MutableStateFlow(listOf(singleAction)),
             additionalActions = MutableStateFlow(emptyList()),
             cancelAction = MutableStateFlow(cancel),
-            submitHint = MutableStateFlow(
-                CollaborationToolsBundle.message("review.comment.hint", CommentInputActionsComponentFactory.submitShortcutText),
-            ),
+            submitHint = vm.hasPendingReview.map { pending ->
+                "${CommentInputActionsComponentFactory.submitShortcutText} to ${primaryName(pending).lowercase()}, " +
+                    "$shiftSubmitShortcutText to add a single comment"
+            }.stateIn(cs, SharingStarted.Eagerly, ""),
         )
         val icon = CommentTextFieldFactory.IconConfig.of(COMPACT, avatars, vm.currentUser.value)
         val editor = CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon) {
@@ -335,6 +342,8 @@ object GiteaReviewEditorComponents {
             GiteaMentionSource.install(it, vm.data.mentions)
         }.apply {
             border = JBUI.Borders.empty(COMPACT.inputPaddingInsets)
+            hideNewLineHint()
+            installShortcut(singleAction, SHIFT_SUBMIT_SHORTCUT)
         }
         return CodeReviewCommentUIUtil.createEditorInlayPanel(editor)
     }

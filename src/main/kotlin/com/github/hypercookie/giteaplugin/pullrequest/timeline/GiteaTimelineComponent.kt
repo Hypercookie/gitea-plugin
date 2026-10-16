@@ -15,8 +15,9 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentio
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
-import com.github.hypercookie.giteaplugin.util.giteaAction
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
+import com.github.hypercookie.giteaplugin.util.hideNewLineHint
+import com.github.hypercookie.giteaplugin.util.submitAction
 import com.intellij.collaboration.messages.CollaborationToolsBundle
 import com.intellij.collaboration.ui.SimpleHtmlPane
 import com.intellij.collaboration.ui.codereview.CodeReviewChatItemUIUtil
@@ -266,7 +267,7 @@ object GiteaTimelineComponent {
     private fun newCommentField(cs: CoroutineScope, data: GiteaPullRequestReviewData, avatars: GiteaAvatarIcons, onPosted: () -> Unit): JComponent {
         val vm = NewCommentViewModel(data.project, cs, data, onPosted)
         val config = CommentInputActionsComponentFactory.Config(
-            primaryAction = MutableStateFlow(giteaAction(CollaborationToolsBundle.message("review.comment.submit")) { vm.post() }),
+            primaryAction = MutableStateFlow(vm.submitAction(cs, CollaborationToolsBundle.message("review.comment.submit")) { vm.post() }),
             secondaryActions = MutableStateFlow(emptyList()),
             additionalActions = MutableStateFlow(emptyList()),
             cancelAction = MutableStateFlow(null),
@@ -276,7 +277,7 @@ object GiteaTimelineComponent {
         return CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon) {
             GiteaCommentCodeBlockFilter.mark(it)
             GiteaMentionSource.install(it, data.mentions)
-        }.apply {
+        }.hideNewLineHint().apply {
             border = JBUI.Borders.empty(FULL.inputPaddingInsets)
         }.let { field ->
             JPanel(BorderLayout()).apply {
