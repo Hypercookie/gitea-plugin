@@ -3,6 +3,10 @@
 [![Build](https://github.com/Hypercookie/gitea-plugin/actions/workflows/build.yml/badge.svg)](https://github.com/Hypercookie/gitea-plugin/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
+> **AI Disclaimer**
+> 
+> Zero effort has been made to hide the fact that this project was largely implemented using GenAI tools. The reason for this heavy AI usage is that I am doing this in my free time and I do have a full time job. I have done my very best to ensure that the code in this repository is up to quality standards, that features work, and security best practises are followed. 
+
 Review [Gitea](https://about.gitea.com/) pull requests without leaving your
 IDE. Browse and filter pull requests, read their timeline, see review comments
 next to your code, and reply, resolve, comment and submit reviews from IntelliJ
