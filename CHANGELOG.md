@@ -10,6 +10,7 @@
 
 ### Changed
 - Review comments in the editor widen to fit their longest code line, up to the editor's width; wider code scrolls sideways instead of being cut off.
+- Code blocks typed in a comment field keep completion and highlighting for their language but no longer show errors for code that isn't a complete file (such as a Java statement outside a class).
 
 ## [0.1.0-beta] - 2026-10-15
 ### Added

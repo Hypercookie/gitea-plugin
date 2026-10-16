@@ -35,6 +35,7 @@
         <completion.contributor language="any"
                                 implementationClass="com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionCompletionContributor"/>
         <typedHandler implementation="com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionTypedHandler"/>
+        <daemon.highlightInfoFilter implementation="com.github.hypercookie.giteaplugin.pullrequest.review.GiteaCommentCodeBlockFilter"/>
         <editorFactoryListener implementation="com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaReviewInEditorController"/>
         <editorNotificationProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.PrReviewEditorNotificationProvider"/>
         <vcsLogCommitStatusProvider implementation="com.github.hypercookie.giteaplugin.log.GiteaCommitStatusProvider"/>
