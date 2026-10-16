@@ -61,6 +61,9 @@ object GiteaReviewEditorComponents {
 
     private val COMPACT = CodeReviewChatItemUIUtil.ComponentType.COMPACT
 
+    private const val READ_ONLY_REASON =
+        "Can't apply here: this view is read-only. Check out the pull request branch and apply in the file or its diff."
+
     fun create(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay, editor: Editor): JComponent = when (inlay) {
         is GiteaEditorInlay.Thread -> createThread(cs, project, inlay, codeBlockApply(cs, project, editor, inlay))
         is GiteaEditorInlay.Pending -> createPending(cs, project, inlay, codeBlockApply(cs, project, editor, inlay))
@@ -69,22 +72,26 @@ object GiteaReviewEditorComponents {
 
     /**
      * Apply for code blocks in [inlay]'s comments: replaces the commented
-     * line of [editor] with the block. Only for an editable file; not while
-     * the comment is outdated, as its line is then only where the changed
-     * code now starts.
+     * line of [editor] with the block. Shown on every code block, but
+     * disabled where [editor] can't be edited (a pull request diff without
+     * the branch checked out, the base side, the unified diff) and while the
+     * comment is outdated, as its line is then only where the changed code
+     * now starts.
      */
-    private fun codeBlockApply(cs: CoroutineScope, project: Project, editor: Editor, inlay: GiteaEditorInlay): GiteaCodeBlockApply? {
+    private fun codeBlockApply(cs: CoroutineScope, project: Project, editor: Editor, inlay: GiteaEditorInlay): GiteaCodeBlockApply {
         val document = editor.document
-        if (editor.isViewer || !document.isWritable || FileDocumentManager.getInstance().getFile(document) == null) return null
+        val editable = !editor.isViewer && document.isWritable && FileDocumentManager.getInstance().getFile(document) != null
         val reason = combine(inlay.line, inlay.outdatedState) { line, outdated ->
             when {
+                !editable -> READ_ONLY_REASON
                 line == null -> "The commented line is not in this file"
                 outdated -> "The commented line has changed since the comment"
                 else -> null
             }
-        }.stateIn(cs, SharingStarted.Eagerly, null)
+        }.stateIn(cs, SharingStarted.Eagerly, if (editable) null else READ_ONLY_REASON)
         return GiteaCodeBlockApply(cs, reason) { code ->
             val line = inlay.line.value ?: return@GiteaCodeBlockApply
+            if (reason.value != null) return@GiteaCodeBlockApply
             if (!ReadonlyStatusHandler.ensureDocumentWritable(project, document)) return@GiteaCodeBlockApply
             WriteCommandAction.writeCommandAction(project).withName("Apply Code Block").run<RuntimeException> {
                 if (line < document.lineCount) {

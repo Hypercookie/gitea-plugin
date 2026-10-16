@@ -2,7 +2,7 @@ package com.github.hypercookie.giteaplugin.util
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.ide.CopyPasteManager
-import com.intellij.ui.components.ActionLink
+import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.InlineIconButton
 import com.intellij.util.ui.JBUI
@@ -21,6 +21,7 @@ import java.awt.event.ComponentEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
+import javax.swing.Icon
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.ScrollPaneConstants
@@ -42,17 +43,15 @@ class GiteaCodeBlockApply(
  * A fenced code block of a comment with its lines unwrapped: as wide as its
  * longest line ([naturalWidth]) when there is room, scrolling horizontally
  * when not. Apply (when [apply] is given) sits in the top right corner and
- * Copy appears next to it while the mouse is over the block.
+ * Copy, the same kind of icon button, appears next to it while the mouse is
+ * over the block.
  */
 class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBlockApply?) : JPanel() {
 
     private val code = GiteaMarkdown.createCodePane(block.html).apply { isOpaque = false }
     private val view = JPanel(BorderLayout()).apply { isOpaque = false; add(code) }
     private val scrollPane = CodeScrollPane(view)
-    private val copyButton = InlineIconButton(AllIcons.Actions.Copy).apply {
-        toolTipText = "Copy"
-        isVisible = false
-    }
+    private val copyButton = iconButton(AllIcons.Actions.Copy, "Copy").apply { isVisible = false }
     private val buttonGap = JBUI.scale(6)
     private val buttons = JPanel(FlowLayout(FlowLayout.RIGHT, buttonGap, 0)).apply {
         isOpaque = true
@@ -73,20 +72,24 @@ class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBl
         copyButton.actionListener = ActionListener {
             CopyPasteManager.getInstance().setContents(StringSelection(block.code))
             copyButton.icon = AllIcons.Actions.Checked
-            copyButton.toolTipText = "Copied"
+            copyButton.tooltip = "Copied"
             revert?.stop()
             revert = Timer(1500) {
                 copyButton.icon = AllIcons.Actions.Copy
-                copyButton.toolTipText = "Copy"
+                copyButton.tooltip = "Copy"
             }.apply { isRepeats = false; start() }
         }
         if (apply != null) {
-            val applyLink = ActionLink("Apply") { apply.apply(block.code) }.apply { isFocusPainted = false }
-            apply.cs.bindOnEdt(apply.unavailableReason) { reason ->
-                applyLink.isEnabled = reason == null
-                applyLink.toolTipText = reason ?: "Replace the commented line with this code"
+            // Same kind of button as Copy, only always shown.
+            val applyButton = iconButton(APPLY_ICON, APPLY_TOOLTIP).apply {
+                name = APPLY_BUTTON_NAME
+                actionListener = ActionListener { apply.apply(block.code) }
             }
-            buttons.add(applyLink)
+            apply.cs.bindOnEdt(apply.unavailableReason) { reason ->
+                applyButton.isEnabled = reason == null
+                applyButton.tooltip = reason ?: APPLY_TOOLTIP
+            }
+            buttons.add(applyButton)
         }
         buttons.isVisible = apply != null
         // Room after the longest line so the buttons don't cover its end.
@@ -99,6 +102,9 @@ class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBl
         add(scrollPane)
         installHover()
     }
+
+    private fun iconButton(icon: Icon, tooltip: String) =
+        InlineIconButton(icon, disabledIcon = IconLoader.getDisabledIcon(icon), tooltip = tooltip)
 
     /** Width that shows every line unwrapped. */
     val naturalWidth: Int get() = scrollPane.naturalWidth + insets.left + insets.right
@@ -150,6 +156,13 @@ class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBl
         }
     }
 }
+
+/** Component name of the Apply button. */
+const val APPLY_BUTTON_NAME = "Gitea code block Apply"
+
+/** The diff viewer's "apply this change" arrow. */
+private val APPLY_ICON = AllIcons.Diff.Arrow
+private const val APPLY_TOOLTIP = "Apply: replace the commented line with this code"
 
 /**
  * Scrolls only horizontally, and only when narrower than its view. Its
