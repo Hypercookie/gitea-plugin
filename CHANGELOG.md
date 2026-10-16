@@ -3,6 +3,8 @@
 # Gitea Changelog
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-10-16
 ### Added
 - Settings to turn off the commit checks column, review comments in the editor, reactions, the pull request suggestion after a push and reloading on window focus; turning a feature off also stops its requests.
 - An opt-in debug widget in the status bar that counts the Gitea API requests sent since the IDE started.
@@ -35,5 +37,6 @@
 - Commit status checks in a "Gitea Commit Checks" column of the Git log.
 - Editable pull request diffs and Jump to Source while the pull request branch is checked out.
 
-[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v0.1.0-beta...HEAD
+[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Hypercookie/gitea-plugin/compare/v0.1.0-beta...v1.0.0
 [0.1.0-beta]: https://github.com/Hypercookie/gitea-plugin/commits/v0.1.0-beta
