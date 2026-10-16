@@ -14,6 +14,9 @@
 - Code blocks in the pull request timeline scroll sideways and have a Copy button on hover, and timeline comments always fit the view's width instead of being cut off on the right.
 - Code blocks typed in a comment field keep completion and highlighting for their language but no longer show errors for code that isn't a complete file (such as a Java statement outside a class).
 - Comment inputs no longer show the "Enter to add a new line" hint.
+- Far fewer Gitea API requests: coming back to the IDE reloads pull request data at most every two minutes and keeps reaction lists fetched in the last five; the background comment check only fetches the comments of reviews that changed; commits, changed files and reviews are fetched once and shared by the views that show them; git events at an unchanged HEAD no longer fetch the pull request each time; paged lists no longer ask for an empty page after the last one.
+- The Gitea Commit Checks column in the Git log is off by default, since it sends one request per commit shown; turn it on under Settings | Version Control | Gitea.
+- The debug request counter's tooltip lists the most requested endpoints.
 
 ### Fixed
 - Start Review, Add Single Comment, Reply and Comment stay disabled, and their shortcuts do nothing, until the comment has text other than whitespace.

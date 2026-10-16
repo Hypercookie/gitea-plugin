@@ -8,6 +8,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchPrMatcher
 import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchPrResolverService
 import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchSync
 import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStoreService
+import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsService
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.settings.GiteaSettingsListener
@@ -84,7 +85,7 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
             com.intellij.openapi.application.ApplicationActivationListener.TOPIC,
             object : com.intellij.openapi.application.ApplicationActivationListener {
                 override fun applicationActivated(ideFrame: com.intellij.openapi.wm.IdeFrame) {
-                    if (GiteaSettings.getInstance().refreshOnFrameActivation) refreshAllData()
+                    if (GiteaSettings.getInstance().refreshOnFrameActivation) refreshOnActivation()
                 }
             },
         )
@@ -136,10 +137,31 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
         data.cs.coroutineContext[kotlinx.coroutines.Job]?.invokeOnCompletion { liveData -= data }
     }
 
+    /** When [refreshAllData] last ran; see [refreshOnActivation]. */
+    @Volatile
+    private var lastFullRefreshAt = 0L
+
+    /** When the session's pull request was last fetched on a git event
+     * and the HEAD it was fetched for; see [refresh]. */
+    @Volatile
+    private var lastVerified: Pair<Long, String?>? = null
+
+    /** [refreshAllData] when coming back to the IDE, at most once every
+     * [ACTIVATION_REFRESH_INTERVAL_MS]: switching windows is frequent, and
+     * each full refresh costs a request per review and per reaction list.
+     * Reaction lists fetched in the last few minutes are kept. */
+    private fun refreshOnActivation() {
+        if (System.currentTimeMillis() - lastFullRefreshAt < ACTIVATION_REFRESH_INTERVAL_MS) return
+        refreshAllData(GiteaReactionsService.BACKGROUND_MAX_AGE_MS)
+    }
+
     /** Re-fetches pull request details and review comments everywhere, so
-     * comments edited or deleted on the server disappear from editors too. */
-    fun refreshAllData() {
-        liveData.forEach { it.reload() }
+     * comments edited or deleted on the server disappear from editors too.
+     * [reactionsMaxAgeMs] as in [GiteaPullRequestReviewData.reload]. */
+    fun refreshAllData(reactionsMaxAgeMs: Long = 0) {
+        lastFullRefreshAt = System.currentTimeMillis()
+        lastVerified = null
+        liveData.forEach { it.reload(reactionsMaxAgeMs) }
         // A pull request may have been opened for the current branch
         // meanwhile; user-paced, so the "no pull request" cache can go.
         GiteaBranchPrResolverService.getInstance(project).invalidate()
@@ -174,6 +196,16 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
         val client = accountManager.clientFor(repoContext.account)
 
         val current = _session.value?.takeIf { it.repo == repoContext }
+        // Git reports changes on every index refresh, often several a minute
+        // while editing; the same branch at the same HEAD was checked recently.
+        val head = repository.currentRevision
+        val verified = lastVerified
+        if (current != null && key == sessionKey && verified != null && verified.second == head &&
+            System.currentTimeMillis() - verified.first < SESSION_RECHECK_MS
+        ) {
+            _branchSync.value = computeSync(repository, key, current.pullRequest.value)
+            return
+        }
         val pr = current?.let { stillOpenForBranch(client, it, key) }
             ?: resolver.resolve(repoContext, client, key)
             ?: return clear()
@@ -182,6 +214,7 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
         // init sees an up-to-date sync and doesn't request another refresh.
         _branchSync.value = computeSync(repository, key, pr)
         sessionKey = key
+        lastVerified = System.currentTimeMillis() to head
         if (current != null && current.number == pr.number) {
             current.update(pr)
             return
@@ -240,6 +273,7 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
     private fun clear() {
         val hadSession = _session.value != null
         sessionKey = null
+        lastVerified = null
         _branchSync.value = null
         replace(null)
         if (hadSession) EditorNotifications.getInstance(project).updateAllNotifications()
@@ -253,6 +287,11 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
 
     companion object {
         private const val REFRESH_DEBOUNCE_MS = 300L
+        private const val ACTIVATION_REFRESH_INTERVAL_MS = 2 * 60_000L
+
+        /** How long a git event at an unchanged HEAD trusts the session's
+         * pull request without fetching it again. */
+        private const val SESSION_RECHECK_MS = 60_000L
         private val SHA_PATTERN = Regex("[0-9a-fA-F]{7,64}")
         private val WHITESPACE = Regex("\\s+")
 

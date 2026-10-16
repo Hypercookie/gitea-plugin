@@ -56,6 +56,10 @@ class GiteaReactionsService(
 
     private val byReactable = ConcurrentHashMap<GiteaReactable, MutableStateFlow<List<GiteaReaction>>>()
 
+    /** When each list was last asked for; a list with a fetch in flight or
+     * a recent one isn't asked for again (see [refresh]). */
+    private val requestedAt = ConcurrentHashMap<GiteaReactable, Long>()
+
     /** Bounds concurrent reaction requests: a long timeline asks for one
      * list per comment. */
     private val permits = Semaphore(4)
@@ -82,16 +86,30 @@ class GiteaReactionsService(
         return flow.asStateFlow()
     }
 
-    /** Fetches every list fetched so far again, to pick up other users' reactions. */
-    fun refresh() {
-        byReactable.forEach { (reactable, flow) -> load(reactable, flow) }
+    /**
+     * Fetches every list fetched so far again, to pick up other users'
+     * reactions; one request per comment. Lists asked for less than
+     * [maxAgeMs] ago are skipped, and so is one asked for within
+     * [MIN_REFETCH_MS] whatever [maxAgeMs] (several views refreshing at once).
+     */
+    fun refresh(maxAgeMs: Long = 0) {
+        val now = System.currentTimeMillis()
+        val minAge = maxOf(maxAgeMs, MIN_REFETCH_MS)
+        byReactable.forEach { (reactable, flow) ->
+            val last = requestedAt[reactable]
+            if (last == null || now - last >= minAge) load(reactable, flow)
+        }
     }
 
     private fun load(reactable: GiteaReactable, flow: MutableStateFlow<List<GiteaReaction>>) {
+        requestedAt[reactable] = System.currentTimeMillis()
         cs.launch {
             runCatchingCancellable { permits.withPermit { fetch(reactable) } }
                 .onSuccess { flow.value = it }
-                .onFailure { if (it !is CancellationException) LOG.info("Failed to load reactions of $reactable", it) }
+                .onFailure {
+                    requestedAt.remove(reactable)
+                    if (it !is CancellationException) LOG.info("Failed to load reactions of $reactable", it)
+                }
         }
     }
 
@@ -123,6 +141,13 @@ class GiteaReactionsService(
 
     companion object {
         private val LOG = logger<GiteaReactionsService>()
+
+        /** A list asked for this recently is not asked for again. */
+        const val MIN_REFETCH_MS = 5_000L
+
+        /** Age after which a background refresh (coming back to the IDE,
+         * reopening a timeline) fetches a list again. */
+        const val BACKGROUND_MAX_AGE_MS = 5 * 60_000L
 
         /** Gitea's default `[ui] REACTIONS`, used until the server's list is loaded. */
         val DEFAULT_REACTIONS = listOf("+1", "-1", "laugh", "hooray", "confused", "heart", "rocket", "eyes")

@@ -57,6 +57,8 @@ import com.intellij.collaboration.ui.icon.CIBuildStatusIcons
 import com.intellij.openapi.diagnostic.thisLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import net.miginfocom.layout.AC
 import net.miginfocom.layout.CC
@@ -158,12 +160,10 @@ object GiteaPullRequestDetailsComponent {
     private fun reviewerStates(cs: CoroutineScope, data: GiteaPullRequestReviewData): MutableStateFlow<Map<GiteaUser, ReviewState>> {
         val states = MutableStateFlow<Map<GiteaUser, ReviewState>>(emptyMap())
         cs.launch {
-            data.pullRequest.collect { pr ->
-                // On failure the reviewer row keeps what it showed; empty would
-                // read as "nobody reviewed".
-                val reviews = runCatchingCancellable { data.client.listReviews(data.owner, data.repoName, pr.number) }
-                    .onFailure { thisLogger().warn("Failed to load reviews of #${pr.number}", it) }
-                    .getOrNull() ?: return@collect
+            // The reviews come with the review comments' load; until it
+            // succeeds the row stays empty, and a failed reload keeps what it
+            // showed (empty would read as "nobody reviewed").
+            combine(data.pullRequest, data.reviews.filterNotNull()) { pr, reviews -> pr to reviews }.collect { (pr, reviews) ->
                 val byUser = LinkedHashMap<GiteaUser, ReviewState>()
                 pr.requestedReviewers.orEmpty().forEach { byUser[it] = ReviewState.NEED_REVIEW }
                 reviews.filter { !it.dismissed }.forEach { review ->

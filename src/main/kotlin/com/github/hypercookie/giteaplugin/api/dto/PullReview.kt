@@ -26,6 +26,8 @@ data class PullReview(
     @SerialName("commit_id") val commitId: String? = null,
     @SerialName("html_url") val htmlUrl: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
+    /** Inline comments in this review; null from servers that don't send it. */
+    @SerialName("comments_count") val commentsCount: Int? = null,
 )
 
 /** One inline diff comment, as returned by `GET .../reviews/{id}/comments`. */

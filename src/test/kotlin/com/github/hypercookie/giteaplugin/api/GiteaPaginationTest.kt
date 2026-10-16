@@ -81,6 +81,45 @@ class GiteaPaginationTest : BasePlatformTestCase() {
         assertEquals((1L..45L).toList(), client.getTimeline("o", "r", 1).map { it.id })
     }
 
+    fun `test a short page that reaches X-Total-Count ends the list`() = runBlocking {
+        server.createContext("/api/v1/repos/o/r/pulls/1/commits") { exchange ->
+            requests += exchange.requestURI.toString()
+            val page = exchange.requestURI.query.split('&').first { it.startsWith("page=") }.substringAfter('=').toInt()
+            val body = when (page) {
+                1 -> (1..50).joinToString(",", "[", "]") { commit(it) }
+                2 -> (51..60).joinToString(",", "[", "]") { commit(it) }
+                else -> "[]"
+            }
+            exchange.responseHeaders.add("X-Total-Count", "60")
+            val bytes = body.toByteArray()
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+
+        assertEquals(60, client.getPullRequestCommits("o", "r", 1).size)
+        assertEquals(2, requests.size)
+    }
+
+    fun `test short pages below X-Total-Count keep paging`() = runBlocking {
+        // A server whose MAX_RESPONSE_ITEMS is 30 answers limit=50 with 30.
+        server.createContext("/api/v1/repos/o/r/labels") { exchange ->
+            requests += exchange.requestURI.toString()
+            val page = exchange.requestURI.query.split('&').first { it.startsWith("page=") }.substringAfter('=').toInt()
+            val ids = ((page - 1) * 30 + 1..minOf(page * 30, 45))
+            val body = if (ids.isEmpty()) "[]" else ids.joinToString(",", "[", "]") { """{"id":$it,"name":"l$it","color":"fff"}""" }
+            exchange.responseHeaders.add("X-Total-Count", "45")
+            val bytes = body.toByteArray()
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+
+        assertEquals((1L..45L).toList(), client.listLabels("o", "r").map { it.id })
+        assertEquals(2, requests.size)
+    }
+
+    private fun commit(n: Int) =
+        """{"sha":"sha$n","commit":{"message":"m","author":{"name":"a","date":"2026-10-15T12:00:00Z"}}}"""
+
     private fun reviews(range: IntRange) =
         range.joinToString(",", "[", "]") { """{"id":$it,"state":"COMMENT"}""" }
 }

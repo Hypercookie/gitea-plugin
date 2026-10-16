@@ -59,7 +59,7 @@ class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea
                 row {
                     checkBox("Show commit checks in the Git log")
                         .bindSelected(settings::commitChecksInLog)
-                        .comment("Adds the Gitea Commit Checks column. When off, no commit statuses are fetched.")
+                        .comment("Adds the Gitea Commit Checks column. Off by default: it fetches the status of every commit shown in the log. When off, no commit statuses are fetched.")
                 }
                 row {
                     checkBox("Show review comments in the editor for the checked-out pull request branch")

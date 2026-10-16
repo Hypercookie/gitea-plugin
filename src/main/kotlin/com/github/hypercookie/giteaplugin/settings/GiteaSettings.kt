@@ -17,7 +17,7 @@ import com.intellij.util.messages.Topic
 class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(State()) {
 
     data class State(
-        @JvmField val commitChecksInLog: Boolean = true,
+        @JvmField val commitChecksInLog: Boolean = false,
         @JvmField val reviewInEditor: Boolean = true,
         @JvmField val showReactions: Boolean = true,
         @JvmField val suggestPullRequestAfterPush: Boolean = true,
@@ -25,7 +25,8 @@ class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(
         @JvmField val showRequestCounter: Boolean = false,
     )
 
-    /** "Gitea Commit Checks" column in the Git log and its status requests. */
+    /** "Gitea Commit Checks" column in the Git log and its status requests
+     * (one per commit shown); off by default. */
     var commitChecksInLog: Boolean
         get() = state.commitChecksInLog
         set(value) { updateState { it.copy(commitChecksInLog = value) } }

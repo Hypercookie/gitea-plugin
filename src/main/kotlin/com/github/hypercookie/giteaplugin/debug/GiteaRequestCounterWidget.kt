@@ -6,6 +6,7 @@ import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
 import com.intellij.openapi.wm.StatusBarWidgetFactory
@@ -54,12 +55,20 @@ private class GiteaRequestCounterWidget(project: Project) : StatusBarWidget, Sta
 
     override fun getText(): String = "Gitea API: ${count.value}"
 
-    override fun getTooltipText(): String =
-        "Gitea API requests sent since the IDE started, in all projects. Avatar and emoji images are not counted."
+    override fun getTooltipText(): String {
+        val top = GiteaHttpClientService.getInstance().requestsByEndpoint().take(TOP_ENDPOINTS)
+        val rows = top.joinToString("") { (endpoint, n) -> "<tr><td align=right>$n</td><td>${StringUtil.escapeXmlEntities(endpoint)}</td></tr>" }
+        return "<html>Gitea API requests sent since the IDE started, in all projects. Avatar and emoji images are not counted." +
+            (if (rows.isEmpty()) "" else "<br><br>Most requested:<table>$rows</table>") + "</html>"
+    }
 
     override fun getAlignment(): Float = Component.CENTER_ALIGNMENT
 
     override fun dispose() {
         cs.cancel()
+    }
+
+    private companion object {
+        const val TOP_ENDPOINTS = 10
     }
 }

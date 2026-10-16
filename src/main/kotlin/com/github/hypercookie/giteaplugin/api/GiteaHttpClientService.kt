@@ -46,15 +46,46 @@ class GiteaHttpClientService : Disposable {
     /** Gitea API requests sent so far, whatever their outcome. */
     val requestCount: StateFlow<Long> = _requestCount.asStateFlow()
 
-    fun countRequest() {
+    private val byEndpoint = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
+
+    fun countRequest(method: String, path: String) {
+        byEndpoint.computeIfAbsent("$method ${endpointOf(path)}") { java.util.concurrent.atomic.AtomicLong() }.incrementAndGet()
         _requestCount.update { it + 1 }
     }
+
+    /** Requests sent so far per endpoint (`GET /repos/{owner}/{repo}/pulls/{n}`),
+     * most frequent first, so the debug widget shows where they go. */
+    fun requestsByEndpoint(): List<Pair<String, Long>> =
+        byEndpoint.map { (endpoint, count) -> endpoint to count.get() }.sortedByDescending { it.second }
 
     override fun dispose() {
         client.shutdownNow()
     }
 
     companion object {
+        private val ID_SEGMENT = Regex("\\d+|[0-9a-fA-F]{7,64}")
+
+        /** [path] with owner, repository, numbers and commit ids replaced by
+         * placeholders, and a file path under `contents/` dropped. */
+        internal fun endpointOf(path: String): String {
+            val segments = path.removePrefix("/api/v1").trim('/').split('/')
+            val out = ArrayList<String>(segments.size)
+            var i = 0
+            while (i < segments.size) {
+                val segment = segments[i]
+                when {
+                    segment == "repos" && i + 2 < segments.size && segments[i + 1] != "issues" -> {
+                        out += "repos"; out += "{owner}"; out += "{repo}"; i += 3; continue
+                    }
+                    segment == "contents" -> { out += "contents"; out += "{path}"; break }
+                    ID_SEGMENT.matches(segment) -> out += "{id}"
+                    else -> out += segment
+                }
+                i++
+            }
+            return "/" + out.joinToString("/")
+        }
+
         @JvmStatic
         fun getInstance(): GiteaHttpClientService =
             ApplicationManager.getApplication().getService(GiteaHttpClientService::class.java)
