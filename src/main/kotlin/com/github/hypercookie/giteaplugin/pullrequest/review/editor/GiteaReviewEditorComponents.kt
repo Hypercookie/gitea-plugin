@@ -6,6 +6,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactable
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsComponentFactory
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.giteaReactionsViewModelOrNull
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
+import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaCommentCodeBlockFilter
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaNewCommentViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaThreadViewModel
@@ -254,7 +255,10 @@ object GiteaReviewEditorComponents {
             ),
         )
         val icon = CommentTextFieldFactory.IconConfig.of(COMPACT, avatars, replyVm.currentUser.value)
-        return CodeReviewCommentTextFieldFactory.createIn(cs, replyVm, config, icon) { GiteaMentionSource.install(it, vm.data.mentions) }.hideNewLineHint().let {
+        return CodeReviewCommentTextFieldFactory.createIn(cs, replyVm, config, icon) {
+            GiteaCommentCodeBlockFilter.mark(it)
+            GiteaMentionSource.install(it, vm.data.mentions)
+        }.hideNewLineHint().let {
             CollaborationToolsUIUtil.wrapWithLimitedSize(it, maxWidth = CodeReviewChatItemUIUtil.TEXT_CONTENT_WIDTH + COMPACT.contentLeftShift)
         }.apply {
             border = JBUI.Borders.empty(COMPACT.inputPaddingInsets)
@@ -333,7 +337,10 @@ object GiteaReviewEditorComponents {
             }.stateIn(cs, SharingStarted.Eagerly, ""),
         )
         val icon = CommentTextFieldFactory.IconConfig.of(COMPACT, avatars, vm.currentUser.value)
-        val editor = CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon) { GiteaMentionSource.install(it, vm.data.mentions) }.apply {
+        val editor = CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon) {
+            GiteaCommentCodeBlockFilter.mark(it)
+            GiteaMentionSource.install(it, vm.data.mentions)
+        }.apply {
             border = JBUI.Borders.empty(COMPACT.inputPaddingInsets)
             hideNewLineHint()
             installShortcut(singleAction, SHIFT_SUBMIT_SHORTCUT)
