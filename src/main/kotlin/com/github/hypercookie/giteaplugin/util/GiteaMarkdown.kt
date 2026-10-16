@@ -119,8 +119,10 @@ object GiteaMarkdown {
     /** A pane for a code block's `<pre>` [html]: no margin, as the block's
      * own component spaces and colors it. */
     internal fun createCodePane(html: String): JEditorPane =
-        SimpleHtmlPane(additionalStyleSheet = StyleSheetUtil.loadStyleSheet(styleSheetRules() + "\npre { margin: 0; padding: 6px; }"))
-            .apply { setHtmlBody(html) }
+        SimpleHtmlPane(
+            additionalStyleSheet = StyleSheetUtil.loadStyleSheet(styleSheetRules() + "\npre { margin: 0; padding: 6px; }"),
+            addBrowserListener = false,
+        ).apply { setHtmlBody(html) }
 
     internal fun codeBackground(): Color = EditorColorsManager.getInstance().globalScheme.defaultBackground
 
