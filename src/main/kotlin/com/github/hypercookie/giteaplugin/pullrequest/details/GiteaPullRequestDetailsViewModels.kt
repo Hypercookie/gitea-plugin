@@ -98,9 +98,9 @@ class GiteaPullRequestChangesViewModel(
             // Only a new head or merge base changes the files; other pull
             // request updates (a new comment bumps updated_at) don't.
             val diffBase = data.pullRequest.map { it.head.sha to it.mergeBase }.distinctUntilChanged()
-            combine(_selectedIndex, _commits, diffBase) { index, commits, _ -> commits.getOrNull(index) }
+            combine(_selectedIndex, _commits, diffBase) { index, commits, base -> commits.getOrNull(index) to base }
                 .distinctUntilChanged()
-                .collect { commit -> _changeList.value = null; _changeList.value = runCatchingCancellable { loadChanges(commit) } }
+                .collect { (commit, _) -> _changeList.value = null; _changeList.value = runCatchingCancellable { loadChanges(commit) } }
         }
     }
 
