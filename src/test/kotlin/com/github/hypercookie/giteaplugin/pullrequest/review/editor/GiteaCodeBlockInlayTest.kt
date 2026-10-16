@@ -62,17 +62,18 @@ class GiteaCodeBlockInlayTest : BasePlatformTestCase() {
         assertTrue(apply.tooltip!!, apply.tooltip!!.contains("read-only"))
     }
 
-    fun testCopyAppearsOnHoverNextToApply() {
+    fun testCopyAndApplyAppearOnHover() {
         myFixture.configureByText("a.txt", "one")
         val component = GiteaReviewEditorComponents.create(cs, project, pending("```\nx\n```", line = 0), myFixture.editor)
         val block = UIUtil.findComponentOfType(component, GiteaCodeBlockComponent::class.java)!!
         val buttons = UIUtil.findComponentsOfType(block, InlineIconButton::class.java)
         assertEquals(2, buttons.size)
         val copy = buttons.single { it.name != APPLY_BUTTON_NAME }
-        assertFalse(copy.isVisible)
+        val panel = copy.parent
+        assertSame("Copy and Apply side by side", applyButton(component).parent, panel)
+        assertFalse(panel.isVisible)
         block.dispatchEvent(MouseEvent(block, MouseEvent.MOUSE_ENTERED, 0, 0, 1, 1, 0, false))
-        assertTrue(copy.isVisible)
-        assertSame("same parent as Apply", applyButton(component).parent, copy.parent)
+        assertTrue(panel.isVisible)
     }
 
     fun testInlayWidensToLongestCodeLine() {
