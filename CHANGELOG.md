@@ -12,6 +12,7 @@
 - Shift+Cmd+Enter (Shift+Ctrl+Enter on Windows and Linux) posts a new review comment as a single comment; Cmd+Enter still starts or adds to the review.
 
 ### Changed
+- Supports IDE builds 252 to 262 (2025.2 to 2026.2); 2026.3 support follows in a later version.
 - Review comments in the editor widen to fit their longest code line, up to the editor's width; wider code scrolls sideways instead of being cut off.
 - Code blocks in the pull request timeline scroll sideways and have a Copy button on hover, and timeline comments always fit the view's width instead of being cut off on the right.
 - Code blocks typed in a comment field keep completion and highlighting for their language but no longer show errors for code that isn't a complete file (such as a Java statement outside a class).

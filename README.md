@@ -99,8 +99,8 @@ like them.
 
 ## Requirements
 
-- IntelliJ IDEA 2025.2 or later, or another JetBrains IDE on platform build 252
-  or later, with the bundled Git plugin enabled.
+- IntelliJ IDEA 2025.2 to 2026.2, or another JetBrains IDE on platform builds
+  252 to 262, with the bundled Git plugin enabled.
 - Gitea 1.27 is recommended; the plugin is tested against it. Gitea 1.24 and
   earlier lack the endpoints for replying to and resolving review comments.
 

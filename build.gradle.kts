@@ -85,6 +85,9 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = "252"
+            // 2026.3 (263) splits VCS into new modules this build doesn't
+            // declare yet; cap at 2026.2 until it does.
+            untilBuild = "262.*"
         }
     }
 
