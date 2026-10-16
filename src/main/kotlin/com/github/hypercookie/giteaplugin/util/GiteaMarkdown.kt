@@ -8,6 +8,8 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.fileTypes.PlainTextLanguage
+import com.intellij.openapi.fileTypes.SyntaxHighlighter
+import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
 import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.ColorUtil
@@ -28,6 +30,7 @@ import org.intellij.markdown.html.SimpleInlineTagProvider
 import org.intellij.markdown.parser.LinkMap
 import org.intellij.markdown.parser.MarkdownParser
 import java.awt.Color
+import java.awt.Font
 import java.net.URI
 import java.util.UUID
 import javax.swing.JComponent
@@ -193,9 +196,43 @@ private object ImageAltTextProvider : GeneratingProvider {
  */
 private object CodeFenceHighlighter : HtmlSyntaxHighlighter {
     override fun color(language: String?, rawContent: String): HtmlChunk {
-        val lang = language?.let(::findLanguage)
-            ?: return HtmlChunk.raw(StringUtil.escapeXmlEntities(rawContent))
-        return HtmlSyntaxHighlighter.colorHtmlChunk(null, lang, rawContent)
+        val escaped = HtmlChunk.raw(StringUtil.escapeXmlEntities(rawContent))
+        val lang = language?.let(::findLanguage) ?: return escaped
+        val highlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(lang, null, null) ?: return escaped
+        return HtmlChunk.raw(colorWithLexer(highlighter, rawContent))
+    }
+
+    /**
+     * Colors [rawContent] token by token with the language's highlighting
+     * lexer and the global color scheme. The platform's
+     * HtmlSyntaxHighlighter.colorHtmlChunk runs a synchronous non-blocking
+     * read action, which throws when called on the EDT, and comment panes
+     * are built on the EDT. A lexer needs no read action, so this is safe
+     * on any thread.
+     */
+    private fun colorWithLexer(highlighter: SyntaxHighlighter, rawContent: String): String {
+        val scheme = EditorColorsManager.getInstance().globalScheme
+        val lexer = highlighter.highlightingLexer
+        lexer.start(rawContent)
+        val html = StringBuilder()
+        while (true) {
+            val tokenType = lexer.tokenType ?: break
+            val token = StringUtil.escapeXmlEntities(rawContent.substring(lexer.tokenStart, lexer.tokenEnd))
+            var foreground: Color? = null
+            var fontType = Font.PLAIN
+            for (key in highlighter.getTokenHighlights(tokenType)) {
+                val attributes = scheme.getAttributes(key) ?: continue
+                attributes.foregroundColor?.let { foreground = it }
+                if (attributes.fontType != Font.PLAIN) fontType = attributes.fontType
+            }
+            var styled = token
+            if (fontType and Font.BOLD != 0) styled = "<b>$styled</b>"
+            if (fontType and Font.ITALIC != 0) styled = "<i>$styled</i>"
+            foreground?.let { styled = "<span style=\"color: ${ColorUtil.toHtmlColor(it)}\">$styled</span>" }
+            html.append(styled)
+            lexer.advance()
+        }
+        return html.toString()
     }
 
     private fun findLanguage(name: String): Language? {
