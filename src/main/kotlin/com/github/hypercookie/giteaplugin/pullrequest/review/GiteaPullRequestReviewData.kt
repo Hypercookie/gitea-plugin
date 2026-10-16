@@ -14,6 +14,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsSe
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaPullRequestMentionSource
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
+import com.github.hypercookie.giteaplugin.util.runCatchingCancellable
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
@@ -110,17 +111,8 @@ class GiteaPullRequestReviewData(
                 if (com.intellij.openapi.application.ApplicationManager.getApplication().isActive) reloadComments()
             }
         }
-        cs.launch { _currentUser.value = runCatching { client.getCurrentUser() }.getOrNull() }
+        cs.launch { loadCurrentUser() }
         cs.launch { reloadComments() }
-        // A submitted review empties the pending store; its comments are now
-        // real server-side comments, so fetch them.
-        cs.launch {
-            var previous = pendingStore.state.value
-            pendingStore.state.collect { current ->
-                if (previous.isNotEmpty() && current.isEmpty()) reloadComments()
-                previous = current
-            }
-        }
     }
 
     /** Re-fetches the pull request, its comments and their reactions, and
@@ -128,8 +120,10 @@ class GiteaPullRequestReviewData(
     fun reload() {
         if (GiteaSettings.getInstance().showReactions) reactions.refresh()
         _reloads.tryEmit(Unit)
+        // Approve / Request Changes need the current user; retry a failed load.
+        if (_currentUser.value == null) cs.launch { loadCurrentUser() }
         cs.launch {
-            runCatching { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)
+            runCatchingCancellable { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)
             reloadComments()
         }
     }
@@ -147,8 +141,14 @@ class GiteaPullRequestReviewData(
         }
     }
 
+    private suspend fun loadCurrentUser() {
+        runCatchingCancellable { client.getCurrentUser() }
+            .onSuccess { _currentUser.value = it }
+            .onFailure { thisLogger().warn("Failed to load the current Gitea user", it) }
+    }
+
     suspend fun reloadComments() = commentsLoadLock.withLock {
-        runCatching { client.getAllReviewComments(owner, repoName, number) }
+        runCatchingCancellable { client.getAllReviewComments(owner, repoName, number) }
             .onSuccess { _comments.value = it }
             .onFailure { if (it !is CancellationException) thisLogger().warn("Failed to load review comments for #$number", it) }
         Unit
@@ -170,7 +170,7 @@ class GiteaPullRequestReviewData(
         val key = path to ref
         val deferred = fileContents.computeIfAbsent(key) {
             cs.async {
-                runCatching {
+                runCatchingCancellable {
                     fileFetchPermits.withPermit { client.getFileContentOrNull(owner, repoName, path, ref) }
                         ?.let(StringUtil::convertLineSeparators)
                 }
@@ -195,7 +195,7 @@ class GiteaPullRequestReviewData(
         val deferred = synchronized(changedFilesLock) {
             changedFilesCache?.takeIf { it.first == key }?.second
                 ?: cs.async {
-                    runCatching { client.getPullRequestFiles(owner, repoName, pr.number).associateBy { it.filename } }
+                    runCatchingCancellable { client.getPullRequestFiles(owner, repoName, pr.number).associateBy { it.filename } }
                 }.also { changedFilesCache = key to it }
         }
         return deferred.await().getOrElse { e ->

@@ -21,7 +21,9 @@ jobs:
       pull-requests: write
     steps:
       - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
+        # Third-party action in a job that holds the signing and Marketplace
+        # secrets: pinned to the v1.3.1 commit, not a movable tag.
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           tool-cache: false
           large-packages: false
@@ -59,7 +61,8 @@ jobs:
       - name: Upload Release Asset
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.event.release.tag_name }} ./build/distributions/*
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" ./build/distributions/*
 
       - name: Publish Plugin
         env:
@@ -73,8 +76,10 @@ jobs:
         if: ${{ github.event.release.body != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Through the environment, not ${{ }} in the script: a tag name
+          # can contain shell syntax.
+          VERSION: ${{ github.event.release.tag_name }}
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
           BRANCH="changelog-update-$VERSION"
           LABEL="release changelog"
 
@@ -86,9 +91,9 @@ jobs:
             exit 0
           fi
 
-          git checkout -b $BRANCH
+          git checkout -b "$BRANCH"
           git commit -am "Changelog update - $VERSION"
-          git push --set-upstream origin $BRANCH
+          git push --set-upstream origin "$BRANCH"
 
           gh label create "$LABEL" \
             --description "Pull requests with release changelog update" \
@@ -99,4 +104,4 @@ jobs:
             --title "Changelog update - \`$VERSION\`" \
             --body "Current pull request contains patched \`CHANGELOG.md\` file for the \`$VERSION\` version." \
             --label "$LABEL" \
-            --head $BRANCH
+            --head "$BRANCH"

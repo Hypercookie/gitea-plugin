@@ -60,9 +60,13 @@ object GiteaMarkdown {
     }
 
     /** A read-only pane showing [html] (output of [toHtml]) with code spans
-     * and code blocks in the editor font. */
+     * and code blocks in the editor font. Links open only when they are
+     * http(s) ([GiteaBrowser]). */
     fun createPane(html: String): JEditorPane =
-        SimpleHtmlPane(additionalStyleSheet = StyleSheetUtil.loadStyleSheet(styleSheetRules())).apply { setHtmlBody(html) }
+        SimpleHtmlPane(additionalStyleSheet = StyleSheetUtil.loadStyleSheet(styleSheetRules()), addBrowserListener = false).apply {
+            addHyperlinkListener(GiteaBrowser.hyperlinkListener)
+            setHtmlBody(html)
+        }
 
     private fun styleSheetRules(): String {
         val scheme = EditorColorsManager.getInstance().globalScheme

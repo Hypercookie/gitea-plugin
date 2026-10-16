@@ -10,9 +10,7 @@ import com.intellij.codeInsight.editorActions.TypedHandlerDelegate
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.collaboration.ui.codereview.avatar.Avatar
-import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.progress.runBlockingCancellable
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
@@ -32,14 +30,8 @@ class GiteaMentionCompletionContributor : CompletionContributor(), DumbAware {
 
         val mentionResult = result.withPrefixMatcher(prefix).caseInsensitive()
         val project = parameters.editor.project
-        val candidates = try {
-            runBlockingCancellable { source.candidates() }
-        } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
-            throw e
-        } catch (e: Exception) {
-            thisLogger().warn("Failed to load users for mention completion", e)
-            return
-        }
+        // Only what is already loaded: no request while completion holds the read lock.
+        val candidates = source.candidates()
         mentionResult.addAllElements(candidates.map { lookupElement(it, project) })
         // Other contributors (words, Markdown) have nothing useful to add
         // inside a mention.

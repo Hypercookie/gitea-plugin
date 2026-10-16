@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.pullrequest.reactions
 
+import com.github.hypercookie.giteaplugin.util.GiteaImages
 import com.intellij.collaboration.ui.codereview.reactions.CodeReviewReactionsUIUtil
 import com.intellij.collaboration.ui.icon.AsyncImageIconsProvider
 import com.intellij.collaboration.ui.icon.CachingIconsProvider
@@ -7,13 +8,9 @@ import com.intellij.collaboration.ui.icon.IconsProvider
 import com.intellij.icons.AllIcons
 import com.intellij.util.IconUtil
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.awt.Image
-import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import javax.imageio.ImageIO
 import javax.swing.Icon
 
 /**
@@ -34,9 +31,9 @@ internal class GiteaReactionIcons(
 
     private val customIcons = CachingIconsProvider(
         AsyncImageIconsProvider(cs, object : AsyncImageIconsProvider.AsyncImageLoader<String> {
-            override suspend fun load(key: String): Image? = withContext(Dispatchers.IO) {
+            override suspend fun load(key: String): Image? {
                 val name = URLEncoder.encode(key, StandardCharsets.UTF_8).replace("+", "%20")
-                runCatching { ImageIO.read(URI("${serverUrl.trimEnd('/')}/assets/img/emoji/$name.png").toURL()) }.getOrNull()
+                return GiteaImages.load("${serverUrl.trimEnd('/')}/assets/img/emoji/$name.png")
             }
 
             override fun createBaseIcon(key: String?, iconSize: Int): Icon = IconUtil.resizeSquared(AllIcons.Nodes.Unknown, iconSize)

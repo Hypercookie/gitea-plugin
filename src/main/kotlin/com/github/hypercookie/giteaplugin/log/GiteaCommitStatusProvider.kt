@@ -7,9 +7,9 @@ import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
+import com.github.hypercookie.giteaplugin.util.GiteaBrowser
 import com.intellij.collaboration.ui.icon.CIBuildStatusIcons
 import com.intellij.icons.AllIcons
-import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -165,7 +165,8 @@ private class GiteaCommitStatusLoader(
         for ((root, candidates) in matches.groupBy { it.gitRoot!! }) {
             val context = candidates.firstOrNull { it.account.id == defaultAccountId } ?: candidates.first()
             val client = clients.getOrPut(context.account) {
-                GiteaAccountManager.getInstance().getToken(context.account)?.let { GiteaApiClient(context.account.serverUrl, it) }
+                val manager = GiteaAccountManager.getInstance()
+                manager.getToken(context.account)?.let { manager.clientFor(context.account) }
             } ?: continue
             targets[root] = Target(context, context.account.serverUrl.trimEnd('/'), client)
         }
@@ -213,7 +214,7 @@ private class GiteaCommitStatusPresentation(
      * commit page, which lists all checks. */
     private val target: String? = when {
         checks.statuses.isEmpty() -> null
-        else -> checks.statuses.singleOrNull()?.targetUrl?.takeIf { it.isNotBlank() } ?: commitUrl
+        else -> checks.statuses.singleOrNull()?.targetUrl?.takeIf(GiteaBrowser::isSafe) ?: commitUrl
     }
 
     override val text: String = HtmlBuilder().apply {
@@ -235,8 +236,7 @@ private class GiteaCommitStatusPresentation(
 
     override fun onClick(e: InputEvent?): Boolean {
         val url = target ?: return false
-        BrowserUtil.browse(url)
-        return true
+        return GiteaBrowser.open(url)
     }
 
     private fun stateText(state: GiteaCheckState, running: Boolean): String = when (state) {

@@ -2,6 +2,7 @@ package com.github.hypercookie.giteaplugin.pullrequest.reactions
 
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.GiteaReaction
+import com.github.hypercookie.giteaplugin.util.runCatchingCancellable
 import com.intellij.collaboration.ui.icon.IconsProvider
 import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.CoroutineScope
@@ -61,7 +62,7 @@ class GiteaReactionsService(
 
     init {
         cs.launch {
-            runCatching { client.getUISettings() }
+            runCatchingCancellable { client.getUISettings() }
                 .onSuccess { settings ->
                     customEmojis.value = settings.customEmojis.toSet()
                     if (settings.allowedReactions.isNotEmpty()) _allowedReactions.value = settings.allowedReactions
@@ -88,7 +89,7 @@ class GiteaReactionsService(
 
     private fun load(reactable: GiteaReactable, flow: MutableStateFlow<List<GiteaReaction>>) {
         cs.launch {
-            runCatching { permits.withPermit { fetch(reactable) } }
+            runCatchingCancellable { permits.withPermit { fetch(reactable) } }
                 .onSuccess { flow.value = it }
                 .onFailure { if (it !is CancellationException) LOG.info("Failed to load reactions of $reactable", it) }
         }

@@ -26,8 +26,10 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.io.IOException
 import java.net.URI
 import java.net.URLEncoder
+import java.net.http.HttpHeaders
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
@@ -77,11 +79,26 @@ internal fun giteaErrorMessage(statusCode: Int, body: String?): String {
     return if (detail == null) "HTTP $statusCode" else "HTTP $statusCode: $detail"
 }
 
+/** Largest response body read into memory; a bigger one fails the request
+ * instead of exhausting the heap (file contents arrive base64-encoded). */
+private const val MAX_RESPONSE_BYTES = 64L * 1024 * 1024
+
+/** A response with its body read as text, at most [MAX_RESPONSE_BYTES]. */
+private class GiteaResponse(val statusCode: Int, val headers: HttpHeaders, val body: String)
+
 /**
  * Gitea REST API client (`/api/v1`). Endpoint shapes checked against a
  * Gitea 1.27.3 instance's `/swagger.v1.json`.
+ *
+ * [token] is asked for on every request, so a client built for an account
+ * ([com.github.hypercookie.giteaplugin.accounts.GiteaAccountManager.clientFor]) always sends the account's current token
+ * and stops working once the account is removed, however long its holder
+ * keeps it.
  */
-class GiteaApiClient(serverUrl: String, private val token: String) {
+class GiteaApiClient(serverUrl: String, private val token: suspend () -> String) {
+
+    /** A client with a fixed token, for checking a token before it is saved. */
+    constructor(serverUrl: String, token: String) : this(serverUrl, { token })
 
     private val baseUrl = serverUrl.trimEnd('/')
 
@@ -292,24 +309,27 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
      * as the directory separator Gitea's contents endpoint expects. */
     private fun encPath(path: String): String = path.split('/').joinToString("/") { enc(it) }
 
-    private fun requestBuilder(path: String): HttpRequest.Builder = HttpRequest.newBuilder()
+    private suspend fun requestBuilder(path: String): HttpRequest.Builder = HttpRequest.newBuilder()
         .uri(URI.create("$baseUrl$path"))
-        .header("Authorization", "token $token")
+        .header("Authorization", "token ${token()}")
         .header("Accept", "application/json")
         .timeout(Duration.ofSeconds(15))
 
     private suspend inline fun <reified T> get(path: String): T = decode(send(path))
 
-    private suspend fun send(path: String): HttpResponse<String> = withContext(Dispatchers.IO) {
+    private suspend fun send(path: String): GiteaResponse = withContext(Dispatchers.IO) {
         execute(requestBuilder(path).GET().build())
     }
 
     /** Every request of this client goes through here, so the debug request
      * counter sees all of them. Blocking; call on the IO dispatcher. */
-    private fun execute(request: HttpRequest): HttpResponse<String> {
+    private fun execute(request: HttpRequest): GiteaResponse {
         val service = httpService
         service.countRequest()
-        return service.client.send(request, HttpResponse.BodyHandlers.ofString())
+        val response = service.client.send(request, HttpResponse.BodyHandlers.ofInputStream())
+        val bytes = response.body().use { it.readNBytes((MAX_RESPONSE_BYTES + 1).toInt()) }
+        if (bytes.size > MAX_RESPONSE_BYTES) throw IOException("Response from ${request.uri().path} is larger than ${MAX_RESPONSE_BYTES / (1024 * 1024)} MB")
+        return GiteaResponse(response.statusCode(), response.headers(), String(bytes, StandardCharsets.UTF_8))
     }
 
     /**
@@ -331,7 +351,7 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
             val pageItems = decode<List<T>?>(response).orEmpty()
             items += pageItems
             emptyPages = if (pageItems.isEmpty()) emptyPages + 1 else 0
-            val hasMore = response.headers().firstValue("X-HasMore").map { it.toBoolean() }.orElse(true)
+            val hasMore = response.headers.firstValue("X-HasMore").map { it.toBoolean() }.orElse(true)
             if (!hasMore || emptyPages >= emptyPagesToEnd) break
         }
         return items
@@ -368,14 +388,14 @@ class GiteaApiClient(serverUrl: String, private val token: String) {
         checkStatus(response)
     }
 
-    private fun checkStatus(response: HttpResponse<String>) {
-        if (response.statusCode() !in 200..299) {
-            throw GiteaApiException(response.statusCode(), giteaErrorMessage(response.statusCode(), response.body()))
+    private fun checkStatus(response: GiteaResponse) {
+        if (response.statusCode !in 200..299) {
+            throw GiteaApiException(response.statusCode, giteaErrorMessage(response.statusCode, response.body))
         }
     }
 
-    private inline fun <reified T> decode(response: HttpResponse<String>): T {
+    private inline fun <reified T> decode(response: GiteaResponse): T {
         checkStatus(response)
-        return json.decodeFromString(response.body())
+        return json.decodeFromString(response.body)
     }
 }

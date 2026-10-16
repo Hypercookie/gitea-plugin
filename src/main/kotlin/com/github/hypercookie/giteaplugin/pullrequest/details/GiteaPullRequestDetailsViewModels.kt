@@ -1,9 +1,12 @@
 package com.github.hypercookie.giteaplugin.pullrequest.details
 
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
+import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchPrResolverService
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestActions
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
+import com.github.hypercookie.giteaplugin.util.GiteaBrowser
+import com.github.hypercookie.giteaplugin.util.runCatchingCancellable
 import com.intellij.collaboration.ui.codereview.details.data.CodeReviewCIJob
 import com.intellij.collaboration.ui.codereview.details.data.CodeReviewCIJobState
 import com.intellij.collaboration.ui.codereview.details.data.ReviewRequestState
@@ -16,12 +19,10 @@ import com.intellij.collaboration.ui.codereview.details.model.CodeReviewDetailsV
 import com.intellij.collaboration.ui.codereview.details.model.CodeReviewStatusViewModel
 import com.intellij.collaboration.util.ChangesSelection
 import com.intellij.collaboration.util.RefComparisonChange
-import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import git4idea.GitRevisionNumber
 import git4idea.repo.GitRepository
-import git4idea.repo.GitRepositoryManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +36,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -82,14 +85,18 @@ class GiteaPullRequestChangesViewModel(
     val changeListVm: StateFlow<Result<GiteaChangeListViewModel>?> = _changeList.asStateFlow()
 
     init {
+        // Again after a push (new head) and on Refresh; a failed load keeps
+        // the commits already shown.
         cs.launch {
-            _commits.value = runCatching { data.client.getPullRequestCommits(data.owner, data.repoName, data.number) }
-                .onFailure { thisLogger().warn("Failed to load commits of #${data.number}", it) }
-                .getOrDefault(emptyList())
+            merge(data.pullRequest.map { it.head.sha }.distinctUntilChanged().map { }, data.reloads).collectLatest {
+                runCatchingCancellable { data.client.getPullRequestCommits(data.owner, data.repoName, data.number) }
+                    .onSuccess { _commits.value = it }
+                    .onFailure { thisLogger().warn("Failed to load commits of #${data.number}", it) }
+            }
         }
         cs.launch {
             combine(_selectedIndex, _commits, data.pullRequest) { index, commits, _ -> commits.getOrNull(index) }
-                .collect { commit -> _changeList.value = null; _changeList.value = runCatching { loadChanges(commit) } }
+                .collect { commit -> _changeList.value = null; _changeList.value = runCatchingCancellable { loadChanges(commit) } }
         }
     }
 
@@ -182,10 +189,7 @@ class GiteaPullRequestBranchesViewModel(
 ) : CodeReviewBranchesViewModel {
 
     private val repository: GitRepository?
-        get() {
-            val manager = GitRepositoryManager.getInstance(data.project)
-            return data.repo.gitRoot?.let { root -> manager.repositories.find { it.root == root } } ?: manager.repositories.firstOrNull()
-        }
+        get() = GiteaBranchPrResolverService.getInstance(data.project).repositoryFor(data.repo)
 
     override val sourceBranch: StateFlow<String> =
         data.pullRequest.map { it.head.ref }.stateIn(cs, SharingStarted.Eagerly, data.pullRequest.value.head.ref)
@@ -205,13 +209,13 @@ class GiteaPullRequestBranchesViewModel(
     }
 
     private fun refreshCheckedOut() {
-        _isCheckedOut.value = repository?.currentBranchName == data.pullRequest.value.head.ref
+        _isCheckedOut.value = GiteaBranchPrResolverService.getInstance(data.project).isCheckedOut(data.repo, data.pullRequest.value)
     }
 
     override fun fetchAndCheckoutRemoteBranch() {
         val repo = repository ?: return
-        cs.launch(Dispatchers.Main) {
-            GiteaPullRequestActions.checkout(data.project, repo, data.pullRequest.value.head.ref) { refreshCheckedOut() }
+        cs.launch {
+            GiteaPullRequestActions.fetchAndCheckout(data.project, repo, data.repo, data.pullRequest.value) { refreshCheckedOut() }
         }
     }
 
@@ -247,7 +251,8 @@ class GiteaPullRequestStatusViewModel(
         }
     }.stateIn(cs, SharingStarted.Eagerly, false)
 
-    override val requiredConversationsResolved: SharedFlow<Boolean> = MutableStateFlow(false)
+    override val requiredConversationsResolved: SharedFlow<Boolean> =
+        data.threads.map { threads -> threads.all { it.isResolved } }.stateIn(cs, SharingStarted.Eagerly, data.threads.value.all { it.isResolved })
 
     private val _ciJobs = MutableStateFlow<List<CodeReviewCIJob>>(emptyList())
     override val ciJobs: SharedFlow<List<CodeReviewCIJob>> = _ciJobs.asStateFlow()
@@ -264,7 +269,7 @@ class GiteaPullRequestStatusViewModel(
                 while (assessment == GiteaMergeability.CHECKING && attempt < RECHECK_ATTEMPTS) {
                     attempt++
                     delay(RECHECK_DELAY_MS)
-                    val fresh = runCatching { data.client.getPullRequest(data.owner, data.repoName, pr.number) }.getOrNull() ?: continue
+                    val fresh = runCatchingCancellable { data.client.getPullRequest(data.owner, data.repoName, pr.number) }.getOrNull() ?: continue
                     assessment = GiteaMergeability.of(fresh.state, fresh.merged, fresh.draft, fresh.mergeable)
                     if (assessment == GiteaMergeability.OK) {
                         _mergeability.value = GiteaMergeability.OK
@@ -280,7 +285,9 @@ class GiteaPullRequestStatusViewModel(
             // "in progress" to its result without a manual refresh.
             data.pullRequest.collectLatest { pr ->
                 do {
-                    val combined = runCatching { data.client.getCombinedStatus(data.owner, data.repoName, pr.head.sha) }.getOrNull()
+                    val combined = runCatchingCancellable { data.client.getCombinedStatus(data.owner, data.repoName, pr.head.sha) }
+                        .onFailure { thisLogger().info("Failed to load commit statuses of #${pr.number}", it) }
+                        .getOrNull()
                     if (combined != null) _ciJobs.value = combined.statuses.orEmpty().map(::toJob)
                     val running = _ciJobs.value.any { it.status == CodeReviewCIJobState.PENDING }
                     if (running) delay(CI_POLL_MS)
@@ -301,7 +308,7 @@ class GiteaPullRequestStatusViewModel(
             else -> CodeReviewCIJobState.PENDING
         },
         true,
-        status.targetUrl,
+        status.targetUrl?.takeIf(GiteaBrowser::isSafe),
     )
 
     private companion object {
@@ -314,7 +321,7 @@ class GiteaPullRequestStatusViewModel(
         val jobs = _ciJobs.value
         val single = jobs.singleOrNull()?.detailsUrl
         if (single != null) {
-            cs.launch(Dispatchers.Main) { BrowserUtil.browse(single) }
+            cs.launch(Dispatchers.Main) { GiteaBrowser.open(single) }
         } else {
             _showJobs.tryEmit(jobs)
         }

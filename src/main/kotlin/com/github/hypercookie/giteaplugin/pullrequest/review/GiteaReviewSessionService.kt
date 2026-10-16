@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -97,6 +98,11 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
             GitRepository.GIT_REPO_CHANGE,
             GitRepositoryChangeListener { requestRefresh() },
         )
+        // An added or removed account changes which pull request (if any)
+        // the checked-out branch resolves to; a removed one drops the session.
+        cs.launch {
+            GiteaAccountManager.getInstance().accountsState.drop(1).collect { requestRefresh() }
+        }
         cs.launch(Dispatchers.IO) {
             refreshRequests.debounce(REFRESH_DEBOUNCE_MS).collectLatest {
                 try {
@@ -163,9 +169,9 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
         // previous branch's pull request must not stay around.
         if (key != sessionKey) clear()
 
-        val token = GiteaAccountManager.getInstance().getToken(repoContext.account)
-        if (token.isNullOrBlank()) return clear()
-        val client = GiteaApiClient(repoContext.account.serverUrl, token)
+        val accountManager = GiteaAccountManager.getInstance()
+        if (accountManager.getToken(repoContext.account) == null) return clear()
+        val client = accountManager.clientFor(repoContext.account)
 
         val current = _session.value?.takeIf { it.repo == repoContext }
         val pr = current?.let { stillOpenForBranch(client, it, key) }
@@ -180,7 +186,7 @@ class GiteaReviewSessionService(private val project: Project, private val cs: Co
             current.update(pr)
             return
         }
-        val store = PendingReviewStoreService.getInstance(project).storeFor(repoContext.owner, repoContext.repo, pr.number)
+        val store = PendingReviewStoreService.getInstance(project).storeFor(repoContext, pr.number)
         replace(GiteaPullRequestReviewData(project, cs.giteaChildScope("Gitea PR #${pr.number}"), repoContext, client, pr, store))
     }
 

@@ -56,6 +56,9 @@ object GiteaBranchPrMatcher {
         return prs.filter { it.head.ref == headRef && isSameRepo(it) }.maxByOrNull { it.updatedAt ?: "" }
     }
 
+    /** Whether [pr]'s head branch is in another repository than its base. */
+    fun isFork(pr: PullRequest): Boolean = !isSameRepo(pr)
+
     /** Unknown repository ids (older servers) count as the same repository. */
     private fun isSameRepo(pr: PullRequest): Boolean {
         val head = pr.head.repoId ?: return true

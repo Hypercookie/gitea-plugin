@@ -1,10 +1,13 @@
 package com.github.hypercookie.giteaplugin.pullrequest.list
 
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
+import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchPrResolverService
 import com.github.hypercookie.giteaplugin.pullrequest.details.GiteaMergeability
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.toolwindow.GiteaProjectViewModel
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
+import com.github.hypercookie.giteaplugin.util.errorDescription
+import com.github.hypercookie.giteaplugin.util.runCatchingCancellable
 import com.intellij.collaboration.ui.codereview.avatar.Avatar
 import com.intellij.collaboration.ui.codereview.list.NamedCollection
 import com.intellij.collaboration.ui.codereview.list.ReviewListComponentFactory
@@ -20,11 +23,11 @@ import com.intellij.openapi.actionSystem.CompositeShortcutSet
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.project.DumbAwareAction
+import com.intellij.openapi.ui.Messages
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.ColorUtil
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.components.JBList
-import git4idea.repo.GitRepositoryManager
 import icons.CollaborationToolsIcons
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -89,15 +92,18 @@ object GiteaPullRequestListComponent {
             projectVm.openPullRequest(item.number, item.title)
         }
         val checkout = action("Checkout", AllIcons.Vcs.Branch, list) { item ->
-            val manager = GitRepositoryManager.getInstance(projectVm.project)
-            val repository = projectVm.repo.gitRoot?.let { root -> manager.repositories.find { it.root == root } }
-                ?: manager.repositories.firstOrNull() ?: return@action
+            val repository = GiteaBranchPrResolverService.getInstance(projectVm.project).repositoryFor(projectVm.repo) ?: return@action
             // The issues endpoints don't return the head branch, so fetch the
             // pull request first.
             cs.launch {
-                val pr = runCatching { projectVm.client.getPullRequest(projectVm.repo.owner, projectVm.repo.repo, item.number) }.getOrNull()
-                    ?: return@launch
-                withContext(Dispatchers.Main) { GiteaPullRequestActions.checkout(projectVm.project, repository, pr.head.ref) }
+                val pr = runCatchingCancellable { projectVm.client.getPullRequest(projectVm.repo.owner, projectVm.repo.repo, item.number) }
+                    .getOrElse { e ->
+                        withContext(Dispatchers.Main) {
+                            Messages.showErrorDialog(projectVm.project, errorDescription(e), "Can't Load Pull Request #${item.number}")
+                        }
+                        return@launch
+                    }
+                GiteaPullRequestActions.fetchAndCheckout(projectVm.project, repository, projectVm.repo, pr)
             }
         }
         val openInBrowser = action("Open in Browser", AllIcons.General.Web, list) { GiteaPullRequestActions.openInBrowser(it.htmlUrl) }

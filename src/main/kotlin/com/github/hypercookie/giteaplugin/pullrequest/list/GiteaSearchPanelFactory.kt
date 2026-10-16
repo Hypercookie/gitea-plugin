@@ -1,6 +1,7 @@
 package com.github.hypercookie.giteaplugin.pullrequest.list
 
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
+import com.github.hypercookie.giteaplugin.util.runCatchingCancellable
 import com.intellij.collaboration.ui.codereview.avatar.Avatar
 import com.intellij.collaboration.ui.codereview.list.search.ChooserPopupUtil
 import com.intellij.collaboration.ui.codereview.list.search.DropDownComponentFactory
@@ -43,7 +44,7 @@ class GiteaSearchPanelFactory(
         DropDownComponentFactory(vm.authorFilterState).create(viewScope, "Author") { point ->
             ChooserPopupUtil.showAsyncChooserPopup(
                 point,
-                itemsLoader = flow { emit(runCatching { vm.getUsers() }) },
+                itemsLoader = flow { emit(runCatchingCancellable { vm.getUsers() }) },
                 presenter = { user ->
                     PopupItemPresentation.Simple(
                         user.login,
@@ -56,14 +57,14 @@ class GiteaSearchPanelFactory(
         DropDownComponentFactory(vm.labelFilterState).create(viewScope, "Label", valuePresenter = { it.name }) { point ->
             ChooserPopupUtil.showAsyncChooserPopup(
                 point,
-                itemsLoader = flow { emit(runCatching { vm.getLabels() }) },
+                itemsLoader = flow { emit(runCatchingCancellable { vm.getLabels() }) },
                 presenter = { label -> PopupItemPresentation.Simple(label.name) },
             )
         },
         DropDownComponentFactory(vm.assigneeFilterState).create(viewScope, "Assignee") { point ->
             ChooserPopupUtil.showAsyncChooserPopup(
                 point,
-                itemsLoader = flow { emit(runCatching { vm.getUsers() }) },
+                itemsLoader = flow { emit(runCatchingCancellable { vm.getUsers() }) },
                 presenter = { user ->
                     PopupItemPresentation.Simple(
                         user.login,

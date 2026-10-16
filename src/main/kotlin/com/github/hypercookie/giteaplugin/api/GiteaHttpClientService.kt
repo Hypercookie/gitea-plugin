@@ -3,6 +3,7 @@ package com.github.hypercookie.giteaplugin.api
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
+import com.intellij.util.net.ssl.CertificateManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +25,11 @@ import java.time.Duration
  * reachable. [dispose] (on plugin unload or IDE shutdown) stops the client,
  * and dropping the service instance drops the last reference to it.
  *
+ * It trusts the IDE's certificates (Settings | Tools | Server Certificates,
+ * so a server with an internal CA works once its certificate is accepted
+ * there) and goes through the IDE's proxy settings, which the platform
+ * installs as the default proxy selector.
+ *
  * It also counts the API requests sent since the IDE started (or since the
  * plugin was loaded), for the debug status bar widget.
  */
@@ -32,6 +38,7 @@ class GiteaHttpClientService : Disposable {
 
     val client: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
+        .sslContext(CertificateManager.getInstance().sslContext)
         .build()
 
     private val _requestCount = MutableStateFlow(0L)
