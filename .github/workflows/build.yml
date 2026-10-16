@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+# Jobs run on the self-hosted runners labelled gitea-plugin (see the runner
+# docker-compose setup). Setting the repository variable CI_RUNNER to
+# "github" sends them back to GitHub-hosted ubuntu-latest runners.
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -17,7 +21,7 @@ jobs:
   # job restores the Gradle cache once instead of twice.
   build:
     name: Build and test
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'github' && 'ubuntu-latest' || fromJSON('["self-hosted", "gitea-plugin"]') }}
     steps:
       - name: Fetch Sources
         uses: actions/checkout@v6
@@ -51,7 +55,7 @@ jobs:
   # is the newest release, which covers a new line before it is listed here.
   verify:
     name: Verify plugin (${{ matrix.ide }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'github' && 'ubuntu-latest' || fromJSON('["self-hosted", "gitea-plugin"]') }}
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +65,7 @@ jobs:
       # default free space. Removing preinstalled SDKs is quicker than the
       # full free-disk-space action.
       - name: Free Disk Space
+        if: runner.environment == 'github-hosted'
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/lib/android
 
       - name: Fetch Sources
@@ -91,7 +96,7 @@ jobs:
     name: Release draft
     if: github.event_name != 'pull_request'
     needs: [ build, verify ]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'github' && 'ubuntu-latest' || fromJSON('["self-hosted", "gitea-plugin"]') }}
     permissions:
       contents: write
     steps:

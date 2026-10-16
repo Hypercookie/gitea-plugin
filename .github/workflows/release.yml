@@ -1,7 +1,9 @@
 # Attaches the plugin archive to a GitHub release when it is published, then
 # publishes it to JetBrains Marketplace (a version like 0.1.0-beta goes to the
 # beta channel). Marketplace publishing needs the secrets PUBLISH_TOKEN,
-# CERTIFICATE_CHAIN, PRIVATE_KEY and PRIVATE_KEY_PASSWORD.
+# CERTIFICATE_CHAIN, PRIVATE_KEY and PRIVATE_KEY_PASSWORD. Like the build, it
+# runs on the self-hosted gitea-plugin runners unless the repository variable
+# CI_RUNNER is "github".
 
 name: Release
 on:
@@ -15,12 +17,13 @@ jobs:
 
   release:
     name: Publish Plugin
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'github' && 'ubuntu-latest' || fromJSON('["self-hosted", "gitea-plugin"]') }}
     permissions:
       contents: write
       pull-requests: write
     steps:
       - name: Maximize Build Space
+        if: runner.environment == 'github-hosted'
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
