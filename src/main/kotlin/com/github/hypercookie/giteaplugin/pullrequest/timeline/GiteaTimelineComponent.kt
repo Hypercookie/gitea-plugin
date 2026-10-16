@@ -14,7 +14,8 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentio
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
-import com.github.hypercookie.giteaplugin.util.giteaAction
+import com.github.hypercookie.giteaplugin.util.hideNewLineHint
+import com.github.hypercookie.giteaplugin.util.submitAction
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
 import com.intellij.collaboration.messages.CollaborationToolsBundle
 import com.intellij.collaboration.ui.SimpleHtmlPane
@@ -265,14 +266,14 @@ object GiteaTimelineComponent {
     private fun newCommentField(cs: CoroutineScope, data: GiteaPullRequestReviewData, avatars: GiteaAvatarIcons, onPosted: () -> Unit): JComponent {
         val vm = NewCommentViewModel(data.project, cs, data, onPosted)
         val config = CommentInputActionsComponentFactory.Config(
-            primaryAction = MutableStateFlow(giteaAction(CollaborationToolsBundle.message("review.comment.submit")) { vm.post() }),
+            primaryAction = MutableStateFlow(vm.submitAction(cs, CollaborationToolsBundle.message("review.comment.submit")) { vm.post() }),
             secondaryActions = MutableStateFlow(emptyList()),
             additionalActions = MutableStateFlow(emptyList()),
             cancelAction = MutableStateFlow(null),
             submitHint = MutableStateFlow(CollaborationToolsBundle.message("review.comment.hint", CommentInputActionsComponentFactory.submitShortcutText)),
         )
         val icon = CommentTextFieldFactory.IconConfig.of(FULL, avatars, data.currentUser.value)
-        return CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon) { GiteaMentionSource.install(it, data.mentions) }.apply {
+        return CodeReviewCommentTextFieldFactory.createIn(cs, vm, config, icon) { GiteaMentionSource.install(it, data.mentions) }.hideNewLineHint().apply {
             border = JBUI.Borders.empty(FULL.inputPaddingInsets)
         }.let { field ->
             JPanel(BorderLayout()).apply {

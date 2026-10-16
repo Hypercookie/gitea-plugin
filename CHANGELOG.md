@@ -7,10 +7,15 @@
 - Settings to turn off the commit checks column, review comments in the editor, reactions, the pull request suggestion after a push and reloading on window focus; turning a feature off also stops its requests.
 - An opt-in debug widget in the status bar that counts the Gitea API requests sent since the IDE started.
 - Code blocks in review comments in the editor: Apply and Copy icon buttons on hover; Apply replaces the commented line with the block (greyed out, with the reason, where the file can't be edited).
+- Shift+Cmd+Enter (Shift+Ctrl+Enter on Windows and Linux) posts a new review comment as a single comment; Cmd+Enter still starts or adds to the review.
 
 ### Changed
 - Review comments in the editor widen to fit their longest code line, up to the editor's width; wider code scrolls sideways instead of being cut off.
 - Code blocks in the pull request timeline scroll sideways and have a Copy button on hover, and timeline comments always fit the view's width instead of being cut off on the right.
+- Comment inputs no longer show the "Enter to add a new line" hint.
+
+### Fixed
+- Start Review, Add Single Comment, Reply and Comment stay disabled, and their shortcuts do nothing, until the comment has text other than whitespace.
 
 ## [0.1.0-beta] - 2026-10-15
 ### Added
