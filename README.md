@@ -103,20 +103,15 @@ like them.
 
 ## Requirements
 
-- IntelliJ IDEA 2025.2 or later, or another JetBrains IDE on platform build 252
-  or later, with the bundled Git plugin enabled.
+- IntelliJ IDEA 2025.2 to 2026.2, or another JetBrains IDE on platform builds
+  252 to 262, with the bundled Git plugin enabled.
 - Gitea 1.27 is recommended; the plugin is tested against it. Gitea 1.24 and
   earlier lack the endpoints for replying to and resolving review comments.
 
 ## Installation
 
-The plugin is in beta. Version 0.1.0-beta is the first release.
-
-1. Download `gitea-plugin-0.1.0-beta.zip` from the
-   [0.1.0-beta release](https://github.com/Hypercookie/gitea-plugin/releases/tag/v0.1.0-beta).
-   Pre-releases are listed on the
-   [releases page](https://github.com/Hypercookie/gitea-plugin/releases) but
-   not under "Latest".
+1. Download `gitea-plugin-1.0.0.zip` from the
+   [latest release](https://github.com/Hypercookie/gitea-plugin/releases/latest).
 2. In the IDE, open <kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>⚙</kbd> |
    <kbd>Install Plugin from Disk...</kbd>, select the downloaded archive (don't
    unzip it) and restart the IDE.
