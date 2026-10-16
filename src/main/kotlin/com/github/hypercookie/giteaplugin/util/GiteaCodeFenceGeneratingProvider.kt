@@ -8,6 +8,7 @@ package com.github.hypercookie.giteaplugin.util
 
 import com.intellij.markdown.utils.lang.HtmlSyntaxHighlighter
 import com.intellij.openapi.util.text.StringUtil
+import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.ast.getTextInNode
@@ -15,9 +16,12 @@ import org.intellij.markdown.html.GeneratingProvider
 import org.intellij.markdown.html.HtmlGenerator
 
 /** Renders a fenced code block as `<pre><code>` with the content colored by
- * [highlighter] for the fence's language. */
+ * [highlighter] for the fence's language. A top-level block (not inside a
+ * list or quote) goes to [cutOut] instead when it is set, and the HTML it
+ * returns takes the block's place. */
 internal class GiteaCodeFenceGeneratingProvider(
     private val highlighter: HtmlSyntaxHighlighter,
+    private val cutOut: ((GiteaMarkdown.CodeBlock) -> String)? = null,
 ) : GeneratingProvider {
 
     override fun processNode(visitor: HtmlGenerator.HtmlGeneratingVisitor, text: String, node: ASTNode) {
@@ -43,7 +47,12 @@ internal class GiteaCodeFenceGeneratingProvider(
             }
         }
 
-        val colored = highlighter.color(language, content.toString().removeSuffix("\n"))
+        val code = content.toString().removeSuffix("\n")
+        val colored = highlighter.color(language, code)
+        if (cutOut != null && node.parent?.type == MarkdownElementTypes.MARKDOWN_FILE) {
+            visitor.consumeHtml(cutOut(GiteaMarkdown.CodeBlock(language, code, "<pre><code>$colored</code></pre>")))
+            return
+        }
         // Built by hand rather than with HtmlChunk.wrapWith so an empty block
         // stays `<code></code>`; a self-closing `<code/>` confuses Swing's parser.
         val classAttribute = language?.let { " class=\"language-${StringUtil.escapeXmlEntities(it)}\"" }.orEmpty()

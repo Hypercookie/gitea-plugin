@@ -4,7 +4,6 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestRev
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
-import com.intellij.collaboration.ui.codereview.editor.CodeReviewComponentInlayRenderer
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterChangesRenderer
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterControlsRenderer
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorModel
@@ -100,11 +99,11 @@ class GiteaReviewInEditorController : EditorFactoryListener {
             cs.launch(Dispatchers.Main) { CodeReviewEditorGutterControlsRenderer.render(model, editor) }
             cs.launch(Dispatchers.Main) {
                 editor.renderInlays(model.inlays, HashingUtil.mappingStrategy(GiteaEditorInlay::key)) { inlay ->
-                    val component = GiteaReviewEditorComponents.create(this, data.project, inlay)
+                    val component = GiteaReviewEditorComponents.create(this, data.project, inlay, editor)
                     component.addHierarchyListener { e ->
                         if (e.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) inlay.shownState.value = component.isShowing
                     }
-                    CodeReviewComponentInlayRenderer(component)
+                    GiteaComponentInlayRenderer(component)
                 }
             }
         }

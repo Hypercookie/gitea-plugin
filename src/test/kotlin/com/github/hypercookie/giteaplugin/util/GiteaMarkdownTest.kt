@@ -85,4 +85,21 @@ class GiteaMarkdownTest : BasePlatformTestCase() {
         val pane = GiteaMarkdown.createPane(GiteaMarkdown.toHtml("`x`"))
         assertTrue(pane.text, pane.text.contains("<code>"))
     }
+
+    fun testToSegmentsCutsOutTopLevelCodeBlocks() {
+        val segments = GiteaMarkdown.toSegments("Before\n\n```xml\n<a/>\n```\n\n- item\n\n  ```\n  nested\n  ```\n\nAfter")
+        assertEquals(3, segments.size)
+        assertEquals("<p>Before</p>", (segments[0] as GiteaMarkdown.Segment.Html).html)
+        val block = (segments[1] as GiteaMarkdown.Segment.Code).block
+        assertEquals("xml", block.language)
+        assertEquals("<a/>", block.code)
+        val rest = (segments[2] as GiteaMarkdown.Segment.Html).html
+        assertTrue(rest, rest.contains("nested") && rest.contains("<pre>") && rest.endsWith("<p>After</p>"))
+    }
+
+    fun testCreateBodyWithoutCodeIsOnePane() {
+        assertTrue(GiteaMarkdown.createBody("just *text*") is javax.swing.JEditorPane)
+        val body = GiteaMarkdown.createBody("text\n\n```\ncode\n```")
+        assertNotNull(com.intellij.util.ui.UIUtil.findComponentOfType(body, GiteaCodeBlockComponent::class.java))
+    }
 }

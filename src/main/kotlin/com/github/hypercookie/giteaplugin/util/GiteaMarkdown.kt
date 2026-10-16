@@ -11,6 +11,7 @@ import com.intellij.openapi.fileTypes.PlainTextLanguage
 import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.ColorUtil
+import com.intellij.ui.components.panels.ListLayout
 import com.intellij.util.ui.StyleSheetUtil
 import com.intellij.util.ui.UIUtil
 import org.intellij.markdown.IElementType
@@ -28,7 +29,10 @@ import org.intellij.markdown.parser.LinkMap
 import org.intellij.markdown.parser.MarkdownParser
 import java.awt.Color
 import java.net.URI
+import java.util.UUID
+import javax.swing.JComponent
 import javax.swing.JEditorPane
+import javax.swing.JPanel
 
 /**
  * Gitea comment and description bodies (GitHub-flavored Markdown) to HTML for
@@ -46,11 +50,38 @@ object GiteaMarkdown {
      * Markdown image syntax would otherwise make the IDE fetch an arbitrary
      * attacker-chosen URL just from a reviewer opening the comment.
      */
-    fun toHtml(markdown: String): String {
+    fun toHtml(markdown: String): String = render(markdown, null)
+
+    /** A fenced code block: its [code] and that code colored as `<pre><code>` [html]. */
+    class CodeBlock(val language: String?, val code: String, val html: String)
+
+    /** A run of [toHtml] output, or a top-level code block cut out of it. */
+    sealed interface Segment {
+        data class Html(val html: String) : Segment
+        class Code(val block: CodeBlock) : Segment
+    }
+
+    /** [toHtml] split at its top-level fenced code blocks, so they can be
+     * shown as their own components. Blocks inside lists or quotes stay in
+     * the HTML. */
+    fun toSegments(markdown: String): List<Segment> {
+        val blocks = mutableListOf<CodeBlock>()
+        // A marker per render that comment text can't contain.
+        val marker = "<!--gitea-code-block-${UUID.randomUUID()}-->"
+        val parts = render(markdown) { blocks.add(it); marker }.split(marker)
+        return buildList {
+            parts.forEachIndexed { index, html ->
+                if (html.isNotBlank()) add(Segment.Html(html.trim()))
+                blocks.getOrNull(index)?.let { add(Segment.Code(it)) }
+            }
+        }
+    }
+
+    private fun render(markdown: String, cutOutCodeBlock: ((CodeBlock) -> String)?): String {
         // Gitea bodies written in the web UI use CRLF line endings, which the
         // parser does not handle.
         val text = markdown.replace("\r\n", "\n").replace('\r', '\n')
-        val flavour = GiteaFlavourDescriptor()
+        val flavour = GiteaFlavourDescriptor(cutOutCodeBlock)
         val tree = MarkdownParser(flavour).buildMarkdownTreeFromString(text)
         val providers = flavour.createHtmlGeneratingProviders(LinkMap.buildLinkMap(tree, text), null)
         // The generator wraps its output in <body>, which the panes add themselves.
@@ -67,6 +98,31 @@ object GiteaMarkdown {
             addHyperlinkListener(GiteaBrowser.hyperlinkListener)
             setHtmlBody(html)
         }
+
+    /** [markdown] as a column of panes, with each top-level code block a
+     * [GiteaCodeBlockComponent] that keeps its lines unwrapped and offers
+     * Copy, and [apply] when given. */
+    fun createBody(markdown: String, apply: GiteaCodeBlockApply? = null): JComponent {
+        val segments = toSegments(markdown)
+        if (segments.none { it is Segment.Code }) return createPane(toHtml(markdown))
+        return JPanel(ListLayout.vertical(0)).apply {
+            isOpaque = false
+            for (segment in segments) {
+                when (segment) {
+                    is Segment.Html -> add(createPane(segment.html))
+                    is Segment.Code -> add(GiteaCodeBlockComponent(segment.block, apply))
+                }
+            }
+        }
+    }
+
+    /** A pane for a code block's `<pre>` [html]: no margin, as the block's
+     * own component spaces and colors it. */
+    internal fun createCodePane(html: String): JEditorPane =
+        SimpleHtmlPane(additionalStyleSheet = StyleSheetUtil.loadStyleSheet(styleSheetRules() + "\npre { margin: 0; padding: 6px; }"))
+            .apply { setHtmlBody(html) }
+
+    internal fun codeBackground(): Color = EditorColorsManager.getInstance().globalScheme.defaultBackground
 
     private fun styleSheetRules(): String {
         val scheme = EditorColorsManager.getInstance().globalScheme
@@ -89,11 +145,13 @@ object GiteaMarkdown {
 
 /** GFM with raw HTML escaped, images reduced to their alt text, strikethrough
  * rendered with a tag Swing understands, and highlighted code fences. */
-private class GiteaFlavourDescriptor : GFMFlavourDescriptor() {
+private class GiteaFlavourDescriptor(
+    private val cutOutCodeBlock: ((GiteaMarkdown.CodeBlock) -> String)?,
+) : GFMFlavourDescriptor() {
     override fun createHtmlGeneratingProviders(linkMap: LinkMap, baseURI: URI?): Map<IElementType, GeneratingProvider> =
         super.createHtmlGeneratingProviders(linkMap, baseURI) + mapOf(
             GFMElementTypes.STRIKETHROUGH to SimpleInlineTagProvider("strike", 2, -2),
-            MarkdownElementTypes.CODE_FENCE to GiteaCodeFenceGeneratingProvider(CodeFenceHighlighter),
+            MarkdownElementTypes.CODE_FENCE to GiteaCodeFenceGeneratingProvider(CodeFenceHighlighter, cutOutCodeBlock),
             MarkdownElementTypes.HTML_BLOCK to EscapedHtmlBlockProvider,
             MarkdownTokenTypes.HTML_TAG to EscapedTextProvider,
             MarkdownElementTypes.IMAGE to ImageAltTextProvider,

@@ -59,13 +59,14 @@ class GiteaEditorReleaseTest : BasePlatformTestCase() {
     }
 
     fun testInlayCommentFieldReleasedWithInlayScope() {
+        myFixture.configureByText("README.md", "readme")
         val baseline = editors()
         // renderInlays gives each inlay a child scope of the controller's
         // Dispatchers.Main scope and cancels it when the inlay is removed.
         val inlayScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         val data = data()
         val vm = GiteaNewCommentViewModel(inlayScope, data, "README.md", ReviewSide.NEW, 0) {}
-        GiteaReviewEditorComponents.create(inlayScope, project, GiteaEditorInlay.NewComment(vm))
+        GiteaReviewEditorComponents.create(inlayScope, project, GiteaEditorInlay.NewComment(vm), myFixture.editor)
         val created = createdSince(baseline)
         assertEquals("new-comment inlay creates its editor", 1, created.size)
 

@@ -10,6 +10,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaNewCommentView
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaThreadViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
+import com.github.hypercookie.giteaplugin.util.GiteaCodeBlockApply
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.bindEnabled
 import com.github.hypercookie.giteaplugin.util.bindName
@@ -25,8 +26,12 @@ import com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentTextFie
 import com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentUIUtil
 import com.intellij.collaboration.ui.codereview.comment.CommentInputActionsComponentFactory
 import com.intellij.collaboration.ui.codereview.timeline.comment.CommentTextFieldFactory
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
+import com.intellij.openapi.vfs.ReadonlyStatusHandler
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.panels.ListLayout
 import com.intellij.util.ui.JBUI
@@ -56,15 +61,42 @@ object GiteaReviewEditorComponents {
 
     private val COMPACT = CodeReviewChatItemUIUtil.ComponentType.COMPACT
 
-    fun create(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay): JComponent = when (inlay) {
-        is GiteaEditorInlay.Thread -> createThread(cs, project, inlay)
-        is GiteaEditorInlay.Pending -> createPending(cs, project, inlay)
+    fun create(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay, editor: Editor): JComponent = when (inlay) {
+        is GiteaEditorInlay.Thread -> createThread(cs, project, inlay, codeBlockApply(cs, project, editor, inlay))
+        is GiteaEditorInlay.Pending -> createPending(cs, project, inlay, codeBlockApply(cs, project, editor, inlay))
         is GiteaEditorInlay.NewComment -> createNewComment(cs, project, inlay.vm)
+    }
+
+    /**
+     * Apply for code blocks in [inlay]'s comments: replaces the commented
+     * line of [editor] with the block. Only for an editable file; not while
+     * the comment is outdated, as its line is then only where the changed
+     * code now starts.
+     */
+    private fun codeBlockApply(cs: CoroutineScope, project: Project, editor: Editor, inlay: GiteaEditorInlay): GiteaCodeBlockApply? {
+        val document = editor.document
+        if (editor.isViewer || !document.isWritable || FileDocumentManager.getInstance().getFile(document) == null) return null
+        val reason = combine(inlay.line, inlay.outdatedState) { line, outdated ->
+            when {
+                line == null -> "The commented line is not in this file"
+                outdated -> "The commented line has changed since the comment"
+                else -> null
+            }
+        }.stateIn(cs, SharingStarted.Eagerly, null)
+        return GiteaCodeBlockApply(cs, reason) { code ->
+            val line = inlay.line.value ?: return@GiteaCodeBlockApply
+            if (!ReadonlyStatusHandler.ensureDocumentWritable(project, document)) return@GiteaCodeBlockApply
+            WriteCommandAction.writeCommandAction(project).withName("Apply Code Block").run<RuntimeException> {
+                if (line < document.lineCount) {
+                    document.replaceString(document.getLineStartOffset(line), document.getLineEndOffset(line), code)
+                }
+            }
+        }
     }
 
     // --- Thread ------------------------------------------------------------
 
-    private fun createThread(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay.Thread): JComponent {
+    private fun createThread(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay.Thread, apply: GiteaCodeBlockApply?): JComponent {
         val vm = inlay.vm
         val avatars = GiteaAvatarIcons.getInstance(project)
         val commentsPanel = verticalPanel(0)
@@ -86,6 +118,7 @@ object GiteaReviewEditorComponents {
                         comment,
                         firstInResolvedThread = first && vm.thread.value.isResolved,
                         firstInOutdatedThread = first && outdated,
+                        apply = apply,
                     ),
                 )
             }
@@ -140,11 +173,12 @@ object GiteaReviewEditorComponents {
         comment: PullReviewComment,
         firstInResolvedThread: Boolean,
         firstInOutdatedThread: Boolean,
+        apply: GiteaCodeBlockApply?,
     ): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
         val reactionsVm = giteaReactionsViewModelOrNull(cs, GiteaReactable.Comment(comment.id), data.currentUser) { data.reactions }
         val body = verticalPanel(CodeReviewTimelineUIUtil.VERTICAL_GAP).apply {
-            add(GiteaMarkdown.createPane(GiteaMarkdown.toHtml(comment.body)))
+            add(GiteaMarkdown.createBody(comment.body, apply))
             reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
         val author = comment.user
@@ -218,9 +252,9 @@ object GiteaReviewEditorComponents {
 
     // --- Pending comment ---------------------------------------------------
 
-    private fun createPending(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay.Pending): JComponent {
+    private fun createPending(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay.Pending, apply: GiteaCodeBlockApply?): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
-        val body = GiteaMarkdown.createPane(GiteaMarkdown.toHtml(inlay.comment.body))
+        val body = GiteaMarkdown.createBody(inlay.comment.body, apply)
         val author = inlay.author.value
         val item = CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, body) {
             iconTooltip = author?.presentableName()
