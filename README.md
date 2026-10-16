@@ -83,7 +83,9 @@ like them.
 ### Git log
 
 - A **Gitea Commit Checks** column shows the commit status of each commit in
-  the Git log. Click it to open the check or the commit page.
+  the Git log. Click it to open the check or the commit page. It is off by
+  default, since it asks the server once per commit shown; turn it on in the
+  Gitea settings.
 
 ### Accounts
 

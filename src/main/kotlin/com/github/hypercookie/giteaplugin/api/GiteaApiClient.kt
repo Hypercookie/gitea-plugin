@@ -251,9 +251,6 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
     suspend fun listReviewComments(owner: String, repo: String, index: Long, reviewId: Long): List<PullReviewComment> =
         get("/api/v1/repos/${enc(owner)}/${enc(repo)}/pulls/$index/reviews/$reviewId/comments")
 
-    /** All inline comments across all reviews on this PR, flattened. */
-    suspend fun getAllReviewComments(owner: String, repo: String, index: Long): List<PullReviewComment> =
-        listReviews(owner, repo, index).flatMap { listReviewComments(owner, repo, index, it.id) }
 
     /** Creates a review; when `options.event` isn't `PENDING`, this also
      * submits it immediately — Gitea does both in one call. */
@@ -325,7 +322,7 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
      * counter sees all of them. Blocking; call on the IO dispatcher. */
     private fun execute(request: HttpRequest): GiteaResponse {
         val service = httpService
-        service.countRequest()
+        service.countRequest(request.method(), request.uri().path)
         val response = service.client.send(request, HttpResponse.BodyHandlers.ofInputStream())
         val bytes = response.body().use { it.readNBytes((MAX_RESPONSE_BYTES + 1).toInt()) }
         if (bytes.size > MAX_RESPONSE_BYTES) throw IOException("Response from ${request.uri().path} is larger than ${MAX_RESPONSE_BYTES / (1024 * 1024)} MB")
@@ -341,6 +338,10 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
      * usable as a stop condition: the timeline drops inline code comments
      * after paging, so there it counts only the current page's items, and a
      * page of nothing but code comments comes back empty (`null`) mid-list.
+     * Elsewhere it is the real total, so a short page that reaches it ends
+     * the list without asking for the empty page after it. (A short page
+     * alone doesn't: a server with a lower `MAX_RESPONSE_ITEMS` sends short
+     * pages throughout.)
      */
     private suspend inline fun <reified T> getAllPages(path: String, emptyPagesToEnd: Int = 1): List<T> {
         val separator = if ('?' in path) '&' else '?'
@@ -353,6 +354,10 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
             emptyPages = if (pageItems.isEmpty()) emptyPages + 1 else 0
             val hasMore = response.headers.firstValue("X-HasMore").map { it.toBoolean() }.orElse(true)
             if (!hasMore || emptyPages >= emptyPagesToEnd) break
+            if (emptyPagesToEnd == 1 && pageItems.size < PAGE_LIMIT) {
+                val total = response.headers.firstValue("X-Total-Count").map { it.toLongOrNull() }.orElse(null)
+                if (total != null && items.size >= total) break
+            }
         }
         return items
     }

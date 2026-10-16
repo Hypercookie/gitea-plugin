@@ -89,13 +89,17 @@ class GiteaPullRequestChangesViewModel(
         // the commits already shown.
         cs.launch {
             merge(data.pullRequest.map { it.head.sha }.distinctUntilChanged().map { }, data.reloads).collectLatest {
-                runCatchingCancellable { data.client.getPullRequestCommits(data.owner, data.repoName, data.number) }
+                runCatchingCancellable { data.commits() }
                     .onSuccess { _commits.value = it }
                     .onFailure { thisLogger().warn("Failed to load commits of #${data.number}", it) }
             }
         }
         cs.launch {
-            combine(_selectedIndex, _commits, data.pullRequest) { index, commits, _ -> commits.getOrNull(index) }
+            // Only a new head or merge base changes the files; other pull
+            // request updates (a new comment bumps updated_at) don't.
+            val diffBase = data.pullRequest.map { it.head.sha to it.mergeBase }.distinctUntilChanged()
+            combine(_selectedIndex, _commits, diffBase) { index, commits, _ -> commits.getOrNull(index) }
+                .distinctUntilChanged()
                 .collect { commit -> _changeList.value = null; _changeList.value = runCatchingCancellable { loadChanges(commit) } }
         }
     }
@@ -105,14 +109,14 @@ class GiteaPullRequestChangesViewModel(
         val changes = if (commit == null) {
             val base = GitRevisionNumber(pr.mergeBase ?: pr.base.sha)
             val head = GitRevisionNumber(pr.head.sha)
-            data.client.getPullRequestFiles(data.owner, data.repoName, data.number).map { file ->
+            data.changedFiles().values.map { file ->
                 RefComparisonChange(
                     base, if (file.status == "added") null else GiteaChangePaths.filePath(data, file.previousFilename ?: file.filename),
                     head, if (file.status == "removed" || file.status == "deleted") null else GiteaChangePaths.filePath(data, file.filename),
                 )
             }
         } else {
-            val details = data.client.getCommitWithFiles(data.owner, data.repoName, commit.sha)
+            val details = data.commitWithFiles(commit.sha)
             val parent = GitRevisionNumber(details.parents.firstOrNull()?.sha ?: commit.sha)
             val head = GitRevisionNumber(commit.sha)
             details.files.orEmpty().map { file ->

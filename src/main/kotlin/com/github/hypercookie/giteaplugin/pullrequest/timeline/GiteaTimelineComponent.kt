@@ -10,6 +10,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsCo
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.giteaReactionsViewModelOrNull
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaCommentCodeBlockFilter
+import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsService
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
@@ -74,7 +75,7 @@ object GiteaTimelineComponent {
         val project = data.project
         val avatars = GiteaAvatarIcons.getInstance(project)
         val loader = GiteaTimelineLoader(cs, data)
-        if (GiteaSettings.getInstance().showReactions) data.reactions.refresh()
+        if (GiteaSettings.getInstance().showReactions) data.reactions.refresh(GiteaReactionsService.BACKGROUND_MAX_AGE_MS)
 
         val itemsPanel = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply { isOpaque = false }
         // Items are rebuilt on every change; their bindings (reaction pills)

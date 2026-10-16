@@ -5,8 +5,11 @@ import com.github.hypercookie.giteaplugin.api.GiteaApiClient
 import com.github.hypercookie.giteaplugin.api.dto.ChangedFile
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
+import com.github.hypercookie.giteaplugin.api.dto.GitCommit
+import com.github.hypercookie.giteaplugin.api.dto.GitCommitWithFiles
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.PullRequest
+import com.github.hypercookie.giteaplugin.api.dto.PullReview
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
 import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStore
@@ -59,6 +62,19 @@ class GiteaPullRequestReviewData(
     private val _comments = MutableStateFlow<List<PullReviewComment>>(emptyList())
     val comments: StateFlow<List<PullReviewComment>> = _comments.asStateFlow()
 
+    private val _reviews = MutableStateFlow<List<PullReview>?>(null)
+
+    /** The pull request's reviews as of the last comment load; null until
+     * then. The reviewer row reads them instead of listing them again. */
+    val reviews: StateFlow<List<PullReview>?> = _reviews.asStateFlow()
+
+    /** Inline comments per review, with the review as it was when they were
+     * fetched; see [reloadComments]. Only touched under [commentsLoadLock]. */
+    private val commentsByReview = HashMap<Long, Pair<PullReview, List<PullReviewComment>>>()
+
+    /** Polls since the last full comment load; see [COMMENTS_FULL_RELOAD_POLLS]. */
+    private var pollsSinceFullLoad = 0
+
     /** Serializes [reloadComments], so a slow response from an earlier
      * fetch (the poll, say) can't overwrite the result of a later one. */
     private val commentsLoadLock = Mutex()
@@ -85,6 +101,13 @@ class GiteaPullRequestReviewData(
 
     private val changedFilesLock = Any()
 
+    /** Commits of the pull request with the head they were fetched for;
+     * shared by the timeline and the commits popup. Guarded by [changedFilesLock]. */
+    private var commitsCache: Pair<String, Deferred<Result<List<GitCommit>>>>? = null
+
+    /** A commit's changed files never change; kept per commit id. */
+    private val commitFiles = ConcurrentHashMap<String, Deferred<Result<GitCommitWithFiles>>>()
+
     /** Changed files by new path, with the (head, merge base) pair they
      * were fetched for; see [changedFiles]. Guarded by [changedFilesLock]. */
     private var changedFilesCache: Pair<Pair<String, String?>, Deferred<Result<Map<String, ChangedFile>>>>? = null
@@ -108,7 +131,10 @@ class GiteaPullRequestReviewData(
         cs.launch {
             while (true) {
                 delay(COMMENTS_POLL_MS)
-                if (com.intellij.openapi.application.ApplicationManager.getApplication().isActive) reloadComments()
+                if (com.intellij.openapi.application.ApplicationManager.getApplication().isActive) {
+                    val full = ++pollsSinceFullLoad >= COMMENTS_FULL_RELOAD_POLLS
+                    reloadComments(full)
+                }
             }
         }
         cs.launch { loadCurrentUser() }
@@ -116,9 +142,11 @@ class GiteaPullRequestReviewData(
     }
 
     /** Re-fetches the pull request, its comments and their reactions, and
-     * tells [reloads] collectors to fetch theirs. */
-    fun reload() {
-        if (GiteaSettings.getInstance().showReactions) reactions.refresh()
+     * tells [reloads] collectors to fetch theirs. [reactionsMaxAgeMs] skips
+     * reaction lists fetched more recently than that (one request per
+     * comment); an explicit Refresh passes 0. */
+    fun reload(reactionsMaxAgeMs: Long = 0) {
+        if (GiteaSettings.getInstance().showReactions) reactions.refresh(reactionsMaxAgeMs)
         _reloads.tryEmit(Unit)
         // Approve / Request Changes need the current user; retry a failed load.
         if (_currentUser.value == null) cs.launch { loadCurrentUser() }
@@ -136,7 +164,10 @@ class GiteaPullRequestReviewData(
         _pullRequest.value = pr
         if (headChanged) {
             // [changedFiles] checks the key anyway; this just drops the stale list.
-            synchronized(changedFilesLock) { changedFilesCache = null }
+            synchronized(changedFilesLock) {
+                changedFilesCache = null
+                commitsCache = null
+            }
             cs.launch { reloadComments() }
         }
     }
@@ -147,11 +178,68 @@ class GiteaPullRequestReviewData(
             .onFailure { thisLogger().warn("Failed to load the current Gitea user", it) }
     }
 
-    suspend fun reloadComments() = commentsLoadLock.withLock {
-        runCatchingCancellable { client.getAllReviewComments(owner, repoName, number) }
-            .onSuccess { _comments.value = it }
+    /**
+     * Fetches the inline comments again. Gitea has no endpoint for all of a
+     * pull request's inline comments, only one per review, so this lists the
+     * reviews and then asks for the comments of each review that has any.
+     *
+     * With [full] false (the background poll), a review whose comment count
+     * and update time are unchanged keeps the comments fetched before: new
+     * and deleted comments show up, edits and resolutions wait for the next
+     * full load (every [COMMENTS_FULL_RELOAD_POLLS] polls, Refresh, coming
+     * back to the IDE, or this user's own changes).
+     */
+    suspend fun reloadComments(full: Boolean = true) = commentsLoadLock.withLock {
+        runCatchingCancellable {
+            val reviews = client.listReviews(owner, repoName, number)
+            val loaded = reviews.associate { review ->
+                val cached = commentsByReview[review.id]
+                    ?.takeIf { (before, _) -> !full && before.commentsCount == review.commentsCount && before.updatedAt == review.updatedAt }
+                    ?.second
+                val comments = when {
+                    cached != null -> cached
+                    review.commentsCount == 0 -> emptyList()
+                    else -> client.listReviewComments(owner, repoName, number, review.id)
+                }
+                review.id to (review to comments)
+            }
+            reviews to loaded
+        }
+            .onSuccess { (reviews, loaded) ->
+                if (full) pollsSinceFullLoad = 0
+                commentsByReview.clear()
+                commentsByReview.putAll(loaded)
+                _reviews.value = reviews
+                _comments.value = reviews.flatMap { loaded.getValue(it.id).second }
+            }
             .onFailure { if (it !is CancellationException) thisLogger().warn("Failed to load review comments for #$number", it) }
         Unit
+    }
+
+    /** The pull request's commits, fetched once per head commit. Failures
+     * are not cached. */
+    suspend fun commits(): List<GitCommit> {
+        val head = _pullRequest.value.head.sha
+        val deferred = synchronized(changedFilesLock) {
+            commitsCache?.takeIf { it.first == head }?.second
+                ?: cs.async { runCatchingCancellable { client.getPullRequestCommits(owner, repoName, number) } }
+                    .also { commitsCache = head to it }
+        }
+        return deferred.await().getOrElse { e ->
+            synchronized(changedFilesLock) { if (commitsCache?.second === deferred) commitsCache = null }
+            throw e
+        }
+    }
+
+    /** [sha] with its changed files; cached, since a commit never changes. */
+    suspend fun commitWithFiles(sha: String): GitCommitWithFiles {
+        val deferred = commitFiles.computeIfAbsent(sha) {
+            cs.async { runCatchingCancellable { client.getCommitWithFiles(owner, repoName, sha) } }
+        }
+        return deferred.await().getOrElse { e ->
+            commitFiles.remove(sha, deferred)
+            throw e
+        }
     }
 
     /**
@@ -235,5 +323,9 @@ class GiteaPullRequestReviewData(
 
     private companion object {
         const val COMMENTS_POLL_MS = 60_000L
+
+        /** Every this many polls, one loads every review's comments again,
+         * to pick up edits and resolutions from elsewhere. */
+        const val COMMENTS_FULL_RELOAD_POLLS = 5
     }
 }

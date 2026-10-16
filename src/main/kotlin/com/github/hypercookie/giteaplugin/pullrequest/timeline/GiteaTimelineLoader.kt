@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -43,7 +46,7 @@ internal class GiteaTimelineLoader(cs: CoroutineScope, private val data: GiteaPu
                 val loaded = try {
                     coroutineScope {
                         val events = async { data.client.getTimeline(data.owner, data.repoName, data.number) }
-                        val commits = async { data.client.getPullRequestCommits(data.owner, data.repoName, data.number) }
+                        val commits = async { data.commits() }
                         State.Items(events.await(), commits.await())
                     }
                 } catch (e: CancellationException) {
@@ -55,6 +58,9 @@ internal class GiteaTimelineLoader(cs: CoroutineScope, private val data: GiteaPu
             }
         }
         cs.launch { data.reloads.collect { requests.emit(Unit) } }
+        // A push shows up as a new head after a reload's timeline request
+        // went out; its commits (and the push event) need another one.
+        cs.launch { data.pullRequest.map { it.head.sha }.distinctUntilChanged().drop(1).collect { requests.emit(Unit) } }
         requests.tryEmit(Unit)
     }
 
