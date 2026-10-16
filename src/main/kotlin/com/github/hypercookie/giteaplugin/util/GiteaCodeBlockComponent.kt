@@ -43,12 +43,15 @@ class GiteaCodeBlockApply(
  * A fenced code block of a comment with its lines unwrapped: as wide as its
  * longest line ([naturalWidth]) when there is room, scrolling horizontally
  * when not. While the mouse is over the block, Copy and (when [apply] is
- * given) Apply show as icon buttons in its top right corner.
+ * given) Apply show as icon buttons in its top right corner, over the code.
  */
 class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBlockApply?) : JPanel() {
 
     private val code = GiteaMarkdown.createCodePane(block.html).apply { isOpaque = false }
-    private val view = JPanel(BorderLayout()).apply { isOpaque = false; add(code) }
+    private val view = JPanel(BorderLayout()).apply {
+        background = GiteaMarkdown.codeBackground()
+        add(code)
+    }
     private val scrollPane = CodeScrollPane(view)
     private val copyButton = iconButton(AllIcons.Actions.Copy, "Copy")
     private val buttonGap = JBUI.scale(6)
@@ -91,10 +94,6 @@ class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBl
             buttons.add(applyButton)
         }
         buttons.isVisible = false
-        // Room after the longest line so the buttons don't cover its end.
-        val reserved = buttons.insets.left + buttons.insets.right + buttonGap +
-            buttons.components.sumOf { it.preferredSize.width + buttonGap }
-        view.border = JBUI.Borders.emptyRight(JBUI.unscale(reserved))
 
         // Buttons first: the earlier child is painted on top.
         add(buttons)
