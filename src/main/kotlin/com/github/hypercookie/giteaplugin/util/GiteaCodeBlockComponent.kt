@@ -42,16 +42,15 @@ class GiteaCodeBlockApply(
 /**
  * A fenced code block of a comment with its lines unwrapped: as wide as its
  * longest line ([naturalWidth]) when there is room, scrolling horizontally
- * when not. Apply (when [apply] is given) sits in the top right corner and
- * Copy, the same kind of icon button, appears next to it while the mouse is
- * over the block.
+ * when not. While the mouse is over the block, Copy and (when [apply] is
+ * given) Apply show as icon buttons in its top right corner.
  */
 class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBlockApply?) : JPanel() {
 
     private val code = GiteaMarkdown.createCodePane(block.html).apply { isOpaque = false }
     private val view = JPanel(BorderLayout()).apply { isOpaque = false; add(code) }
     private val scrollPane = CodeScrollPane(view)
-    private val copyButton = iconButton(AllIcons.Actions.Copy, "Copy").apply { isVisible = false }
+    private val copyButton = iconButton(AllIcons.Actions.Copy, "Copy")
     private val buttonGap = JBUI.scale(6)
     private val buttons = JPanel(FlowLayout(FlowLayout.RIGHT, buttonGap, 0)).apply {
         isOpaque = true
@@ -80,7 +79,7 @@ class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBl
             }.apply { isRepeats = false; start() }
         }
         if (apply != null) {
-            // Same kind of button as Copy, only always shown.
+            // Same kind of button as Copy, right of it.
             val applyButton = iconButton(APPLY_ICON, APPLY_TOOLTIP).apply {
                 name = APPLY_BUTTON_NAME
                 actionListener = ActionListener { apply.apply(block.code) }
@@ -91,7 +90,7 @@ class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBl
             }
             buttons.add(applyButton)
         }
-        buttons.isVisible = apply != null
+        buttons.isVisible = false
         // Room after the longest line so the buttons don't cover its end.
         val reserved = buttons.insets.left + buttons.insets.right + buttonGap +
             buttons.components.sumOf { it.preferredSize.width + buttonGap }
@@ -125,9 +124,8 @@ class GiteaCodeBlockComponent(block: GiteaMarkdown.CodeBlock, apply: GiteaCodeBl
     }
 
     private fun setHovered(hovered: Boolean) {
-        if (copyButton.isVisible == hovered) return
-        copyButton.isVisible = hovered
-        buttons.isVisible = hovered || buttons.componentCount > 1
+        if (buttons.isVisible == hovered) return
+        buttons.isVisible = hovered
         revalidate()
         repaint()
     }
