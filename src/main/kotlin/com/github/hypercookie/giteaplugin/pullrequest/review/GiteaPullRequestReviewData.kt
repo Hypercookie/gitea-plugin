@@ -99,6 +99,8 @@ class GiteaPullRequestReviewData(
      * of a big pull request asks for two versions of every changed file at once. */
     private val fileFetchPermits = Semaphore(8)
 
+    private val localFiles = repo.gitRoot?.let { LocalGitFiles(project, it) }
+
     private val changedFilesLock = Any()
 
     /** Commits of the pull request with the head they were fetched for;
@@ -247,6 +249,9 @@ class GiteaPullRequestReviewData(
      * what IntelliJ documents use (a raw CRLF text diffed against a document
      * has every line changed). Null when the file doesn't exist at that ref.
      *
+     * Read from the local repository when it has the commit (see
+     * [LocalGitFiles]), else from the Gitea API.
+     *
      * Successful results, "doesn't exist" included, are cached for the
      * lifetime of this PR. A failed request (timeout, rate limit, server
      * error) is not cached, so the next call retries.
@@ -259,8 +264,13 @@ class GiteaPullRequestReviewData(
         val deferred = fileContents.computeIfAbsent(key) {
             cs.async {
                 runCatchingCancellable {
-                    fileFetchPermits.withPermit { client.getFileContentOrNull(owner, repoName, path, ref) }
-                        ?.let(StringUtil::convertLineSeparators)
+                    fileFetchPermits.withPermit {
+                        when (val local = localFiles?.read(path, ref) ?: LocalGitFiles.Read.Unavailable) {
+                            is LocalGitFiles.Read.Found -> local.text
+                            LocalGitFiles.Read.Missing -> null
+                            LocalGitFiles.Read.Unavailable -> client.getFileContentOrNull(owner, repoName, path, ref)
+                        }
+                    }?.let(StringUtil::convertLineSeparators)
                 }
             }
         }
