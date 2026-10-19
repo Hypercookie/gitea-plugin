@@ -2,6 +2,7 @@ package com.github.hypercookie.giteaplugin.pullrequest.review
 
 import kotlinx.coroutines.delay
 import com.github.hypercookie.giteaplugin.api.GiteaApiClient
+import com.github.hypercookie.giteaplugin.api.GiteaServerFeatures
 import com.github.hypercookie.giteaplugin.api.dto.ChangedFile
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
@@ -93,6 +94,11 @@ class GiteaPullRequestReviewData(
     private val _currentUser = MutableStateFlow<GiteaUser?>(null)
     val currentUser: StateFlow<GiteaUser?> = _currentUser.asStateFlow()
 
+    private val _serverFeatures = MutableStateFlow(GiteaServerFeatures.UNKNOWN)
+    /** What the server's Gitea version supports; [GiteaServerFeatures.UNKNOWN]
+     * (everything) until its version is known. */
+    val serverFeatures: StateFlow<GiteaServerFeatures> = _serverFeatures.asStateFlow()
+
     private val fileContents = ConcurrentHashMap<Pair<String, String>, Deferred<Result<String?>>>()
 
     /** Bounds concurrent file content requests (to 8): opening the diff chain
@@ -138,6 +144,7 @@ class GiteaPullRequestReviewData(
             }
         }
         cs.launch { loadCurrentUser() }
+        cs.launch { _serverFeatures.value = GiteaServerFeatures.of(repo.account.serverUrl, client) }
         cs.launch { reloadComments() }
     }
 

@@ -34,7 +34,13 @@ class GiteaThreadViewModel(
     override val isBusy: StateFlow<Boolean> = _isBusy.asStateFlow()
 
     override val isResolved: StateFlow<Boolean> = _thread.map { it.isResolved }.stateIn(cs, SharingStarted.Eagerly, initial.isResolved)
-    override val canChangeResolvedState: StateFlow<Boolean> = MutableStateFlow(true)
+    /** Gitea 1.26+; older servers have no resolve endpoint. */
+    override val canChangeResolvedState: StateFlow<Boolean> = data.serverFeatures.map { it.resolveComments }
+        .stateIn(cs, SharingStarted.Eagerly, data.serverFeatures.value.resolveComments)
+
+    /** Gitea 1.27+; older servers have no reply endpoint. */
+    val canReply: StateFlow<Boolean> = data.serverFeatures.map { it.replyToComments }
+        .stateIn(cs, SharingStarted.Eagerly, data.serverFeatures.value.replyToComments)
 
     private val _isWritingReply = MutableStateFlow(false)
     val isWritingReply: StateFlow<Boolean> = _isWritingReply.asStateFlow()

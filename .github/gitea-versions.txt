@@ -1,0 +1,7 @@
+# Gitea versions the live integration tests run against, one per release
+# series: the newest patch of each. The first line is the oldest supported
+# version. scripts/check-version-updates.py keeps this current.
+1.25.5
+1.26.4
+1.27.3
+28.1.0

@@ -10,3 +10,6 @@ data class GiteaUser(
     @SerialName("full_name") val fullName: String? = null,
     @SerialName("avatar_url") val avatarUrl: String? = null,
 )
+
+@Serializable
+data class GiteaVersionInfo(val version: String)

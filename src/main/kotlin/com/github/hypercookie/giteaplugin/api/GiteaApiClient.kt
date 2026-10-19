@@ -14,6 +14,7 @@ import com.github.hypercookie.giteaplugin.api.dto.GiteaReaction
 import com.github.hypercookie.giteaplugin.api.dto.GiteaRepository
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUISettings
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
+import com.github.hypercookie.giteaplugin.api.dto.GiteaVersionInfo
 import com.github.hypercookie.giteaplugin.api.dto.IssueComment
 import com.github.hypercookie.giteaplugin.api.dto.PullReview
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
@@ -111,6 +112,9 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
     // --- Auth -----------------------------------------------------------
 
     suspend fun getCurrentUser(): GiteaUser = get("/api/v1/user")
+
+    /** The server's Gitea version (see [GiteaServerFeatures]). */
+    suspend fun getVersion(): GiteaVersionInfo = get("/api/v1/version")
 
     // --- Repositories -----------------------------------------------------
 
