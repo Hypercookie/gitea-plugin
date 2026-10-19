@@ -103,15 +103,19 @@ like them.
 
 ## Requirements
 
-- IntelliJ IDEA 2025.2 to 2026.2, or another JetBrains IDE on platform builds
-  252 to 262, with the bundled Git plugin enabled.
-- Gitea 1.27 is recommended; the plugin is tested against it. Gitea 1.24 and
-  earlier lack the endpoints for replying to and resolving review comments.
+- IntelliJ IDEA 2025.2 or later, or another JetBrains IDE on platform build
+  252 or later, with the bundled Git plugin enabled. Builds 252 to 262 and
+  263 (2026.3) each have their own plugin archive.
+- Gitea 1.24 or later; the plugin is tested against 1.24, 1.25, 1.26, 1.27
+  and 28.1. Resolving review comments needs Gitea 1.26 and replying to them
+  1.27; on older servers those actions are hidden.
 
 ## Installation
 
-1. Download `gitea-plugin-1.0.0.zip` from the
-   [latest release](https://github.com/Hypercookie/gitea-plugin/releases/latest).
+1. Download the archive for your IDE from the
+   [latest release](https://github.com/Hypercookie/gitea-plugin/releases/latest):
+   `gitea-plugin-<version>-252.zip` for builds 252 to 262 (2025.2 to 2026.2),
+   `gitea-plugin-<version>-263.zip` for 2026.3.
 2. In the IDE, open <kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>⚙</kbd> |
    <kbd>Install Plugin from Disk...</kbd>, select the downloaded archive (don't
    unzip it) and restart the IDE.
@@ -161,22 +165,26 @@ The archive is written to `build/distributions/`; install it the same way.
 
 The project uses Kotlin and the
 [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html),
-and builds against IntelliJ IDEA 2025.2.
+and builds once per IDE line range: `platforms/<line>/` holds each range's IDE
+version, build range and line-specific code (see
+[docs/platform-versions.md](docs/platform-versions.md)). Without
+`-Pplatform`, the build targets 252 to 262 against IntelliJ IDEA 2025.2.
 
 ```shell
-./gradlew runIde        # start a sandbox IDE with the plugin installed
-./gradlew check         # run the tests
-./gradlew verifyPlugin  # run the IntelliJ Plugin Verifier
-./gradlew buildPlugin   # build the plugin archive
+./gradlew runIde                  # start a sandbox IDE with the plugin installed
+./gradlew check                   # run the tests
+./gradlew verifyPlugin            # run the IntelliJ Plugin Verifier
+./gradlew buildPlugin             # build the plugin archive
+./gradlew check -Pplatform=263    # the same for 2026.3
 ```
 
 `verifyPlugin` checks the plugin against the latest release of every IDE
-version since 2025.2. It fails on compatibility problems and on any use of
-internal IntelliJ Platform API.
+version in the profile's range; `-PverifyIdeLine=261` checks one. It fails on
+compatibility problems and on any use of internal IntelliJ Platform API.
 
-Live integration tests run against a local Gitea instance when
-`GITEA_DEV_TOKEN` is set; see
-[docs/local-gitea-dev-instance.md](docs/local-gitea-dev-instance.md).
+Live integration tests run against a Gitea server when `GITEA_DEV_TOKEN` is
+set. `scripts/gitea-test-server.sh` starts a throwaway one of any version;
+see [docs/local-gitea-dev-instance.md](docs/local-gitea-dev-instance.md).
 
 Source layout under `src/main/kotlin/com/github/hypercookie/giteaplugin`:
 
