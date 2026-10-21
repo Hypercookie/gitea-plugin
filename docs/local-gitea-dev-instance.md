@@ -1,5 +1,18 @@
 # Local Gitea dev instance
 
+For the live tests alone, `scripts/gitea-test-server.sh` is quicker: it
+downloads any Gitea version's release binary, starts it on port 3000 and
+creates the fixture below (no Docker needed):
+
+```bash
+eval "$(scripts/gitea-test-server.sh start 1.27.3)"
+./gradlew test --tests '*GiteaLiveIntegrationTest*' --rerun
+scripts/gitea-test-server.sh stop
+```
+
+The rest of this page sets up a longer-lived instance in Docker for manual
+testing.
+
 A throwaway Gitea server in Docker for manual testing and for
 `GiteaLiveIntegrationTest`. It listens on `127.0.0.1` only.
 
@@ -56,7 +69,7 @@ The `sha1` field of the response is the token. Create a second user,
 Run the live tests with:
 
 ```bash
-GITEA_DEV_TOKEN=<token> ./gradlew test --tests '*GiteaLiveIntegrationTest*'
+GITEA_DEV_TOKEN=<token> ./gradlew test --tests '*GiteaLiveIntegrationTest*' --rerun
 ```
 
 `GITEA_DEV_URL` overrides the default `http://localhost:3000`.

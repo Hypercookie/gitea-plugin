@@ -1,0 +1,8 @@
+<!-- Module dependencies for IDE builds 252 to 262, included by plugin.xml. -->
+<idea-plugin>
+    <dependencies>
+        <module name="intellij.platform.collaborationTools"/>
+        <module name="intellij.platform.vcs.impl"/>
+        <module name="intellij.platform.vcs.log.impl"/>
+    </dependencies>
+</idea-plugin>
