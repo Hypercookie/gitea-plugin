@@ -26,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -85,6 +86,11 @@ class GiteaPullRequestReviewData(
     /** Emits on every [reload], so views that fetch data of their own (the
      * timeline's comments and events) fetch it again too. */
     val reloads: SharedFlow<Unit> = _reloads.asSharedFlow()
+
+    /** Pull request fetches [reload] asks for. Conflated: reloads asked for
+     * while one runs (a Refresh clicked repeatedly) make one more, not one
+     * each. */
+    private val pullRequestReloads = Channel<Unit>(Channel.CONFLATED)
 
     val threads: StateFlow<List<ReviewThread>> =
         _comments.map(ReviewThreads::group).stateIn(cs, SharingStarted.Eagerly, emptyList())
@@ -148,6 +154,12 @@ class GiteaPullRequestReviewData(
         cs.launch { loadCurrentUser() }
         cs.launch { _serverFeatures.value = GiteaServerFeatures.of(repo.account.serverUrl, client) }
         cs.launch { reloadComments() }
+        cs.launch {
+            for (ignored in pullRequestReloads) {
+                runCatchingCancellable { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)
+                reloadComments()
+            }
+        }
     }
 
     /** Re-fetches the pull request, its comments and their reactions, and
@@ -159,10 +171,7 @@ class GiteaPullRequestReviewData(
         _reloads.tryEmit(Unit)
         // Approve / Request Changes need the current user; retry a failed load.
         if (_currentUser.value == null) cs.launch { loadCurrentUser() }
-        cs.launch {
-            runCatchingCancellable { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)
-            reloadComments()
-        }
+        pullRequestReloads.trySend(Unit)
     }
 
     /** Called when the same PR shows up again with possibly newer data
