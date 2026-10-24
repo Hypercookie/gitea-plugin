@@ -3,6 +3,9 @@ on:
   push:
     branches: [ main ]
   pull_request:
+  # The version check dispatches this for its pull requests, whose pushes
+  # (made with GITHUB_TOKEN) start no workflow by themselves.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,11 +16,47 @@ concurrency:
 
 jobs:
 
+  # The job matrices: one build per IDE line profile in platforms/, one
+  # verification per IDE line each profile covers (its verifyLines), one live
+  # test run per Gitea version in .github/gitea-versions.txt.
+  matrix:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      platforms: ${{ steps.plan.outputs.platforms }}
+      verify: ${{ steps.plan.outputs.verify }}
+      gitea: ${{ steps.plan.outputs.gitea }}
+    steps:
+      - name: Fetch Sources
+        uses: actions/checkout@v6
+
+      - name: Plan jobs
+        id: plan
+        shell: python
+        run: |
+          import json, os, pathlib, re
+          platforms, verify = [], []
+          for file in sorted(pathlib.Path("platforms").glob("*/platform.properties")):
+              lines = re.search(r"^verifyLines\s*=\s*(.*)$", file.read_text(), re.M).group(1)
+              platforms.append(file.parent.name)
+              verify += [{"platform": file.parent.name, "ide": line.strip()} for line in lines.split(",") if line.strip()]
+          gitea = [line.strip() for line in pathlib.Path(".github/gitea-versions.txt").read_text().splitlines()
+                   if line.strip() and not line.startswith("#")]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"platforms={json.dumps(platforms)}\n")
+              out.write(f"verify={json.dumps(verify)}\n")
+              out.write(f"gitea={json.dumps(gitea)}\n")
+
   # Build and test in one job: check reuses the compiled classes, and the
   # job restores the Gradle cache once instead of twice.
   build:
-    name: Build and test
+    name: Build and test (${{ matrix.platform }})
+    needs: matrix
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(needs.matrix.outputs.platforms) }}
     steps:
       - name: Fetch Sources
         uses: actions/checkout@v6
@@ -32,30 +71,31 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build plugin and run tests
-        run: ./gradlew buildPlugin check
+        run: ./gradlew buildPlugin check -Pplatform=${{ matrix.platform }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: plugin-distribution
+          name: plugin-distribution-${{ matrix.platform }}
           path: ./build/distributions/*.zip
 
       - name: Collect Tests Result
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
         with:
-          name: tests-result
+          name: tests-result-${{ matrix.platform }}
           path: ${{ github.workspace }}/build/reports/tests
 
-  # One job per IDE release line, so each downloads a single IDE. "latest"
-  # is the newest release, which covers a new line before it is listed here.
+  # One job per IDE line, so each downloads a single IDE: the newest
+  # release of the line, or its newest EAP before the first release.
   verify:
     name: Verify plugin (${{ matrix.ide }})
+    needs: matrix
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        ide: [ "252", "253", "261", "262", "latest" ]
+        include: ${{ fromJSON(needs.matrix.outputs.verify) }}
     steps:
       # The restored Gradle cache plus one IDE need more than a runner's
       # default free space. Removing preinstalled SDKs is quicker than the
@@ -78,7 +118,7 @@ jobs:
           cache-read-only: true
 
       - name: Run Plugin Verification tasks
-        run: ./gradlew verifyPlugin -PverifyIdeLine=${{ matrix.ide }}
+        run: ./gradlew verifyPlugin -Pplatform=${{ matrix.platform }} -PverifyIdeLine=${{ matrix.ide }}
 
       - name: Collect Plugin Verifier Result
         if: ${{ always() }}
@@ -87,10 +127,50 @@ jobs:
           name: pluginVerifier-result-${{ matrix.ide }}
           path: ${{ github.workspace }}/build/reports/pluginVerifier
 
+  # The live integration tests against each tested Gitea version, on a
+  # throwaway server started from Gitea's release binary.
+  gitea:
+    name: Gitea ${{ matrix.gitea }}
+    needs: matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gitea: ${{ fromJSON(needs.matrix.outputs.gitea) }}
+    steps:
+      - name: Fetch Sources
+        uses: actions/checkout@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+
+      - name: Start Gitea
+        run: scripts/gitea-test-server.sh start ${{ matrix.gitea }} | sed 's/^export //' >> "$GITHUB_ENV"
+
+      - name: Run live tests
+        run: ./gradlew test --tests '*GiteaLiveIntegrationTest*' --rerun
+
+      - name: Collect Gitea log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: gitea-${{ matrix.gitea }}
+          path: |
+            build/gitea-test/server/gitea.log
+            build/reports/tests
+
   releaseDraft:
     name: Release draft
     if: github.event_name != 'pull_request'
-    needs: [ build, verify ]
+    needs: [ build, verify, gitea ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -121,7 +201,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(./gradlew properties --property version --quiet --console=plain | tail -n 1 | cut -f2- -d ' ')
+          # The release version; the build's own version carries the IDE line.
+          VERSION=$(sed -n 's/^version *= *//p' gradle.properties)
           RELEASE_NOTE="./build/tmp/release_note.txt"
           ./gradlew getChangelog --unreleased --no-header --quiet --console=plain --output-file=$RELEASE_NOTE
 

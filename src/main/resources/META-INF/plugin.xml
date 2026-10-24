@@ -1,4 +1,4 @@
-<idea-plugin>
+<idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
     <id>com.github.hypercookie.giteaplugin</id>
     <name>Gitea</name>
     <vendor>hypercookie</vendor>
@@ -19,11 +19,9 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>Git4Idea</depends>
-    <dependencies>
-        <module name="intellij.platform.collaborationTools"/>
-        <module name="intellij.platform.vcs.impl"/>
-        <module name="intellij.platform.vcs.log.impl"/>
-    </dependencies>
+    <!-- Module dependencies differ per IDE line; each build includes its
+         line's file from platforms/<line>/src/main/resources. -->
+    <xi:include href="/META-INF/gitea-platform.xml" xpointer="xpointer(/idea-plugin/*)"/>
 
 
     <extensions defaultExtensionNs="com.intellij">

@@ -5,9 +5,6 @@ import com.github.hypercookie.giteaplugin.pullrequest.diff.GITEA_DIFF_CHAIN_KEY
 import com.intellij.diff.chains.SimpleDiffRequestChain
 import com.intellij.diff.editor.ChainDiffVirtualFile
 import com.intellij.diff.requests.MessageDiffRequest
-import com.intellij.ide.plugins.DynamicPlugins
-import com.intellij.ide.plugins.IdeaPluginDescriptorImpl
-import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.extensions.PluginId
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import java.time.Duration
@@ -21,10 +18,7 @@ import java.time.Duration
 class DynamicUnloadTest : BasePlatformTestCase() {
 
     fun testDescriptorAllowsUnloadWithoutRestart() {
-        // DynamicPlugins is internal platform API; it is used only in tests,
-        // which verifyPlugin does not check.
-        val descriptor = PluginManagerCore.getPlugin(PluginId.getId("com.github.hypercookie.giteaplugin")) as IdeaPluginDescriptorImpl
-        assertNull(DynamicPlugins.checkCanUnloadWithoutRestart(descriptor))
+        assertNull(unloadWithoutRestartBlocker(PluginId.getId("com.github.hypercookie.giteaplugin")))
     }
 
     fun testHttpClientIsStoppedWhenServiceIsDisposed() {

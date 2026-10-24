@@ -309,6 +309,31 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
         }
     }
 
+    /** The version gates in GiteaServerFeatures match what the server
+     * actually accepts: resolving (1.26+) and replying (1.27+). */
+    fun testServerFeaturesMatchServerEndpoints() {
+        requireToken()
+        runBlocking {
+            val features = com.github.hypercookie.giteaplugin.api.GiteaServerFeatures.of(serverUrl, client())
+            println("Gitea ${features.version}")
+            assertNotNull("version read", features.version)
+            val data = data(1)
+            val thread = withTimeout(TIMEOUT) { data.threads.first { it.isNotEmpty() } }.first { !it.isResolved }
+
+            val resolved = runCatching { client().resolveComment(OWNER, REPO, thread.id) }
+            assertEquals("resolve works on ${features.version}", features.resolveComments, resolved.isSuccess)
+            if (resolved.isSuccess) client().unresolveComment(OWNER, REPO, thread.id)
+
+            val reply = runCatching { client().replyToComment(OWNER, REPO, 1, thread.id, "feature check") }
+            assertEquals("reply works on ${features.version}", features.replyToComments, reply.isSuccess)
+            reply.getOrNull()?.let { comment ->
+                val request = java.net.http.HttpRequest.newBuilder(java.net.URI("$serverUrl/api/v1/repos/$OWNER/$REPO/issues/comments/${comment.id}"))
+                    .header("Authorization", "token $token").DELETE().build()
+                java.net.http.HttpClient.newHttpClient().send(request, java.net.http.HttpResponse.BodyHandlers.discarding())
+            }
+        }
+    }
+
     private companion object {
         /** Authored by alice, so the token's user (plugindev) can review it. */
         const val OTHERS_PR = 7L

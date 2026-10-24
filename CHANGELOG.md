@@ -3,6 +3,12 @@
 # Gitea Changelog
 
 ## [Unreleased]
+### Added
+- Support for IntelliJ 2026.3 (build 263), as a separate plugin archive: 2026.3 moved the version control modules the plugin depends on.
+
+### Changed
+- Resolve and Reply on review comments are hidden on Gitea servers that lack them (resolving needs Gitea 1.26, replying 1.27) instead of failing.
+- Tested with Gitea 1.24 to 1.27 and 28.1.
 
 ## [1.0.0] - 2026-10-16
 ### Added

@@ -1,6 +1,7 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import java.time.Duration
+import java.util.Properties
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -9,14 +10,40 @@ plugins {
     id("org.jetbrains.changelog")
 }
 
+// The IDE line this build targets: a directory in platforms/ with its
+// platform.properties and any line-specific sources and resources
+// (docs/platform-versions.md). -Pplatform=263 builds for 2026.3.
+val platform = providers.gradleProperty("platform").get()
+val platformDir = layout.projectDirectory.dir("platforms/$platform")
+val platformProperties = Properties().apply {
+    load(providers.fileContents(platformDir.file("platform.properties")).asText.get().reader())
+}
+fun platformProperty(name: String): String =
+    platformProperties.getProperty(name) ?: error("platforms/$platform/platform.properties lacks $name")
+fun platformList(name: String): List<String> =
+    platformProperty(name).split(',').map(String::trim).filter(String::isNotEmpty)
+
+// The release version (CHANGELOG.md section, Marketplace channel, Git tag).
+val releaseVersion = providers.gradleProperty("version").get()
+
 group = providers.gradleProperty("group").get()
-version = providers.gradleProperty("version").get()
+// Each IDE line's build is its own Marketplace upload, which needs a
+// version of its own: 1.0.0-252, 1.0.0-263.
+version = "$releaseVersion-$platform"
+
+kotlin.sourceSets.main {
+    kotlin.srcDir(platformDir.dir("src/main/kotlin"))
+    resources.srcDir(platformDir.dir("src/main/resources"))
+}
+kotlin.sourceSets.test {
+    kotlin.srcDir(platformDir.dir("src/test/kotlin"))
+}
 
 kotlin {
     jvmToolchain(21)
     compilerOptions {
         // Plugins run on the IDE's bundled Kotlin stdlib (2.2 in 2025.2, the
-        // sinceBuild line), not the compiler's. Newer API levels emit
+        // oldest supported line), not the compiler's. Newer API levels emit
         // bytecode that stdlib can't read: Kotlin 2.4 writes coroutine
         // debug metadata v2, which 2.2's DebugProbes reject, so every
         // resumed coroutine dies and its caller waits forever.
@@ -47,27 +74,19 @@ dependencies {
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
     intellijPlatform {
-        intellijIdea("2025.2.6.2")
-        bundledPlugin("Git4Idea")
-        // Shared code review UI the bundled GitHub/GitLab plugins are built
-        // on (list, details, review in editor, comments). Public,
-        // non-@Internal API only; verifyPlugin enforces this.
-        bundledModule("intellij.platform.collaborationTools")
-        // collaborationTools' own module dependencies; without them on the
-        // compile classpath, Git4Idea's GitRepository supertypes stop
-        // resolving.
-        bundledModule("intellij.platform.vcs.dvcs.impl")
-        bundledModule("intellij.platform.vcs.dvcs.impl.shared")
-        bundledModule("intellij.platform.vcs.log.impl")
-        // AsyncChangesTree (the PR changes tree from CodeReviewChangeListComponentFactory).
-        bundledModule("intellij.platform.vcs.impl")
+        // Per IDE line, with why each module is needed, in
+        // platforms/<line>/platform.properties.
+        intellijIdea(platformProperty("platformVersion"))
+        bundledPlugins(platformList("bundledPlugins"))
+        bundledModules(platformList("bundledModules"))
+        testBundledPlugins(platformList("testBundledPlugins"))
         testFramework(TestFrameworkType.Platform)
     }
 }
 
 intellijPlatform {
     pluginConfiguration {
-        version = providers.gradleProperty("version")
+        version = project.version.toString()
 
         // Change notes for Marketplace come from the matching CHANGELOG.md
         // section ("Unreleased" until a release patches it).
@@ -84,10 +103,8 @@ intellijPlatform {
         }
 
         ideaVersion {
-            sinceBuild = "252"
-            // 2026.3 (263) splits VCS into new modules this build doesn't
-            // declare yet; cap at 2026.2 until it does.
-            untilBuild = "262.*"
+            sinceBuild = platformProperty("sinceBuild")
+            untilBuild = platformProperty("untilBuild")
         }
     }
 
@@ -110,18 +127,22 @@ intellijPlatform {
     pluginVerification {
         // Gate for the "public IntelliJ APIs only" rule: the verifier
         // reports @ApiStatus.Internal, experimental and deprecated usages.
-        // Without -PverifyIdeLine, the latest release of every IDE line from
-        // sinceBuild on (no untilBuild is set). CI runs one line per job:
-        // -PverifyIdeLine=253 checks the latest 2025.3.x, and
-        // -PverifyIdeLine=latest the newest release.
+        // Without -PverifyIdeLine, the latest release of every IDE line in
+        // the platform's sinceBuild..untilBuild range. CI runs one line per
+        // job (verifyLines in platform.properties): -PverifyIdeLine=253
+        // checks the newest 2025.3 build, an EAP while the line has no
+        // release yet.
         ides {
-            val line = providers.gradleProperty("verifyIdeLine").orNull
-            when (line) {
+            when (val line = providers.gradleProperty("verifyIdeLine").orNull) {
                 null -> recommended()
-                "latest" -> latest()
                 else -> latest {
                     sinceBuild = line
                     untilBuild = "$line.*"
+                    channels = listOf(
+                        org.jetbrains.intellij.platform.gradle.models.ProductRelease.Channel.RELEASE,
+                        org.jetbrains.intellij.platform.gradle.models.ProductRelease.Channel.RC,
+                        org.jetbrains.intellij.platform.gradle.models.ProductRelease.Channel.EAP,
+                    )
                 }
             }
         }

@@ -217,6 +217,7 @@ object GiteaReviewEditorComponents {
         val collapseLink = createCollapseLink(cs, inlay)
         val replyLink = ActionLink(CollaborationToolsBundle.message("review.comments.reply.action")) { vm.startWritingReply() }.apply {
             isFocusPainted = false
+            bindVisibility(cs, vm.canReply)
         }
         val resolveLink = ActionLink(createResolveAction(cs, vm)).apply {
             autoHideOnDisable = false
