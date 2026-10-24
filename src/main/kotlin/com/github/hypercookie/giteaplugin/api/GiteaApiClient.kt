@@ -323,9 +323,11 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
     }
 
     /** Every request of this client goes through here, so the debug request
-     * counter sees all of them. Blocking; call on the IO dispatcher. */
-    private fun execute(request: HttpRequest): GiteaResponse {
+     * counter and the server's rate limit see all of them. Blocking once the
+     * limit lets the request go; call on the IO dispatcher. */
+    private suspend fun execute(request: HttpRequest): GiteaResponse {
         val service = httpService
+        service.limiterFor(request.uri().rawAuthority).acquire()
         service.countRequest(request.method(), request.uri().path)
         val response = service.client.send(request, HttpResponse.BodyHandlers.ofInputStream())
         val bytes = response.body().use { it.readNBytes((MAX_RESPONSE_BYTES + 1).toInt()) }
