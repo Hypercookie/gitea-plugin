@@ -309,6 +309,43 @@ class GiteaLiveIntegrationTest : BasePlatformTestCase() {
         }
     }
 
+    /** Editing works for top-level and inline review comments alike. */
+    fun testEditCommentsOnServer() {
+        requireToken()
+        runBlocking {
+            val data = data(7)
+            val sha = data.pullRequest.value.head.sha
+            val review = client().createReview(
+                OWNER, REPO, 7,
+                com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions(
+                    event = com.github.hypercookie.giteaplugin.api.dto.ReviewEvent.COMMENT,
+                    body = "edit test",
+                    commitId = sha,
+                    comments = listOf(com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment("before", "src/Greeter.kt", newPosition = 4)),
+                ),
+            )
+            val top = client().createIssueComment(OWNER, REPO, 7, "top before")
+            try {
+                data.reloadComments()
+                val inline = data.comments.value.single { it.reviewId == review.id }
+                data.editComment(inline.id, "after")
+                withTimeout(TIMEOUT) { data.comments.first { cs -> cs.any { it.id == inline.id && it.body == "after" } } }
+
+                val edited = client().editComment(OWNER, REPO, top.id, "top after")
+                assertEquals("top after", edited.body)
+            } finally {
+                val http = java.net.http.HttpClient.newHttpClient()
+                for (path in listOf("pulls/7/reviews/${review.id}", "issues/comments/${top.id}")) {
+                    http.send(
+                        java.net.http.HttpRequest.newBuilder(java.net.URI("$serverUrl/api/v1/repos/$OWNER/$REPO/$path"))
+                            .header("Authorization", "token $token").DELETE().build(),
+                        java.net.http.HttpResponse.BodyHandlers.discarding(),
+                    )
+                }
+            }
+        }
+    }
+
     /** The version gates in GiteaServerFeatures match what the server
      * actually accepts: resolving (1.26+) and replying (1.27+). */
     fun testServerFeaturesMatchServerEndpoints() {

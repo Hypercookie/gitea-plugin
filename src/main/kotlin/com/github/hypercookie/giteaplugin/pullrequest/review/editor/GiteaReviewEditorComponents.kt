@@ -190,12 +190,13 @@ object GiteaReviewEditorComponents {
     ): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
         val reactionsVm = giteaReactionsViewModelOrNull(cs, GiteaReactable.Comment(comment.id), data.currentUser) { data.reactions }
-        val body = verticalPanel(CodeReviewTimelineUIUtil.VERTICAL_GAP).apply {
+        val view = verticalPanel(CodeReviewTimelineUIUtil.VERTICAL_GAP).apply {
             add(GiteaMarkdown.createBody(comment.body, apply))
             reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
         val author = comment.user
-        return CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, body) {
+        val editable = GiteaCommentEditing.editable(cs, data, comment.id, author, comment.body, view)
+        return CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, editable.content) {
             iconTooltip = author?.presentableName()
             maxContentWidth = null
             val title = horizontalPanel(CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP).apply {
@@ -207,6 +208,7 @@ object GiteaReviewEditorComponents {
             }
             val actions = horizontalPanel(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP).apply {
                 reactionsVm?.let { add(GiteaReactionsComponentFactory.createAddReactionButton(cs, it)) }
+                add(editable.editButton)
             }
             withHeader(title, actions)
         }

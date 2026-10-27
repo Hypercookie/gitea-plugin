@@ -10,6 +10,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsCo
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.giteaReactionsViewModelOrNull
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaAvatarIcons
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaCommentCodeBlockFilter
+import com.github.hypercookie.giteaplugin.pullrequest.review.editor.GiteaCommentEditing
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactionsService
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
@@ -138,6 +139,7 @@ object GiteaTimelineComponent {
         user: GiteaUser?,
         content: JComponent,
         title: JComponent,
+        editButton: JComponent? = null,
     ): JComponent {
         val reactionsVm = giteaReactionsViewModelOrNull(cs, reactable, data.currentUser) { data.reactions }
         val mainPanel = JPanel(ListLayout.vertical(CodeReviewTimelineUIUtil.VERTICAL_GAP)).apply {
@@ -148,6 +150,7 @@ object GiteaTimelineComponent {
         val actionsPanel = JPanel(ListLayout.horizontal(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP)).apply {
             isOpaque = false
             reactionsVm?.let { add(GiteaReactionsComponentFactory.createAddReactionButton(cs, it)) }
+            editButton?.let(::add)
         }
         return CodeReviewChatItemUIUtil.build(FULL, { size -> avatars.getIcon(user, size) }, mainPanel) {
             iconTooltip = user?.displayName()
@@ -164,10 +167,14 @@ object GiteaTimelineComponent {
         data: GiteaPullRequestReviewData,
     ): JComponent? =
         when (event.type) {
-            "comment" -> reactableChatItem(
-                cs, avatars, data, GiteaReactable.Comment(event.id), event.user,
-                GiteaMarkdown.createBody(event.body.orEmpty()), titlePane(event.user, null, event.createdAt),
-            )
+            "comment" -> {
+                val body = event.body.orEmpty()
+                val editable = GiteaCommentEditing.editable(cs, data, event.id, event.user, body, GiteaMarkdown.createBody(body))
+                reactableChatItem(
+                    cs, avatars, data, GiteaReactable.Comment(event.id), event.user,
+                    editable.content, titlePane(event.user, null, event.createdAt), editable.editButton,
+                )
+            }
             "review" -> {
                 val verb = "reviewed the changes"
                 val inline = commentsByReview[event.reviewId].orEmpty()
@@ -212,6 +219,7 @@ object GiteaTimelineComponent {
      * when it was made on an older commit, and the body. */
     private fun inlineComment(cs: CoroutineScope, comment: com.github.hypercookie.giteaplugin.api.dto.PullReviewComment, data: GiteaPullRequestReviewData): JComponent {
         val reactionsVm = giteaReactionsViewModelOrNull(cs, GiteaReactable.Comment(comment.id), data.currentUser) { data.reactions }
+        val editable = GiteaCommentEditing.editable(cs, data, comment.id, comment.user, comment.body, GiteaMarkdown.createBody(comment.body))
         val line = comment.position?.takeIf { it > 0 } ?: comment.originalPosition
         val header = JPanel(ListLayout.horizontal(com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentUIUtil.Title.HORIZONTAL_GAP)).apply {
             isOpaque = false
@@ -225,12 +233,13 @@ object GiteaTimelineComponent {
                 add(com.intellij.collaboration.ui.CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.resolved.tag")))
             }
             reactionsVm?.let { add(GiteaReactionsComponentFactory.createAddReactionButton(cs, it)) }
+            add(editable.editButton)
         }
         return JPanel(ListLayout.vertical(2)).apply {
             isOpaque = false
             border = JBUI.Borders.emptyLeft(8)
             add(header)
-            add(GiteaMarkdown.createBody(comment.body))
+            add(editable.content)
             reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
     }
