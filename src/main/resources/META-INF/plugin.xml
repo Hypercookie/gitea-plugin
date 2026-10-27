@@ -58,6 +58,11 @@
                 text="Include Resolved Comments in Navigation">
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
         </action>
+        <action id="Gitea.Diff.JumpToSourceLine" class="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaJumpToSourceLineAction"
+                text="Jump to Source Line" description="Open the local file at this line, checking out the pull request branch first if needed"
+                icon="AllIcons.Actions.EditSource">
+            <add-to-group group-id="Diff.EditorPopupMenu" anchor="first"/>
+        </action>
     </actions>
 
     <projectListeners>

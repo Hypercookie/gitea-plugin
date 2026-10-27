@@ -26,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -86,6 +87,11 @@ class GiteaPullRequestReviewData(
      * timeline's comments and events) fetch it again too. */
     val reloads: SharedFlow<Unit> = _reloads.asSharedFlow()
 
+    /** Pull request fetches [reload] asks for. Conflated: reloads asked for
+     * while one runs (a Refresh clicked repeatedly) make one more, not one
+     * each. */
+    private val pullRequestReloads = Channel<Unit>(Channel.CONFLATED)
+
     val threads: StateFlow<List<ReviewThread>> =
         _comments.map(ReviewThreads::group).stateIn(cs, SharingStarted.Eagerly, emptyList())
 
@@ -104,6 +110,8 @@ class GiteaPullRequestReviewData(
     /** Bounds concurrent file content requests (to 8): opening the diff chain
      * of a big pull request asks for two versions of every changed file at once. */
     private val fileFetchPermits = Semaphore(8)
+
+    private val localFiles = repo.gitRoot?.let { LocalGitFiles(project, it) }
 
     private val changedFilesLock = Any()
 
@@ -146,6 +154,12 @@ class GiteaPullRequestReviewData(
         cs.launch { loadCurrentUser() }
         cs.launch { _serverFeatures.value = GiteaServerFeatures.of(repo.account.serverUrl, client) }
         cs.launch { reloadComments() }
+        cs.launch {
+            for (ignored in pullRequestReloads) {
+                runCatchingCancellable { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)
+                reloadComments()
+            }
+        }
     }
 
     /** Re-fetches the pull request, its comments and their reactions, and
@@ -157,10 +171,7 @@ class GiteaPullRequestReviewData(
         _reloads.tryEmit(Unit)
         // Approve / Request Changes need the current user; retry a failed load.
         if (_currentUser.value == null) cs.launch { loadCurrentUser() }
-        cs.launch {
-            runCatchingCancellable { client.getPullRequest(owner, repoName, number) }.onSuccess(::update)
-            reloadComments()
-        }
+        pullRequestReloads.trySend(Unit)
     }
 
     /** Called when the same PR shows up again with possibly newer data
@@ -254,6 +265,9 @@ class GiteaPullRequestReviewData(
      * what IntelliJ documents use (a raw CRLF text diffed against a document
      * has every line changed). Null when the file doesn't exist at that ref.
      *
+     * Read from the local repository when it has the commit (see
+     * [LocalGitFiles]), else from the Gitea API.
+     *
      * Successful results, "doesn't exist" included, are cached for the
      * lifetime of this PR. A failed request (timeout, rate limit, server
      * error) is not cached, so the next call retries.
@@ -266,8 +280,13 @@ class GiteaPullRequestReviewData(
         val deferred = fileContents.computeIfAbsent(key) {
             cs.async {
                 runCatchingCancellable {
-                    fileFetchPermits.withPermit { client.getFileContentOrNull(owner, repoName, path, ref) }
-                        ?.let(StringUtil::convertLineSeparators)
+                    fileFetchPermits.withPermit {
+                        when (val local = localFiles?.read(path, ref) ?: LocalGitFiles.Read.Unavailable) {
+                            is LocalGitFiles.Read.Found -> local.text
+                            LocalGitFiles.Read.Missing -> null
+                            LocalGitFiles.Read.Unavailable -> client.getFileContentOrNull(owner, repoName, path, ref)
+                        }
+                    }?.let(StringUtil::convertLineSeparators)
                 }
             }
         }
