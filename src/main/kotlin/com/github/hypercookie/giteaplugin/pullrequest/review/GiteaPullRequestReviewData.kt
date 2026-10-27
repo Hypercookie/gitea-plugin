@@ -307,6 +307,18 @@ class GiteaPullRequestReviewData(
         reloadComments()
     }
 
+    /** Comments being edited, with their unsaved text. */
+    internal val commentEdits = GiteaCommentEdits()
+
+    /** Saves [body] as the text of the comment [commentId], an inline review
+     * comment or a top-level one, and shows it everywhere: the comments
+     * here, and the timeline's copies of both kinds through [reloads]. */
+    suspend fun editComment(commentId: Long, body: String) {
+        client.editComment(owner, repoName, commentId, body)
+        reloadComments()
+        _reloads.tryEmit(Unit)
+    }
+
     suspend fun setResolved(thread: ReviewThread, resolved: Boolean) {
         if (resolved) client.resolveComment(owner, repoName, thread.id)
         else client.unresolveComment(owner, repoName, thread.id)

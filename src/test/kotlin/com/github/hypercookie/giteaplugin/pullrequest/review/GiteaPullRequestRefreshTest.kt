@@ -160,6 +160,31 @@ class GiteaPullRequestRefreshTest : BasePlatformTestCase() {
         assertEquals(listOf("fresh"), data.comments.value.map { it.body })
     }
 
+    fun `test editing a comment patches it and reloads comments and timeline`() = runBlocking {
+        var patched: Pair<String, String>? = null
+        server.createContext("/api/v1/repos/o/r/issues/comments/1") { exchange ->
+            if (exchange.requestMethod == "PATCH") {
+                patched = exchange.requestURI.path to exchange.requestBody.readBytes().decodeToString()
+                reviewCommentBodies = listOf("edited")
+                timelineBodies = listOf("edited")
+            }
+            val bytes = comment(1, "edited").toByteArray()
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        val data = data()
+        val loader = GiteaTimelineLoader(scope, data)
+        data.awaitComments("first")
+        loader.awaitBodies("first")
+
+        data.editComment(1, "edited")
+
+        assertEquals("/api/v1/repos/o/r/issues/comments/1" to """{"body":"edited"}""", patched)
+        data.awaitComments("edited")
+        loader.awaitBodies("edited")
+        Unit
+    }
+
     private companion object {
         const val TIMEOUT_MS = 10_000L
         const val PR_JSON = """{"id":1,"number":1,"title":"Test","state":"open","base":{"ref":"main","sha":"base"},"head":{"ref":"feature","sha":"head"}}"""

@@ -5,6 +5,7 @@ import com.github.hypercookie.giteaplugin.api.dto.CreateIssueCommentOption
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewCommentReplyOptions
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewOptions
 import com.github.hypercookie.giteaplugin.api.dto.CombinedCommitStatus
+import com.github.hypercookie.giteaplugin.api.dto.EditIssueCommentOption
 import com.github.hypercookie.giteaplugin.api.dto.EditReactionOption
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
 import com.github.hypercookie.giteaplugin.api.dto.GitCommitWithFiles
@@ -247,6 +248,12 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
             CreateIssueCommentOption(body),
         )
 
+    /** Edits the text of a comment: a top-level one or an inline review
+     * comment, which Gitea keeps in the same table. Only its author (or a
+     * repository admin) may. */
+    suspend fun editComment(owner: String, repo: String, commentId: Long, body: String): IssueComment =
+        patch("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/comments/$commentId", EditIssueCommentOption(body))
+
     // --- Reviews & inline comments -----------------------------------------
 
     suspend fun listReviews(owner: String, repo: String, index: Long): List<PullReview> =
@@ -371,6 +378,16 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
             requestBuilder(path)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json.encodeToString<B>(body)))
+                .build(),
+        )
+        decode(response)
+    }
+
+    private suspend inline fun <reified B, reified T> patch(path: String, body: B): T = withContext(Dispatchers.IO) {
+        val response = execute(
+            requestBuilder(path)
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(json.encodeToString<B>(body)))
                 .build(),
         )
         decode(response)

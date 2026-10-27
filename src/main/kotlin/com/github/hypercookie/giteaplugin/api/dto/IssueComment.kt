@@ -17,3 +17,8 @@ data class IssueComment(
 
 @Serializable
 data class CreateIssueCommentOption(val body: String)
+
+/** Body for `PATCH /issues/comments/{id}`, which edits any comment of an
+ * issue or pull request, inline review comments included. */
+@Serializable
+data class EditIssueCommentOption(val body: String)
