@@ -177,12 +177,17 @@ class GiteaChangeListViewModel(
         _selection.value = selection
     }
 
+    /** Asks the changes tree to select [change]. */
+    fun selectInTree(change: RefComparisonChange) {
+        _selectionRequests.tryEmit(CodeReviewChangeListViewModel.SelectionRequest.OneChange(change))
+    }
+
     override fun showDiffPreview() = showDiff()
 
     override fun showDiff() {
         val selection = _selection.value
         val selected = selection?.changes ?: changes
-        GiteaPullRequestDiff.show(data, selected, selection?.selectedIdx ?: 0)
+        GiteaPullRequestDiff.show(data, selected, selection?.selectedIdx ?: 0, this)
     }
 }
 

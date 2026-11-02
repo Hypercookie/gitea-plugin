@@ -44,8 +44,9 @@ import kotlin.coroutines.cancellation.CancellationException
  */
 object GiteaPullRequestDiff {
 
-    /** Shows [changes] as one diff chain, starting at [selectedIndex]. */
-    fun show(data: GiteaPullRequestReviewData, changes: List<RefComparisonChange>, selectedIndex: Int) {
+    /** Shows [changes] as one diff chain, starting at [selectedIndex]. [changeList] is the tree
+     * "Select in Changes Tree" selects in. */
+    fun show(data: GiteaPullRequestReviewData, changes: List<RefComparisonChange>, selectedIndex: Int, changeList: GiteaChangeListViewModel? = null) {
         if (changes.isEmpty()) return
         data.cs.launch {
             val pr = data.pullRequest.value
@@ -61,6 +62,9 @@ object GiteaPullRequestDiff {
                         GiteaDiffCommentNavigation(requests, requests.map(::navigationFile)).apply {
                             currentPath = requests[selectedIndex.coerceIn(0, requests.lastIndex)]
                                 .getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY)?.path
+                            selectInTree = changeList?.let { vm ->
+                                { request -> requests.indexOf(request).takeIf { it >= 0 }?.let { vm.selectInTree(changes[it]) } }
+                            }
                         },
                     )
                     // Shown in the toolbar after the platform's navigation arrows.
@@ -71,7 +75,7 @@ object GiteaPullRequestDiff {
         }
     }
 
-    private val COMMENT_NAVIGATION_ACTIONS = listOf("Gitea.Diff.Review.PreviousComment", "Gitea.Diff.Review.NextComment", "Gitea.Diff.SelectInProjectView")
+    private val COMMENT_NAVIGATION_ACTIONS = listOf("Gitea.Diff.Review.PreviousComment", "Gitea.Diff.Review.NextComment", "Gitea.Diff.SelectInChangesTree")
 
     private fun navigationFile(request: SimpleDiffRequest): CommentNavigation.File {
         val ctx = request.getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY)!!
