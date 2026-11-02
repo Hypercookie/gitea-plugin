@@ -79,6 +79,11 @@ class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea
                     checkBox("Reload open pull requests when the IDE window regains focus")
                         .bindSelected(settings::refreshOnFrameActivation)
                 }
+                row {
+                    checkBox("Code suggestions in review comments")
+                        .bindSelected(settings::codeSuggestions)
+                        .comment("Off by default. Adds a Suggest Change button to new review comments and an Apply button on suggestions from other plugin users. A suggestion is stored in the comment text itself, with a hidden marker at its end. Applies to comments opened afterwards.")
+                }
             }
             group("Debug") {
                 row {

@@ -23,6 +23,7 @@ class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(
         @JvmField val suggestPullRequestAfterPush: Boolean = true,
         @JvmField val refreshOnFrameActivation: Boolean = true,
         @JvmField val showRequestCounter: Boolean = false,
+        @JvmField val codeSuggestions: Boolean = false,
     )
 
     /** "Gitea Commit Checks" column in the Git log and its status requests
@@ -52,6 +53,12 @@ class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(
     var refreshOnFrameActivation: Boolean
         get() = state.refreshOnFrameActivation
         set(value) { updateState { it.copy(refreshOnFrameActivation = value) } }
+
+    /** Code suggestions in review comments, with a hidden marker in the
+     * comment body and an Apply button for other plugin users. Off by default. */
+    var codeSuggestions: Boolean
+        get() = state.codeSuggestions
+        set(value) { updateState { it.copy(codeSuggestions = value) } }
 
     /** Debug widget in the status bar counting Gitea API requests. */
     var showRequestCounter: Boolean

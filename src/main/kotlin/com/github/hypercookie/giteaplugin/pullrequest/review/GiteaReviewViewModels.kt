@@ -2,6 +2,8 @@ package com.github.hypercookie.giteaplugin.pullrequest.review
 
 import com.github.hypercookie.giteaplugin.api.dto.CreatePullReviewComment
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
+import com.github.hypercookie.giteaplugin.util.GiteaSuggestion
 import com.intellij.collaboration.ui.codereview.comment.CodeReviewSubmittableTextViewModelBase
 import com.intellij.collaboration.ui.codereview.timeline.thread.CodeReviewResolvableItemViewModel
 import com.intellij.openapi.diagnostic.thisLogger
@@ -111,8 +113,19 @@ class GiteaNewCommentViewModel(
     val hasPendingReview: StateFlow<Boolean> = data.pending.map { it.isNotEmpty() }
         .stateIn(cs, SharingStarted.Eagerly, data.pending.value.isNotEmpty())
 
+    /** Lines a suggestion in the text was started from; see [startSuggestion]. */
+    private var suggestionOriginal: List<String> = emptyList()
+
+    /** Inserts a suggestion block holding [original], the commented code,
+     * into the text. Submitting then adds the hidden suggestion marker. */
+    fun startSuggestion(original: List<String>) {
+        suggestionOriginal = original
+        val current = text.value
+        text.value = (if (current.isBlank()) "" else current.trimEnd() + "\n\n") + GiteaSuggestion.template(original)
+    }
+
     private fun comment(body: String) = CreatePullReviewComment(
-        body = body,
+        body = if (suggestionOriginal.isNotEmpty() && GiteaSettings.getInstance().codeSuggestions) GiteaSuggestion.withMarker(body, suggestionOriginal) else body,
         path = path,
         newPosition = if (side == ReviewSide.NEW) line + 1L else 0,
         oldPosition = if (side == ReviewSide.OLD) line + 1L else 0,

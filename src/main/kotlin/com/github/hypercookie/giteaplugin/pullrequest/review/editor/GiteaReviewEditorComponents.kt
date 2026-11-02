@@ -11,7 +11,12 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaNewCommentView
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaThreadViewModel
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
+import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.util.GiteaCodeBlockApply
+import com.github.hypercookie.giteaplugin.util.GiteaSuggestion
+import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.util.TextRange
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
 import com.github.hypercookie.giteaplugin.util.SHIFT_SUBMIT_SHORTCUT
 import com.github.hypercookie.giteaplugin.util.bindEnabled
@@ -73,7 +78,7 @@ object GiteaReviewEditorComponents {
     fun create(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay, editor: Editor): JComponent = when (inlay) {
         is GiteaEditorInlay.Thread -> createThread(cs, project, inlay, codeBlockApply(cs, project, editor, inlay))
         is GiteaEditorInlay.Pending -> createPending(cs, project, inlay, codeBlockApply(cs, project, editor, inlay))
-        is GiteaEditorInlay.NewComment -> createNewComment(cs, project, inlay.vm)
+        is GiteaEditorInlay.NewComment -> createNewComment(cs, project, inlay.vm, editor)
     }
 
     /**
@@ -95,16 +100,30 @@ object GiteaReviewEditorComponents {
                 else -> null
             }
         }.stateIn(cs, SharingStarted.Eagerly, if (editable) null else READ_ONLY_REASON)
-        return GiteaCodeBlockApply(cs, reason) { code ->
-            val line = inlay.line.value ?: return@GiteaCodeBlockApply
-            if (reason.value != null) return@GiteaCodeBlockApply
-            if (!ReadonlyStatusHandler.ensureDocumentWritable(project, document)) return@GiteaCodeBlockApply
+        val applySuggestion: (GiteaSuggestion) -> Unit = suggestion@{ suggestion ->
+            val line = inlay.line.value ?: return@suggestion
+            if (reason.value != null) return@suggestion
+            val end = line + suggestion.lines
+            val original = if (end <= document.lineCount) (line until end).map { document.getText(TextRange(document.getLineStartOffset(it), document.getLineEndOffset(it))) } else null
+            if (original == null || GiteaSuggestion.hashOf(original) != suggestion.originalHash) {
+                Messages.showWarningDialog(project, "The code this suggestion was written for has changed, so it can't be applied.", "Apply Suggestion")
+                return@suggestion
+            }
+            if (!ReadonlyStatusHandler.ensureDocumentWritable(project, document)) return@suggestion
+            WriteCommandAction.writeCommandAction(project).withName("Apply Suggestion").run<RuntimeException> {
+                document.replaceString(document.getLineStartOffset(line), document.getLineEndOffset(end - 1), suggestion.code)
+            }
+        }
+        return GiteaCodeBlockApply(cs, reason, applySuggestion = applySuggestion, apply = code@{ code ->
+            val line = inlay.line.value ?: return@code
+            if (reason.value != null) return@code
+            if (!ReadonlyStatusHandler.ensureDocumentWritable(project, document)) return@code
             WriteCommandAction.writeCommandAction(project).withName("Apply Code Block").run<RuntimeException> {
                 if (line < document.lineCount) {
                     document.replaceString(document.getLineStartOffset(line), document.getLineEndOffset(line), code)
                 }
             }
-        }
+        })
     }
 
     // --- Thread ------------------------------------------------------------
@@ -311,7 +330,7 @@ object GiteaReviewEditorComponents {
 
     // --- New comment -------------------------------------------------------
 
-    private fun createNewComment(cs: CoroutineScope, project: Project, vm: GiteaNewCommentViewModel): JComponent {
+    private fun createNewComment(cs: CoroutineScope, project: Project, vm: GiteaNewCommentViewModel, editor: Editor): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
         // Strings from the GitHub plugin's bundle (pull.request.review.editor.*).
         fun primaryName(pending: Boolean) = if (pending) "Add Review Comment" else "Start Review"
@@ -329,10 +348,22 @@ object GiteaReviewEditorComponents {
                 vm.cancel()
             }
         }
+        // Opt-in: starts the comment with the commented line in a suggestion block.
+        val suggestAction = if (GiteaSettings.getInstance().codeSuggestions && vm.side == ReviewSide.NEW) {
+            giteaAction("Suggest Change") {
+                val document = editor.document
+                if (vm.line < document.lineCount) {
+                    val lineText = document.getText(TextRange(document.getLineStartOffset(vm.line), document.getLineEndOffset(vm.line)))
+                    vm.startSuggestion(listOf(lineText))
+                }
+            }
+        } else {
+            null
+        }
         val config = CommentInputActionsComponentFactory.Config(
             primaryAction = MutableStateFlow(primaryAction),
             secondaryActions = MutableStateFlow(listOf(singleAction)),
-            additionalActions = MutableStateFlow(emptyList()),
+            additionalActions = MutableStateFlow(listOfNotNull(suggestAction)),
             cancelAction = MutableStateFlow(cancel),
             submitHint = vm.hasPendingReview.map { pending ->
                 "${CommentInputActionsComponentFactory.submitShortcutText} to ${primaryName(pending).lowercase()}, " +

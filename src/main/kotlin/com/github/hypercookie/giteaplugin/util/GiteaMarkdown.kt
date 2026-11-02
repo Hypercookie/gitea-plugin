@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.util
 
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.intellij.collaboration.ui.SimpleHtmlPane
 import com.intellij.collaboration.ui.setHtmlBody
 import com.intellij.lang.Language
@@ -106,6 +107,18 @@ object GiteaMarkdown {
      * [GiteaCodeBlockComponent] that keeps its lines unwrapped and offers
      * Copy, and [apply] when given. */
     fun createBody(markdown: String, apply: GiteaCodeBlockApply? = null): JComponent {
+        // With suggestions on, a comment's hidden marker is cut off and its
+        // suggestion block applies with a check that the code is unchanged.
+        val suggestion = if (apply?.applySuggestion != null && GiteaSettings.getInstance().codeSuggestions) {
+            GiteaSuggestion.parse(markdown)
+        } else {
+            null
+        }
+        val text = if (suggestion != null) GiteaSuggestion.stripMarker(markdown) else markdown
+        return createBody(text, apply, suggestion)
+    }
+
+    private fun createBody(markdown: String, apply: GiteaCodeBlockApply?, suggestion: GiteaSuggestion?): JComponent {
         val segments = toSegments(markdown)
         if (segments.none { it is Segment.Code }) return createPane(toHtml(markdown))
         return JPanel(ListLayout.vertical(0)).apply {
@@ -113,7 +126,14 @@ object GiteaMarkdown {
             for (segment in segments) {
                 when (segment) {
                     is Segment.Html -> add(createPane(segment.html))
-                    is Segment.Code -> add(GiteaCodeBlockComponent(segment.block, apply))
+                    is Segment.Code -> {
+                        val blockApply = if (suggestion != null && segment.block.language == "suggestion") {
+                            GiteaCodeBlockApply(apply!!.cs, apply.unavailableReason, { apply.applySuggestion!!(suggestion) })
+                        } else {
+                            apply
+                        }
+                        add(GiteaCodeBlockComponent(segment.block, blockApply))
+                    }
                 }
             }
         }

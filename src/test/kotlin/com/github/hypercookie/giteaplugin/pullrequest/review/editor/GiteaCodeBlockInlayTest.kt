@@ -45,6 +45,22 @@ class GiteaCodeBlockInlayTest : BasePlatformTestCase() {
         assertEquals("one\nTWO\n  2\nthree", myFixture.editor.document.text)
     }
 
+    fun testSuggestionAppliesOnlyWhileCodeIsUnchanged() {
+        val settings = com.github.hypercookie.giteaplugin.settings.GiteaSettings.getInstance()
+        settings.codeSuggestions = true
+        try {
+            myFixture.configureByText("a.txt", "one\ntwo\nthree")
+            val body = com.github.hypercookie.giteaplugin.util.GiteaSuggestion.withMarker(
+                "```suggestion\nTWO\n```", listOf("two"),
+            )
+            val apply = applyButton(GiteaReviewEditorComponents.create(cs, project, pending(body, line = 1), myFixture.editor))
+            apply.actionListener!!.actionPerformed(ActionEvent(apply, ActionEvent.ACTION_PERFORMED, null))
+            assertEquals("one\nTWO\nthree", myFixture.editor.document.text)
+        } finally {
+            settings.codeSuggestions = false
+        }
+    }
+
     fun testApplyDisabledWhileOutdated() {
         myFixture.configureByText("a.txt", "one\ntwo")
         val inlay = pending("```\nx\n```", line = 0)
