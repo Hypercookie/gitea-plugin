@@ -9,11 +9,11 @@ import java.security.MessageDigest
  * Gitea web UI), and a hidden marker at the very end of the body says how
  * many lines it replaces and which code it was written against.
  *
- * The marker is an empty, closed custom HTML element,
- * `<gitea-plugin-suggestion v="1" n=".." h=".."></gitea-plugin-suggestion>`:
- * Gitea's renderer does not show an element it does not know, its attributes
- * carry the data, and as it is closed it hides nothing after it. It is
- * written as the last thing in the body.
+ * The marker is a closed HTML comment with the same `gitea-plugin:` prefix
+ * as the multi-line range marker, `<!--gitea-plugin:suggest=2,0a1b2c3d4e5f-->`
+ * (lines replaced, hash of the original). Gitea's Markdown renderer drops
+ * it, so colleagues without the plugin just see the suggestion block. An
+ * unclosed tag would be shown as literal text. Parsing ignores where in the body it sits.
  *
  * @property lines how many lines, starting at the commented line, [code] replaces.
  * @property originalHash [hashOf] the lines it replaces, to refuse applying
@@ -22,11 +22,10 @@ import java.security.MessageDigest
 data class GiteaSuggestion(val code: String, val lines: Int, val originalHash: String) {
 
     /** The marker to append to a comment body. */
-    fun marker(): String = "$MARKER_START v=\"1\" n=\"$lines\" h=\"$originalHash\"></gitea-plugin-suggestion>"
+    fun marker(): String = "<!--gitea-plugin:suggest=$lines,$originalHash-->"
 
     companion object {
-        private const val MARKER_START = "<gitea-plugin-suggestion"
-        private val MARKER = Regex("""\s*<gitea-plugin-suggestion v="1" n="(\d{1,4})" h="([0-9a-f]{12})"></gitea-plugin-suggestion>\s*$""")
+        private val MARKER = Regex("""<!--gitea-plugin:suggest=(\d{1,4}),([0-9a-f]{12})-->""")
         private val FENCE = Regex("""```suggestion[^\n]*\n(.*?)\n?```""", RegexOption.DOT_MATCHES_ALL)
 
         /** Hash of [lines] ignoring trailing whitespace and line separator style. */
@@ -37,7 +36,7 @@ data class GiteaSuggestion(val code: String, val lines: Int, val originalHash: S
         }
 
         /** [body] with its hidden marker, if any, cut off. */
-        fun stripMarker(body: String): String = MARKER.replace(body, "")
+        fun stripMarker(body: String): String = MARKER.replace(body, "").trimEnd()
 
         /** The suggestion [body] carries: its marker plus the code of its
          * first ```` ```suggestion ```` fence; null when either is missing. */

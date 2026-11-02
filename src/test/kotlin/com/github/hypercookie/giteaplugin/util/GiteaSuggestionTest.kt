@@ -11,13 +11,13 @@ class GiteaSuggestionTest : TestCase() {
         assertEquals("val x = 1\nval b = 2", s.code)
         assertEquals(2, s.lines)
         assertEquals(GiteaSuggestion.hashOf(original), s.originalHash)
-        assertFalse(GiteaSuggestion.stripMarker(body).contains("gitea-plugin-suggestion"))
+        assertFalse(GiteaSuggestion.stripMarker(body).contains("gitea-plugin:suggest"))
         assertTrue(GiteaSuggestion.stripMarker(body).contains("```suggestion"))
     }
 
-    fun testMarkerIsAClosedTagAtTheEnd() {
+    fun testMarkerIsAClosedCommentAtTheEnd() {
         val body = GiteaSuggestion.withMarker("```suggestion\nx\n```", listOf("y"))
-        assertTrue(body.trimEnd().endsWith("></gitea-plugin-suggestion>"))
+        assertTrue(body.trimEnd().endsWith("-->"))
     }
 
     fun testNoMarkerNoSuggestion() {
