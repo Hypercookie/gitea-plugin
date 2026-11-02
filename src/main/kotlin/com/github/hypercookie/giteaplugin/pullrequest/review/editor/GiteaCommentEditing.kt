@@ -4,6 +4,7 @@ import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaCommentCodeBlockFilter
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
+import com.github.hypercookie.giteaplugin.util.GiteaHiddenMarkers
 import com.github.hypercookie.giteaplugin.util.bindVisibility
 import com.github.hypercookie.giteaplugin.util.giteaAction
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
@@ -15,7 +16,11 @@ import com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentUIUtil
 import com.intellij.collaboration.ui.codereview.comment.CodeReviewSubmittableTextViewModelBase
 import com.intellij.collaboration.ui.codereview.comment.CommentInputActionsComponentFactory
 import com.intellij.collaboration.ui.codereview.timeline.comment.CommentTextFieldFactory
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.util.ui.EmptyIcon
+import kotlinx.coroutines.CancellationException
 import com.intellij.util.ui.UIUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
@@ -36,10 +41,13 @@ internal class GiteaEditCommentViewModel(
     private val commentId: Long,
     private val original: String,
     initialText: String,
+    /** Hidden markers of the comment, not shown in the text field and kept on save. */
+    private val markers: List<String> = emptyList(),
     private val onDone: () -> Unit,
 ) : CodeReviewSubmittableTextViewModelBase(data.project, cs, initialText) {
 
-    fun save() = submit { body ->
+    fun save() = submit { text ->
+        val body = GiteaHiddenMarkers.attach(text, markers)
         if (body != original) {
             // Before the request: the comment is drawn again once it is
             // saved, and must not reopen its editor then.
@@ -61,8 +69,8 @@ internal object GiteaCommentEditing {
 
     /**
      * [content] shows [view] (the comment's rendered body) or, while
-     * editing, the text field instead; [editButton] starts editing and is
-     * visible on the signed-in user's own comments only.
+     * editing, the text field instead; [editButton] holds the edit and the
+     * delete button, visible on the signed-in user's own comments only.
      */
     class Editable(val content: JComponent, val editButton: JComponent)
 
@@ -94,11 +102,14 @@ internal object GiteaCommentEditing {
             content.repaint()
         }
 
+        // Hidden markers stay out of the text field; the draft is without them too.
+        val hidden = GiteaHiddenMarkers.split(body)
+
         fun start(text: String) {
             if (editor != null) return
             val ecs = cs.giteaChildScope("Gitea comment editor").also { editorCs = it }
             data.commentEdits.update(commentId, text)
-            val vm = GiteaEditCommentViewModel(ecs, data, commentId, body, text) { UIUtil.invokeLaterIfNeeded { stop() } }
+            val vm = GiteaEditCommentViewModel(ecs, data, commentId, body, text, hidden.markers) { UIUtil.invokeLaterIfNeeded { stop() } }
             ecs.launch { vm.text.collect { data.commentEdits.update(commentId, it) } }
             val field = createField(ecs, data, vm)
             editor = field
@@ -109,10 +120,31 @@ internal object GiteaCommentEditing {
             vm.requestFocus()
         }
 
-        val editButton = CodeReviewCommentUIUtil.createEditButton { start(body) }.apply { bindVisibility(cs, canEdit) }
+        val editButton = JPanel(ListLayout.horizontal(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP)).apply {
+            isOpaque = false
+            add(CodeReviewCommentUIUtil.createEditButton { start(hidden.text) })
+            add(CodeReviewCommentUIUtil.createDeleteCommentIconButton { confirmAndDelete(cs, data, commentId) })
+            bindVisibility(cs, canEdit)
+        }
         // Drawn again while being edited: carry on where the old editor was.
         data.commentEdits.draft(commentId)?.takeIf { canEdit.value }?.let(::start)
         return Editable(content, editButton)
+    }
+
+    /** Asks, then deletes the comment on the server and drops it everywhere it is shown. */
+    private fun confirmAndDelete(cs: CoroutineScope, data: GiteaPullRequestReviewData, commentId: Long) {
+        if (!MessageDialogBuilder.yesNo("Delete Comment", "Are you sure you want to delete this comment? This can't be undone.").ask(data.project)) return
+        cs.launch {
+            try {
+                data.deleteComment(commentId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                NotificationGroupManager.getInstance().getNotificationGroup("Gitea")
+                    .createNotification("Could not delete the comment", e.message ?: e.toString(), NotificationType.ERROR)
+                    .notify(data.project)
+            }
+        }
     }
 
     private fun isOwn(user: GiteaUser?, author: GiteaUser?) = user != null && author != null && user.id == author.id

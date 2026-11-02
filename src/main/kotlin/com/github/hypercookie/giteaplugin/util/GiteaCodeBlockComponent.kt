@@ -37,6 +37,8 @@ class GiteaCodeBlockApply(
     val cs: CoroutineScope,
     val unavailableReason: StateFlow<String?>,
     val apply: (code: String) -> Unit,
+    /** Applies a suggestion of a comment ([GiteaSuggestion]); null where suggestions are off. */
+    val applySuggestion: ((GiteaSuggestion) -> Unit)? = null,
 )
 
 /**

@@ -322,6 +322,15 @@ class GiteaPullRequestReviewData(
         _reloads.tryEmit(Unit)
     }
 
+    /** Deletes the comment [commentId], an inline review comment or a
+     * top-level one, and drops it everywhere it is shown. */
+    suspend fun deleteComment(commentId: Long) {
+        client.deleteComment(owner, repoName, commentId)
+        commentEdits.finish(commentId)
+        reloadComments()
+        _reloads.tryEmit(Unit)
+    }
+
     suspend fun setResolved(thread: ReviewThread, resolved: Boolean) {
         if (resolved) client.resolveComment(owner, repoName, thread.id)
         else client.unresolveComment(owner, repoName, thread.id)
