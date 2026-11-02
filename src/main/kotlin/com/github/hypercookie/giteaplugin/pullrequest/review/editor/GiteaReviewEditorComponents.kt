@@ -16,6 +16,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.util.GiteaCodeBlockApply
 import com.github.hypercookie.giteaplugin.util.GiteaSuggestion
+import com.github.hypercookie.giteaplugin.util.hasAtMostOneSuggestion
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.TextRange
 import com.github.hypercookie.giteaplugin.util.GiteaMarkdown
@@ -282,7 +283,7 @@ object GiteaReviewEditorComponents {
         val replyVm = vm.replyVm
         val resolveAction = createResolveAction(cs, vm)
         val config = CommentInputActionsComponentFactory.Config(
-            primaryAction = MutableStateFlow(replyVm.submitAction(cs, CollaborationToolsBundle.message("review.comments.reply.action")) { replyVm.submitReply() }),
+            primaryAction = MutableStateFlow(replyVm.submitAction(cs, CollaborationToolsBundle.message("review.comments.reply.action"), accepts = ::hasAtMostOneSuggestion) { replyVm.submitReply() }),
             secondaryActions = MutableStateFlow(emptyList()),
             additionalActions = MutableStateFlow(listOf(resolveAction)),
             cancelAction = MutableStateFlow(giteaAction("") { vm.stopWritingReply() }),
@@ -352,10 +353,10 @@ object GiteaReviewEditorComponents {
         val avatars = GiteaAvatarIcons.getInstance(project)
         // Strings from the GitHub plugin's bundle (pull.request.review.editor.*).
         fun primaryName(pending: Boolean) = if (pending) "Add Review Comment" else "Start Review"
-        val primaryAction = vm.submitAction(cs, primaryName(vm.hasPendingReview.value)) { vm.addToReview() }.apply {
+        val primaryAction = vm.submitAction(cs, primaryName(vm.hasPendingReview.value), accepts = ::hasAtMostOneSuggestion) { vm.addToReview() }.apply {
             bindName(cs, vm.hasPendingReview.map(::primaryName))
         }
-        val singleAction = vm.submitAction(cs, "Add Single Comment") { vm.postSingle() }
+        val singleAction = vm.submitAction(cs, "Add Single Comment", accepts = ::hasAtMostOneSuggestion) { vm.postSingle() }
         val cancel = giteaAction("") {
             if (vm.text.value.isBlank() ||
                 MessageDialogBuilder.yesNo(
@@ -386,6 +387,8 @@ object GiteaReviewEditorComponents {
         } else {
             null
         }
+        // A comment holds one suggestion: no second block, by button or by hand.
+        suggestAction?.bindEnabled(cs, vm.text.map { GiteaSuggestion.count(it) == 0 })
         val config = CommentInputActionsComponentFactory.Config(
             primaryAction = MutableStateFlow(primaryAction),
             secondaryActions = MutableStateFlow(listOf(singleAction)),

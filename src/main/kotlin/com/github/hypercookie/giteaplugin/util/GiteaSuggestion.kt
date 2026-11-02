@@ -28,6 +28,7 @@ data class GiteaSuggestion(val code: String, val lines: Int, val originalHash: S
 
     companion object {
         private val MARKER = Regex("""<!--gitea-plugin:suggest=(\d{1,4}),([0-9a-f]{12})-->""")
+        private val FENCE_START = Regex("^```suggestion", RegexOption.MULTILINE)
         private val FENCE = Regex("""```suggestion[^\n]*\n(.*?)\n?```""", RegexOption.DOT_MATCHES_ALL)
 
         /** Hash of [lines] ignoring trailing whitespace and line separator style. */
@@ -57,6 +58,10 @@ data class GiteaSuggestion(val code: String, val lines: Int, val originalHash: S
          */
         fun parseOrPlain(body: String): GiteaSuggestion? = parse(body)
             ?: FENCE.find(body.replace("\r\n", "\n"))?.groupValues?.get(1)?.let { GiteaSuggestion(it, 0, "") }
+
+        /** How many suggestion blocks [text] has. A comment holds at most one:
+         * a suggestion replaces the commented code, so two would conflict. */
+        fun count(text: String): Int = FENCE_START.findAll(text.replace("\r\n", "\n")).count()
 
         /** The text to start a suggestion comment with: a suggestion fence holding [original]. */
         fun template(original: List<String>): String =

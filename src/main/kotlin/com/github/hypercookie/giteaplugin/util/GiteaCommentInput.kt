@@ -31,11 +31,21 @@ import javax.swing.KeyStroke
  * blank and nothing is being submitted, as the platform's own
  * `submitActionIn` (which builds on internal API) does.
  */
-fun CodeReviewSubmittableTextViewModel.submitAction(cs: CoroutineScope, name: String, perform: () -> Unit): Action =
-    giteaAction(name) { if (text.value.isNotBlank()) perform() }.apply {
-        isEnabled = text.value.isNotBlank()
-        bindEnabled(cs, combine(text, state) { text, state -> text.isNotBlank() && state?.isInProgress != true })
+fun CodeReviewSubmittableTextViewModel.submitAction(
+    cs: CoroutineScope,
+    name: String,
+    /** Extra condition on the text, besides it not being blank. */
+    accepts: (String) -> Boolean = { true },
+    perform: () -> Unit,
+): Action =
+    giteaAction(name) { if (text.value.isNotBlank() && accepts(text.value)) perform() }.apply {
+        isEnabled = text.value.isNotBlank() && accepts(text.value)
+        bindEnabled(cs, combine(text, state) { text, state -> text.isNotBlank() && accepts(text) && state?.isInProgress != true })
     }
+
+/** Text that may be submitted: with suggestions on, at most one suggestion block. */
+fun hasAtMostOneSuggestion(text: String): Boolean =
+    !com.github.hypercookie.giteaplugin.settings.GiteaSettings.getInstance().codeSuggestions || GiteaSuggestion.count(text) <= 1
 
 /** Shift + the submit shortcut (Shift+Cmd+Enter on macOS, Shift+Ctrl+Enter elsewhere). */
 val SHIFT_SUBMIT_SHORTCUT: ShortcutSet

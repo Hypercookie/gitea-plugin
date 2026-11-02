@@ -5,6 +5,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaCommentCodeBlo
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
 import com.github.hypercookie.giteaplugin.util.GiteaHiddenMarkers
+import com.github.hypercookie.giteaplugin.util.hasAtMostOneSuggestion
 import com.github.hypercookie.giteaplugin.util.bindVisibility
 import com.github.hypercookie.giteaplugin.util.giteaAction
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
@@ -151,7 +152,7 @@ internal object GiteaCommentEditing {
 
     private fun createField(cs: CoroutineScope, data: GiteaPullRequestReviewData, vm: GiteaEditCommentViewModel): JComponent {
         val config = CommentInputActionsComponentFactory.Config(
-            primaryAction = MutableStateFlow(vm.submitAction(cs, CollaborationToolsBundle.message("review.comment.save")) { vm.save() }),
+            primaryAction = MutableStateFlow(vm.submitAction(cs, CollaborationToolsBundle.message("review.comment.save"), accepts = ::hasAtMostOneSuggestion) { vm.save() }),
             secondaryActions = MutableStateFlow(emptyList()),
             additionalActions = MutableStateFlow(emptyList()),
             cancelAction = MutableStateFlow(giteaAction("") { vm.cancel() }),
