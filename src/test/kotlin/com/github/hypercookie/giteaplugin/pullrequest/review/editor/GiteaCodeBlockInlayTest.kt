@@ -61,6 +61,23 @@ class GiteaCodeBlockInlayTest : BasePlatformTestCase() {
         }
     }
 
+    fun testMultiLineSuggestionReplacesTheRangeEndingAtTheCommentLine() {
+        val settings = com.github.hypercookie.giteaplugin.settings.GiteaSettings.getInstance()
+        settings.codeSuggestions = true
+        try {
+            myFixture.configureByText("a.txt", "one\ntwo\nthree\nfour")
+            val body = com.github.hypercookie.giteaplugin.util.GiteaSuggestion.withMarker(
+                "```suggestion\nTWO-THREE\n```", listOf("two", "three"),
+            )
+            // Anchored at its last line, like a multi-line comment.
+            val apply = applyButton(GiteaReviewEditorComponents.create(cs, project, pending(body, line = 2), myFixture.editor))
+            apply.actionListener!!.actionPerformed(ActionEvent(apply, ActionEvent.ACTION_PERFORMED, null))
+            assertEquals("one\nTWO-THREE\nfour", myFixture.editor.document.text)
+        } finally {
+            settings.codeSuggestions = false
+        }
+    }
+
     fun testApplyDisabledWhileOutdated() {
         myFixture.configureByText("a.txt", "one\ntwo")
         val inlay = pending("```\nx\n```", line = 0)

@@ -4,6 +4,7 @@ import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaCommentCodeBlockFilter
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionSource
+import com.github.hypercookie.giteaplugin.util.GiteaHiddenMarkers
 import com.github.hypercookie.giteaplugin.util.bindVisibility
 import com.github.hypercookie.giteaplugin.util.giteaAction
 import com.github.hypercookie.giteaplugin.util.giteaChildScope
@@ -36,10 +37,13 @@ internal class GiteaEditCommentViewModel(
     private val commentId: Long,
     private val original: String,
     initialText: String,
+    /** Hidden markers of the comment, not shown in the text field and kept on save. */
+    private val markers: List<String> = emptyList(),
     private val onDone: () -> Unit,
 ) : CodeReviewSubmittableTextViewModelBase(data.project, cs, initialText) {
 
-    fun save() = submit { body ->
+    fun save() = submit { text ->
+        val body = GiteaHiddenMarkers.attach(text, markers)
         if (body != original) {
             // Before the request: the comment is drawn again once it is
             // saved, and must not reopen its editor then.
@@ -94,11 +98,14 @@ internal object GiteaCommentEditing {
             content.repaint()
         }
 
+        // Hidden markers stay out of the text field; the draft is without them too.
+        val hidden = GiteaHiddenMarkers.split(body)
+
         fun start(text: String) {
             if (editor != null) return
             val ecs = cs.giteaChildScope("Gitea comment editor").also { editorCs = it }
             data.commentEdits.update(commentId, text)
-            val vm = GiteaEditCommentViewModel(ecs, data, commentId, body, text) { UIUtil.invokeLaterIfNeeded { stop() } }
+            val vm = GiteaEditCommentViewModel(ecs, data, commentId, body, text, hidden.markers) { UIUtil.invokeLaterIfNeeded { stop() } }
             ecs.launch { vm.text.collect { data.commentEdits.update(commentId, it) } }
             val field = createField(ecs, data, vm)
             editor = field
@@ -109,7 +116,7 @@ internal object GiteaCommentEditing {
             vm.requestFocus()
         }
 
-        val editButton = CodeReviewCommentUIUtil.createEditButton { start(body) }.apply { bindVisibility(cs, canEdit) }
+        val editButton = CodeReviewCommentUIUtil.createEditButton { start(hidden.text) }.apply { bindVisibility(cs, canEdit) }
         // Drawn again while being edited: carry on where the old editor was.
         data.commentEdits.draft(commentId)?.takeIf { canEdit.value }?.let(::start)
         return Editable(content, editButton)

@@ -103,15 +103,18 @@ object GiteaReviewEditorComponents {
         val applySuggestion: (GiteaSuggestion) -> Unit = suggestion@{ suggestion ->
             val line = inlay.line.value ?: return@suggestion
             if (reason.value != null) return@suggestion
-            val end = line + suggestion.lines
-            val original = if (end <= document.lineCount) (line until end).map { document.getText(TextRange(document.getLineStartOffset(it), document.getLineEndOffset(it))) } else null
+            // The suggestion replaces its lines up to the comment's line: for a
+            // multi-line comment, which is anchored at its last line, the whole range.
+            val first = line - suggestion.lines + 1
+            val end = line + 1
+            val original = if (first >= 0 && end <= document.lineCount) (first until end).map { document.getText(TextRange(document.getLineStartOffset(it), document.getLineEndOffset(it))) } else null
             if (original == null || GiteaSuggestion.hashOf(original) != suggestion.originalHash) {
                 Messages.showWarningDialog(project, "The code this suggestion was written for has changed, so it can't be applied.", "Apply Suggestion")
                 return@suggestion
             }
             if (!ReadonlyStatusHandler.ensureDocumentWritable(project, document)) return@suggestion
             WriteCommandAction.writeCommandAction(project).withName("Apply Suggestion").run<RuntimeException> {
-                document.replaceString(document.getLineStartOffset(line), document.getLineEndOffset(end - 1), suggestion.code)
+                document.replaceString(document.getLineStartOffset(first), document.getLineEndOffset(line), suggestion.code)
             }
         }
         return GiteaCodeBlockApply(cs, reason, applySuggestion = applySuggestion, apply = code@{ code ->
@@ -353,8 +356,14 @@ object GiteaReviewEditorComponents {
             giteaAction("Suggest Change") {
                 val document = editor.document
                 if (vm.line < document.lineCount) {
-                    val lineText = document.getText(TextRange(document.getLineStartOffset(vm.line), document.getLineEndOffset(vm.line)))
-                    vm.startSuggestion(listOf(lineText))
+                    // Selected lines that end at the comment's line (a multi-line comment), else the line.
+                    val selection = editor.selectionModel
+                    val first = if (selection.hasSelection() && document.getLineNumber(selection.selectionEnd.coerceAtLeast(1) - 1) == vm.line) {
+                        document.getLineNumber(selection.selectionStart).coerceAtMost(vm.line)
+                    } else {
+                        vm.line
+                    }
+                    vm.startSuggestion((first..vm.line).map { document.getText(TextRange(document.getLineStartOffset(it), document.getLineEndOffset(it))) })
                 }
             }
         } else {

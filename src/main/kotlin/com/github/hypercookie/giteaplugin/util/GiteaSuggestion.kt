@@ -15,7 +15,8 @@ import java.security.MessageDigest
  * it, so colleagues without the plugin just see the suggestion block. An
  * unclosed tag would be shown as literal text. Parsing ignores where in the body it sits.
  *
- * @property lines how many lines, starting at the commented line, [code] replaces.
+ * @property lines how many lines, ending at the commented line, [code] replaces.
+ *   A multi-line comment is anchored at its last line, so its whole range.
  * @property originalHash [hashOf] the lines it replaces, to refuse applying
  *   it once they have changed.
  */
