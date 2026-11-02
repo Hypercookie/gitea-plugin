@@ -44,8 +44,9 @@ import kotlin.coroutines.cancellation.CancellationException
  */
 object GiteaPullRequestDiff {
 
-    /** Shows [changes] as one diff chain, starting at [selectedIndex]. */
-    fun show(data: GiteaPullRequestReviewData, changes: List<RefComparisonChange>, selectedIndex: Int) {
+    /** Shows [changes] as one diff chain, starting at [selectedIndex]. [changeList] is the tree
+     * "Select in Changes Tree" selects in. */
+    fun show(data: GiteaPullRequestReviewData, changes: List<RefComparisonChange>, selectedIndex: Int, changeList: GiteaChangeListViewModel? = null) {
         if (changes.isEmpty()) return
         data.cs.launch {
             val pr = data.pullRequest.value
@@ -56,7 +57,16 @@ object GiteaPullRequestDiff {
             withContext(Dispatchers.Main) {
                 val chain = SimpleDiffRequestChain(requests, selectedIndex.coerceIn(0, requests.lastIndex)).apply {
                     putUserData(GITEA_DIFF_CHAIN_KEY, true)
-                    putUserData(GiteaDiffCommentNavigation.KEY, GiteaDiffCommentNavigation(requests, requests.map(::navigationFile)))
+                    putUserData(
+                        GiteaDiffCommentNavigation.KEY,
+                        GiteaDiffCommentNavigation(requests, requests.map(::navigationFile)).apply {
+                            currentPath = requests[selectedIndex.coerceIn(0, requests.lastIndex)]
+                                .getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY)?.path
+                            selectInTree = changeList?.let { vm ->
+                                { request -> requests.indexOf(request).takeIf { it >= 0 }?.let { vm.selectInTree(changes[it]) } }
+                            }
+                        },
+                    )
                     // Shown in the toolbar after the platform's navigation arrows.
                     putUserData(DiffUserDataKeys.CONTEXT_ACTIONS, COMMENT_NAVIGATION_ACTIONS.mapNotNull(ActionManager.getInstance()::getAction))
                 }
@@ -65,7 +75,7 @@ object GiteaPullRequestDiff {
         }
     }
 
-    private val COMMENT_NAVIGATION_ACTIONS = listOf("Gitea.Diff.Review.PreviousComment", "Gitea.Diff.Review.NextComment")
+    private val COMMENT_NAVIGATION_ACTIONS = listOf("Gitea.Diff.Review.PreviousComment", "Gitea.Diff.Review.NextComment", "Gitea.Diff.SelectInChangesTree")
 
     private fun navigationFile(request: SimpleDiffRequest): CommentNavigation.File {
         val ctx = request.getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY)!!
@@ -97,8 +107,9 @@ object GiteaPullRequestDiff {
             afterText != null -> factory.create(data.project, afterText, fileType)
             else -> factory.createEmpty()
         }
+        // Titled with the file name, which names the editor tab and the diff window.
         val afterTitle = if (localFile != null) "Local" else change.revisionNumberAfter.toShortString()
-        return SimpleDiffRequest("#${pr.number}: $name", before, after, change.revisionNumberBefore.toShortString(), afterTitle).apply {
+        return SimpleDiffRequest(name.substringAfterLast('/'), before, after, change.revisionNumberBefore.toShortString(), afterTitle).apply {
             putUserData(
                 GITEA_DIFF_COMMENT_CONTEXT_KEY,
                 GiteaDiffCommentContext(data.repo, data.client, pr, afterPath ?: name, beforePath ?: name, data.pendingStore, data),

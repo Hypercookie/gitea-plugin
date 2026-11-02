@@ -29,6 +29,7 @@
                     id="Gitea Pull Requests" anchor="left" doNotActivateOnStart="true" canCloseContents="true"
                     icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
         <diff.DiffExtension implementation="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaCommentDiffExtension"/>
+        <editorTabTitleProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaDiffTabTitleProvider"/>
         <fileEditorProvider implementation="com.github.hypercookie.giteaplugin.pullrequest.timeline.GiteaTimelineEditorProvider"/>
         <completion.contributor language="any"
                                 implementationClass="com.github.hypercookie.giteaplugin.pullrequest.review.mention.GiteaMentionCompletionContributor"/>
@@ -54,6 +55,10 @@
                 text="Previous Comment" description="Go to the previous review comment of the pull request" icon="AllIcons.General.ChevronUp"/>
         <action id="Gitea.Diff.Review.NextComment" class="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaNextCommentAction"
                 text="Next Comment" description="Go to the next review comment of the pull request" icon="AllIcons.General.ChevronDown"/>
+        <action id="Gitea.Diff.SelectInChangesTree" class="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaSelectInChangesTreeAction"
+                text="Select in Changes Tree" description="Select the file of this diff in the pull request's changes tree" icon="AllIcons.General.Locate">
+            <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
+        </action>
         <action id="Gitea.Diff.Review.IncludeResolvedComments" class="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaIncludeResolvedCommentsAction"
                 text="Include Resolved Comments in Navigation">
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>

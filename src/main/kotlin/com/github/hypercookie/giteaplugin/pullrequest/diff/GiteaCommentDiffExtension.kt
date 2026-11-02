@@ -52,6 +52,7 @@ class GiteaCommentDiffExtension : DiffExtension() {
         val ctx = request.getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY) ?: return
         if (viewer !is SimpleDiffViewer && viewer !is SimpleOnesideDiffViewer && viewer !is UnifiedDiffViewer) return
         val project = diffContext.project ?: return
+        GiteaDiffCommentNavigation.of(diffContext)?.let { GiteaDiffTabTitleProvider.show(project, it, ctx.path) }
 
         val cs = GiteaProjectCoroutineScope.getInstance(project).coroutineScope.giteaChildScope("Gitea diff review")
         Disposer.register(viewer) { cs.cancel() }
