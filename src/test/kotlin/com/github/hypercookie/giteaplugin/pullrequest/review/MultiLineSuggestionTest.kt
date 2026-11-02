@@ -1,11 +1,13 @@
 package com.github.hypercookie.giteaplugin.pullrequest.review
 
+import com.github.hypercookie.giteaplugin.util.GiteaHiddenMarkers
 import com.github.hypercookie.giteaplugin.util.GiteaSuggestion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
-class GiteaHiddenMarkersTest {
+/** The range marker together with #63's suggestion marker and edit-mode hiding. */
+class MultiLineSuggestionTest {
 
     private val original = listOf("val a = 1", "val b = 2")
     private val body = MultiLineRange.append(
@@ -25,17 +27,13 @@ class GiteaHiddenMarkersTest {
 
     @Test
     fun `edit text hides all markers and saving puts them back`() {
-        val (text, markers) = GiteaHiddenMarkers.split(body)
+        val split = GiteaHiddenMarkers.split(body)
+        val text = split.text
+        val markers = split.markers
         assertFalse("<!--" in text)
         assertEquals(2, markers.size)
-        val saved = GiteaHiddenMarkers.join(text.replace("Simplify", "Shorter"), markers)
+        val saved = GiteaHiddenMarkers.attach(text.replace("Simplify", "Shorter"), markers)
         assertEquals(MultiLineRange(4, 5), MultiLineRange.parse(saved).range)
         assertEquals(2, GiteaSuggestion.parse(saved)!!.lines)
-    }
-
-    @Test
-    fun `no markers leaves text alone`() {
-        assertEquals("plain" to emptyList<String>(), GiteaHiddenMarkers.split("plain"))
-        assertEquals("plain", GiteaHiddenMarkers.join("plain", emptyList()))
     }
 }
