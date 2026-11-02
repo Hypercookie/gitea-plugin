@@ -76,9 +76,8 @@ class GiteaReviewEditorModel(
     private val document: Document,
     private val showChanges: Boolean,
     private val editorLines: StateFlow<EditorLineTransfer> = MutableStateFlow(EditorLineTransfer.Identity),
-    /** 0-based document lines the user has selected, if any; the range of a multi-line comment. */
-    private val selectedLines: () -> IntRange? = { null },
-) : CodeReviewEditorModel<GiteaEditorInlay>, CodeReviewEditorGutterActionableChangesModel {
+) : CodeReviewEditorModel<GiteaEditorInlay>, CodeReviewEditorGutterActionableChangesModel,
+    CodeReviewEditorGutterControlsModel.WithMultilineComments {
 
     private class Mappings(
         val refToDoc: List<ChangedBlock>,
@@ -309,21 +308,44 @@ class GiteaReviewEditorModel(
             it.vm.requestFocus()
             return
         }
-        // Opt-in: a selection of several lines containing the clicked one
-        // becomes one comment on its last line, with the first line in a
-        // hidden marker (see MultiLineRange).
-        val selection = if (GiteaSettings.getInstance().multiLineComments) selectedLines()?.takeIf { it.last > it.first && docLine in it } else null
-        val endRef = selection?.let { LineMapping.transfer(m.docToRef, it.last) }
-        val startRef = selection?.let { LineMapping.transfer(m.docToRef, it.first) }
-        val range = if (endRef != null && startRef != null && startRef < endRef) startRef to endRef else null
-        val anchor = range?.second ?: refLine
-        current[anchor]?.let {
+        openNewComment(refLine, null)
+    }
+
+    private fun openNewComment(refLine: Int, startRefLine: Int?) {
+        val current = newComments.value
+        current[refLine]?.let {
             it.vm.requestFocus()
             return
         }
-        val vm = GiteaNewCommentViewModel(cs, data, path, side, anchor, range?.first) { removeNewComment(anchor) }
-        newComments.value = current + (anchor to GiteaEditorInlay.NewComment(vm))
+        val vm = GiteaNewCommentViewModel(cs, data, path, side, refLine, startRefLine) { removeNewComment(refLine) }
+        newComments.value = current + (refLine to GiteaEditorInlay.NewComment(vm))
         vm.requestFocus()
+    }
+
+    // --- Multi-line comments (opt-in) --------------------------------------
+    // The platform's "Add Comment" editor action (Ctrl+Shift+X, editor
+    // context menu) offers "Add Comment on Selected Lines" for a selection
+    // when the editor's model implements WithMultilineComments, the same
+    // route the GitHub plugin's diff model takes. Gitea anchors a comment to
+    // one line, so the comment goes on the range's last line and its first
+    // line travels in a hidden marker (see MultiLineRange).
+
+    /** First and last PR line of the editor lines [range] (end exclusive),
+     * or null if the setting is off or an end can't be anchored. */
+    private fun refRange(range: LineRange): Pair<Int, Int>? {
+        if (!GiteaSettings.getInstance().multiLineComments) return null
+        val m = mappings.value ?: return null
+        val lines = editorLines.value
+        val start = lines.fromEditor(range.start)?.let { LineMapping.transfer(m.docToRef, it) } ?: return null
+        val end = lines.fromEditor(range.end - 1)?.let { LineMapping.transfer(m.docToRef, it) } ?: return null
+        return (start to end).takeIf { start <= end }
+    }
+
+    override fun canCreateComment(lineRange: LineRange): Boolean = refRange(lineRange) != null
+
+    override fun requestNewComment(lineRange: LineRange) {
+        val (start, end) = refRange(lineRange) ?: return
+        openNewComment(end, start.takeIf { it < end })
     }
 
     override fun cancelNewComment(lineIdx: Int) {

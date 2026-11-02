@@ -108,7 +108,7 @@ class GiteaCommentDiffExtension : DiffExtension() {
     ): Pair<EditorEx, StateFlow<Collection<GiteaEditorInlay>>>? {
         if (editor == null) return null
         val path = if (side == ReviewSide.NEW) ctx.path else ctx.basePath
-        val model = GiteaReviewEditorModel(cs, data, path, ctx.basePath, side, editor.document, showChanges = false, selectedLines = GiteaReviewInEditorController.editorSelectedLines(editor))
+        val model = GiteaReviewEditorModel(cs, data, path, ctx.basePath, side, editor.document, showChanges = false)
         GiteaReviewInEditorController.renderReview(cs, data, editor, model)
         return editor to model.inlays
     }

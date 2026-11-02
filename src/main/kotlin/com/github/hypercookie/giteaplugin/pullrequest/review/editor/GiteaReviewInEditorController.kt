@@ -4,7 +4,9 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestRev
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
+import com.intellij.collaboration.ui.codereview.editor.CodeReviewCommentableEditorModel
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterChangesRenderer
+import com.intellij.util.ui.UIUtil
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterControlsRenderer
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorModel
 import com.intellij.collaboration.ui.codereview.editor.renderInlays
@@ -66,18 +68,6 @@ class GiteaReviewInEditorController : EditorFactoryListener {
     }
 
     companion object {
-        /** Selected lines of [editor] (a selection ending at a line start doesn't include that line). */
-        fun editorSelectedLines(editor: EditorEx): () -> IntRange? = {
-            val m = editor.selectionModel
-            if (!m.hasSelection()) null else {
-                val doc = editor.document
-                val first = doc.getLineNumber(m.selectionStart)
-                var last = doc.getLineNumber(m.selectionEnd)
-                if (last > first && doc.getLineStartOffset(last) == m.selectionEnd) last--
-                first..last
-            }
-        }
-
         /**
          * Installs review UI for [path] into [editor] until [cs] is cancelled.
          * Shared with the diff viewer extension.
@@ -91,7 +81,7 @@ class GiteaReviewInEditorController : EditorFactoryListener {
             side: ReviewSide = ReviewSide.NEW,
             showChanges: Boolean = true,
         ): Nothing {
-            val model = GiteaReviewEditorModel(cs, data, path, basePath, side, editor.document, showChanges, selectedLines = editorSelectedLines(editor))
+            val model = GiteaReviewEditorModel(cs, data, path, basePath, side, editor.document, showChanges)
             if (showChanges) cs.launch(Dispatchers.Main) { CodeReviewEditorGutterChangesRenderer.render(model, editor) }
             renderReview(cs, data, editor, model)
             awaitCancellation()
@@ -109,6 +99,12 @@ class GiteaReviewInEditorController : EditorFactoryListener {
             model: CodeReviewEditorModel<GiteaEditorInlay>,
         ) {
             cs.launch(Dispatchers.Main) { CodeReviewEditorGutterControlsRenderer.render(model, editor) }
+            // Lets the platform's "Add Comment" editor action (Ctrl+Shift+X)
+            // reach this model, including "Add Comment on Selected Lines".
+            editor.putUserData(CodeReviewCommentableEditorModel.KEY, model)
+            cs.coroutineContext[Job]?.invokeOnCompletion {
+                UIUtil.invokeLaterIfNeeded { if (editor.getUserData(CodeReviewCommentableEditorModel.KEY) === model) editor.putUserData(CodeReviewCommentableEditorModel.KEY, null) }
+            }
             cs.launch(Dispatchers.Main) {
                 editor.renderInlays(model.inlays, HashingUtil.mappingStrategy(GiteaEditorInlay::key)) { inlay ->
                     val component = GiteaReviewEditorComponents.create(this, data.project, inlay, editor)

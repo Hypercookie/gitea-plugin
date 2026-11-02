@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.pullrequest.review.editor
 
+import com.intellij.diff.util.LineRange
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterControlsModel
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorModel
@@ -28,7 +29,7 @@ class GiteaUnifiedReviewEditorModel(
     cs: CoroutineScope,
     private val new: CodeReviewEditorModel<GiteaEditorInlay>?,
     private val old: CodeReviewEditorModel<GiteaEditorInlay>?,
-) : CodeReviewEditorModel<GiteaEditorInlay> {
+) : CodeReviewEditorModel<GiteaEditorInlay>, CodeReviewEditorGutterControlsModel.WithMultilineComments {
 
     override val inlays: StateFlow<Collection<GiteaEditorInlay>> =
         combine(new?.inlays ?: flowOf(emptyList()), old?.inlays ?: flowOf(emptyList())) { n, o -> n + o }
@@ -63,6 +64,18 @@ class GiteaUnifiedReviewEditorModel(
 
     override fun requestNewComment(lineIdx: Int) {
         modelFor(lineIdx)?.requestNewComment(lineIdx)
+    }
+
+    /** The side model of a multi-line comment: the one both ends of [range] (end exclusive) belong to. */
+    private fun modelFor(range: LineRange): CodeReviewEditorGutterControlsModel.WithMultilineComments? {
+        val model = modelFor(range.start) ?: return null
+        return (model as? CodeReviewEditorGutterControlsModel.WithMultilineComments)?.takeIf { modelFor(range.end - 1) === model }
+    }
+
+    override fun canCreateComment(lineRange: LineRange): Boolean = modelFor(lineRange)?.canCreateComment(lineRange) == true
+
+    override fun requestNewComment(lineRange: LineRange) {
+        modelFor(lineRange)?.requestNewComment(lineRange)
     }
 
     override fun cancelNewComment(lineIdx: Int) {
