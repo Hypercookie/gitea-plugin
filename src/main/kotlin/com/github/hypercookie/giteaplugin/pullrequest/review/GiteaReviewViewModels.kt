@@ -103,6 +103,8 @@ class GiteaNewCommentViewModel(
     val path: String,
     val side: ReviewSide,
     val line: Int,
+    /** 0-based first line of a multi-line comment ending at [line], else null. */
+    val startLine: Int? = null,
     private val onDone: () -> Unit,
 ) : CodeReviewSubmittableTextViewModelBase(data.project, cs, "") {
 
@@ -125,7 +127,10 @@ class GiteaNewCommentViewModel(
     }
 
     private fun comment(body: String) = CreatePullReviewComment(
-        body = if (suggestionOriginal.isNotEmpty() && GiteaSettings.getInstance().codeSuggestions) GiteaSuggestion.withMarker(body, suggestionOriginal) else body,
+        body = MultiLineRange.append(
+            if (suggestionOriginal.isNotEmpty() && GiteaSettings.getInstance().codeSuggestions) GiteaSuggestion.withMarker(body, suggestionOriginal) else body,
+            startLine?.takeIf { it < line }?.let { MultiLineRange(it + 1, line + 1) },
+        ),
         path = path,
         newPosition = if (side == ReviewSide.NEW) line + 1L else 0,
         oldPosition = if (side == ReviewSide.OLD) line + 1L else 0,

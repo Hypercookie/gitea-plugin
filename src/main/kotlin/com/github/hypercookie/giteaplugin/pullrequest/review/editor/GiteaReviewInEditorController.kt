@@ -4,7 +4,9 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestRev
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaReviewSessionService
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.util.GiteaProjectCoroutineScope
+import com.intellij.collaboration.ui.codereview.editor.CodeReviewCommentableEditorModel
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterChangesRenderer
+import com.intellij.util.ui.UIUtil
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterControlsRenderer
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorModel
 import com.intellij.collaboration.ui.codereview.editor.renderInlays
@@ -97,6 +99,13 @@ class GiteaReviewInEditorController : EditorFactoryListener {
             model: CodeReviewEditorModel<GiteaEditorInlay>,
         ) {
             cs.launch(Dispatchers.Main) { CodeReviewEditorGutterControlsRenderer.render(model, editor) }
+            // Lets the platform's "Add Comment" editor action (Ctrl+Shift+X)
+            // reach this model, including "Add Comment on Selected Lines".
+            editor.putUserData(CodeReviewCommentableEditorModel.KEY, model)
+            cs.launch(Dispatchers.Main) { GiteaRangeHighlights.install(this, editor, model.inlays) }
+            cs.coroutineContext[Job]?.invokeOnCompletion {
+                UIUtil.invokeLaterIfNeeded { if (editor.getUserData(CodeReviewCommentableEditorModel.KEY) === model) editor.putUserData(CodeReviewCommentableEditorModel.KEY, null) }
+            }
             cs.launch(Dispatchers.Main) {
                 editor.renderInlays(model.inlays, HashingUtil.mappingStrategy(GiteaEditorInlay::key)) { inlay ->
                     val component = GiteaReviewEditorComponents.create(this, data.project, inlay, editor)
