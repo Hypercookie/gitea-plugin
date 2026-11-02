@@ -31,9 +31,11 @@ import org.intellij.markdown.html.SimpleInlineTagProvider
 import org.intellij.markdown.parser.LinkMap
 import org.intellij.markdown.parser.MarkdownParser
 import java.awt.Color
+import java.awt.FlowLayout
 import java.awt.Font
 import java.net.URI
 import java.util.UUID
+import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JEditorPane
 import javax.swing.JPanel
@@ -110,7 +112,7 @@ object GiteaMarkdown {
         // With suggestions on, a comment's hidden marker is cut off and its
         // suggestion block applies with a check that the code is unchanged.
         val suggestion = if (apply?.applySuggestion != null && GiteaSettings.getInstance().codeSuggestions) {
-            GiteaSuggestion.parse(markdown)
+            GiteaSuggestion.parseOrPlain(markdown)
         } else {
             null
         }
@@ -127,15 +129,31 @@ object GiteaMarkdown {
                 when (segment) {
                     is Segment.Html -> add(createPane(segment.html))
                     is Segment.Code -> {
-                        val blockApply = if (suggestion != null && segment.block.language == "suggestion") {
-                            GiteaCodeBlockApply(apply!!.cs, apply.unavailableReason, { apply.applySuggestion!!(suggestion) })
+                        if (suggestion != null && apply != null && segment.block.language == "suggestion") {
+                            // A labelled button that is always there, not an icon shown on hover.
+                            add(GiteaCodeBlockComponent(segment.block, null))
+                            add(suggestionApplyRow(apply, suggestion))
                         } else {
-                            apply
+                            add(GiteaCodeBlockComponent(segment.block, apply))
                         }
-                        add(GiteaCodeBlockComponent(segment.block, blockApply))
                     }
                 }
             }
+        }
+    }
+
+    private fun suggestionApplyRow(apply: GiteaCodeBlockApply, suggestion: GiteaSuggestion): JComponent {
+        val button = JButton("Apply suggestion").apply {
+            name = APPLY_BUTTON_NAME
+            addActionListener { apply.applySuggestion!!(suggestion) }
+        }
+        apply.cs.bindOnEdt(apply.unavailableReason) { reason ->
+            button.isEnabled = reason == null
+            button.toolTipText = reason ?: "Replace the commented code with this suggestion"
+        }
+        return JPanel(FlowLayout(FlowLayout.LEFT, 0, 4)).apply {
+            isOpaque = false
+            add(button)
         }
     }
 

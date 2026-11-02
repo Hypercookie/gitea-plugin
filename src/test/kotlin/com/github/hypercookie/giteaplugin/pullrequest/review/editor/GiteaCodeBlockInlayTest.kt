@@ -53,8 +53,8 @@ class GiteaCodeBlockInlayTest : BasePlatformTestCase() {
             val body = com.github.hypercookie.giteaplugin.util.GiteaSuggestion.withMarker(
                 "```suggestion\nTWO\n```", listOf("two"),
             )
-            val apply = applyButton(GiteaReviewEditorComponents.create(cs, project, pending(body, line = 1), myFixture.editor))
-            apply.actionListener!!.actionPerformed(ActionEvent(apply, ActionEvent.ACTION_PERFORMED, null))
+            val apply = suggestionButton(GiteaReviewEditorComponents.create(cs, project, pending(body, line = 1), myFixture.editor))
+            apply.doClick()
             assertEquals("one\nTWO\nthree", myFixture.editor.document.text)
         } finally {
             settings.codeSuggestions = false
@@ -70,12 +70,35 @@ class GiteaCodeBlockInlayTest : BasePlatformTestCase() {
                 "```suggestion\nTWO-THREE\n```", listOf("two", "three"),
             )
             // Anchored at its last line, like a multi-line comment.
-            val apply = applyButton(GiteaReviewEditorComponents.create(cs, project, pending(body, line = 2), myFixture.editor))
-            apply.actionListener!!.actionPerformed(ActionEvent(apply, ActionEvent.ACTION_PERFORMED, null))
+            val apply = suggestionButton(GiteaReviewEditorComponents.create(cs, project, pending(body, line = 2), myFixture.editor))
+            apply.doClick()
             assertEquals("one\nTWO-THREE\nfour", myFixture.editor.document.text)
         } finally {
             settings.codeSuggestions = false
         }
+    }
+
+    fun testPlainSuggestionBlockWithoutMarkerAppliesToTheCommentedLine() {
+        val settings = com.github.hypercookie.giteaplugin.settings.GiteaSettings.getInstance()
+        settings.codeSuggestions = true
+        try {
+            myFixture.configureByText("a.txt", "one\ntwo\nthree")
+            // As typed in the Gitea web UI: no hidden marker.
+            val component = GiteaReviewEditorComponents.create(cs, project, pending("Try:\n\n```suggestion\nTWO\n```", line = 1), myFixture.editor)
+            val apply = suggestionButton(component)
+            assertTrue(apply.isVisible)
+            assertTrue(apply.isEnabled)
+            apply.doClick()
+            assertEquals("one\nTWO\nthree", myFixture.editor.document.text)
+        } finally {
+            settings.codeSuggestions = false
+        }
+    }
+
+    fun testSuggestionBlockGetsNoApplyButtonWhileTheSettingIsOff() {
+        myFixture.configureByText("a.txt", "one")
+        val component = GiteaReviewEditorComponents.create(cs, project, pending("```suggestion\nx\n```", line = 0), myFixture.editor)
+        assertTrue(UIUtil.findComponentsOfType(component, javax.swing.JButton::class.java).none { it.name == APPLY_BUTTON_NAME })
     }
 
     fun testApplyDisabledWhileOutdated() {
@@ -126,6 +149,11 @@ class GiteaCodeBlockInlayTest : BasePlatformTestCase() {
         GiteaEditorInlay.Pending(CreatePullReviewComment(body, "a.txt", newPosition = line + 1L), MutableStateFlow(null)) {}.apply {
             lineState.value = line
         }
+
+    private fun suggestionButton(component: JComponent): javax.swing.JButton {
+        PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+        return UIUtil.findComponentsOfType(component, javax.swing.JButton::class.java).single { it.name == APPLY_BUTTON_NAME }
+    }
 
     private fun applyButton(component: JComponent): InlineIconButton {
         PlatformTestUtil.dispatchAllEventsInIdeEventQueue()

@@ -106,10 +106,12 @@ object GiteaReviewEditorComponents {
             if (reason.value != null) return@suggestion
             // The suggestion replaces its lines up to the comment's line: for a
             // multi-line comment, which is anchored at its last line, the whole range.
-            val first = line - suggestion.lines + 1
+            // Without a marker (a suggestion block typed elsewhere) that is the comment's own range.
+            val lines = if (suggestion.lines > 0) suggestion.lines else 1 + GiteaRangeHighlights.extraLines(inlay)
+            val first = line - lines + 1
             val end = line + 1
             val original = if (first >= 0 && end <= document.lineCount) (first until end).map { document.getText(TextRange(document.getLineStartOffset(it), document.getLineEndOffset(it))) } else null
-            if (original == null || GiteaSuggestion.hashOf(original) != suggestion.originalHash) {
+            if (original == null || (suggestion.originalHash.isNotEmpty() && GiteaSuggestion.hashOf(original) != suggestion.originalHash)) {
                 Messages.showWarningDialog(project, "The code this suggestion was written for has changed, so it can't be applied.", "Apply Suggestion")
                 return@suggestion
             }

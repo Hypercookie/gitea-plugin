@@ -17,8 +17,9 @@ import java.security.MessageDigest
  *
  * @property lines how many lines, ending at the commented line, [code] replaces.
  *   A multi-line comment is anchored at its last line, so its whole range.
+ *   0 when unknown (no marker): the comment's own line or range.
  * @property originalHash [hashOf] the lines it replaces, to refuse applying
- *   it once they have changed.
+ *   it once they have changed; empty when unknown (no marker).
  */
 data class GiteaSuggestion(val code: String, val lines: Int, val originalHash: String) {
 
@@ -47,6 +48,15 @@ data class GiteaSuggestion(val code: String, val lines: Int, val originalHash: S
             val lines = marker.groupValues[1].toIntOrNull()?.takeIf { it > 0 } ?: return null
             return GiteaSuggestion(code, lines, marker.groupValues[2])
         }
+
+        /**
+         * Like [parse], and a plain ```` ```suggestion ```` fence without the
+         * marker (typed in the Gitea web UI, or by someone without the plugin)
+         * counts too: it has no [GiteaSuggestion.lines] (0, meaning the comment's
+         * own line or range) and no hash, so it can't be checked against the code.
+         */
+        fun parseOrPlain(body: String): GiteaSuggestion? = parse(body)
+            ?: FENCE.find(body.replace("\r\n", "\n"))?.groupValues?.get(1)?.let { GiteaSuggestion(it, 0, "") }
 
         /** The text to start a suggestion comment with: a suggestion fence holding [original]. */
         fun template(original: List<String>): String =
