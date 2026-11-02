@@ -56,7 +56,13 @@ object GiteaPullRequestDiff {
             withContext(Dispatchers.Main) {
                 val chain = SimpleDiffRequestChain(requests, selectedIndex.coerceIn(0, requests.lastIndex)).apply {
                     putUserData(GITEA_DIFF_CHAIN_KEY, true)
-                    putUserData(GiteaDiffCommentNavigation.KEY, GiteaDiffCommentNavigation(requests, requests.map(::navigationFile)))
+                    putUserData(
+                        GiteaDiffCommentNavigation.KEY,
+                        GiteaDiffCommentNavigation(requests, requests.map(::navigationFile)).apply {
+                            currentPath = requests[selectedIndex.coerceIn(0, requests.lastIndex)]
+                                .getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY)?.path
+                        },
+                    )
                     // Shown in the toolbar after the platform's navigation arrows.
                     putUserData(DiffUserDataKeys.CONTEXT_ACTIONS, COMMENT_NAVIGATION_ACTIONS.mapNotNull(ActionManager.getInstance()::getAction))
                 }
@@ -65,7 +71,7 @@ object GiteaPullRequestDiff {
         }
     }
 
-    private val COMMENT_NAVIGATION_ACTIONS = listOf("Gitea.Diff.Review.PreviousComment", "Gitea.Diff.Review.NextComment")
+    private val COMMENT_NAVIGATION_ACTIONS = listOf("Gitea.Diff.Review.PreviousComment", "Gitea.Diff.Review.NextComment", "Gitea.Diff.SelectInProjectView")
 
     private fun navigationFile(request: SimpleDiffRequest): CommentNavigation.File {
         val ctx = request.getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY)!!
@@ -97,8 +103,9 @@ object GiteaPullRequestDiff {
             afterText != null -> factory.create(data.project, afterText, fileType)
             else -> factory.createEmpty()
         }
+        // Titled with the file name, which names the editor tab and the diff window.
         val afterTitle = if (localFile != null) "Local" else change.revisionNumberAfter.toShortString()
-        return SimpleDiffRequest("#${pr.number}: $name", before, after, change.revisionNumberBefore.toShortString(), afterTitle).apply {
+        return SimpleDiffRequest(name.substringAfterLast('/'), before, after, change.revisionNumberBefore.toShortString(), afterTitle).apply {
             putUserData(
                 GITEA_DIFF_COMMENT_CONTEXT_KEY,
                 GiteaDiffCommentContext(data.repo, data.client, pr, afterPath ?: name, beforePath ?: name, data.pendingStore, data),

@@ -61,6 +61,11 @@ class GiteaDiffCommentNavigation(
     /** Thread last moved to, so the next step continues from it. */
     private var currentThreadId: Long? = null
 
+    /** Repository-relative path of the file the chain currently shows; the
+     * editor tab is named after it (see [GiteaDiffTabTitleProvider]). */
+    @Volatile
+    var currentPath: String? = null
+
     /** What a step from the current request of [e] goes to, or null. */
     private fun plan(e: AnActionEvent, next: Boolean): Plan? {
         val request = e.getData(DiffDataKeys.DIFF_REQUEST) ?: return null
