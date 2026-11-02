@@ -11,6 +11,7 @@ import com.github.hypercookie.giteaplugin.pullrequest.review.PullRequestBase
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewThread
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterActionableChangesModel
+import com.intellij.collaboration.ui.codereview.editor.CodeReviewCommentableEditorModel
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorGutterControlsModel
 import com.intellij.collaboration.ui.codereview.editor.CodeReviewEditorModel
 import com.intellij.diff.DiffContentFactory
@@ -77,7 +78,7 @@ class GiteaReviewEditorModel(
     private val showChanges: Boolean,
     private val editorLines: StateFlow<EditorLineTransfer> = MutableStateFlow(EditorLineTransfer.Identity),
 ) : CodeReviewEditorModel<GiteaEditorInlay>, CodeReviewEditorGutterActionableChangesModel,
-    CodeReviewEditorGutterControlsModel.WithMultilineComments {
+    CodeReviewCommentableEditorModel.WithMultilineComments {
 
     private class Mappings(
         val refToDoc: List<ChangedBlock>,
