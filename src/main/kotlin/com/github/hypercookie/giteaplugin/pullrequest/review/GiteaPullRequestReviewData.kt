@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -87,7 +88,9 @@ class GiteaPullRequestReviewData(
     val reloads: SharedFlow<Unit> = _reloads.asSharedFlow()
 
     val threads: StateFlow<List<ReviewThread>> =
-        _comments.map(ReviewThreads::group).stateIn(cs, SharingStarted.Eagerly, emptyList())
+        combine(_comments, _reviews) { comments, reviews ->
+            ReviewThreads.group(comments, reviews.orEmpty().associate { it.id to it.commitId })
+        }.stateIn(cs, SharingStarted.Eagerly, emptyList())
 
     val pending: StateFlow<List<CreatePullReviewComment>> = pendingStore.state
 
