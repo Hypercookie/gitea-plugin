@@ -226,7 +226,7 @@ object GiteaReviewEditorComponents {
             reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
         val author = comment.user
-        val editable = GiteaCommentEditing.editable(cs, data, comment.id, author, parsed.text, view, parsed.range, comment.body)
+        val editable = GiteaCommentEditing.editable(cs, data, comment.id, author, comment.body, view)
         return CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, editable.content) {
             iconTooltip = author?.presentableName()
             maxContentWidth = null
@@ -364,14 +364,16 @@ object GiteaReviewEditorComponents {
                 vm.cancel()
             }
         }
-        // Opt-in: starts the comment with the commented line in a suggestion block.
+        // Opt-in: starts the comment with the commented line(s) in a suggestion
+        // block; a multi-line comment suggests a replacement for its whole range.
         val suggestAction = if (GiteaSettings.getInstance().codeSuggestions && vm.side == ReviewSide.NEW) {
             giteaAction("Suggest Change") {
                 val document = editor.document
                 if (vm.line < document.lineCount) {
-                    // Selected lines that end at the comment's line (a multi-line comment), else the line.
+                    // The comment's range (a multi-line comment), else selected lines that
+                    // end at the comment's line, else the line.
                     val selection = editor.selectionModel
-                    val first = if (selection.hasSelection() && document.getLineNumber(selection.selectionEnd.coerceAtLeast(1) - 1) == vm.line) {
+                    val first = vm.startLine ?: if (selection.hasSelection() && document.getLineNumber(selection.selectionEnd.coerceAtLeast(1) - 1) == vm.line) {
                         document.getLineNumber(selection.selectionStart).coerceAtMost(vm.line)
                     } else {
                         vm.line

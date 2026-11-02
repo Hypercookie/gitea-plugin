@@ -102,6 +102,7 @@ class GiteaReviewInEditorController : EditorFactoryListener {
             // Lets the platform's "Add Comment" editor action (Ctrl+Shift+X)
             // reach this model, including "Add Comment on Selected Lines".
             editor.putUserData(CodeReviewCommentableEditorModel.KEY, model)
+            cs.launch(Dispatchers.Main) { GiteaRangeHighlights.install(this, editor, model.inlays) }
             cs.coroutineContext[Job]?.invokeOnCompletion {
                 UIUtil.invokeLaterIfNeeded { if (editor.getUserData(CodeReviewCommentableEditorModel.KEY) === model) editor.putUserData(CodeReviewCommentableEditorModel.KEY, null) }
             }
