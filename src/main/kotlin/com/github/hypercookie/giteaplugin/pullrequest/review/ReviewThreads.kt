@@ -5,7 +5,7 @@ import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 
 /** Which version of the file a review comment's line number refers to. */
 enum class ReviewSide {
-    /** `position`: a line of the file at the comment's `commit_id`. */
+    /** `position`: a line of the file at the review's commit. */
     NEW,
 
     /** `original_position`: a line of the merge-base version. */
@@ -22,7 +22,10 @@ data class ReviewThread(
     val side: ReviewSide,
     /** 0-based line in the file version the side refers to. */
     val line: Int,
-    /** Commit the line number refers to (Gitea's `commit_id`). */
+    /** Commit the line number refers to: the commit of the review that holds
+     * the thread's first comment, null for the pull request head. Gitea's
+     * per-comment `commit_id` is only the commit that last changed the line
+     * (a blame), so it says nothing about how lines are numbered. */
     val commitId: String?,
     val comments: List<PullReviewComment>,
 ) {
@@ -36,7 +39,8 @@ data class ReviewThread(
 
 object ReviewThreads {
 
-    fun group(comments: List<PullReviewComment>): List<ReviewThread> = comments
+    /** [reviewCommits] maps a review id to its `commit_id`. */
+    fun group(comments: List<PullReviewComment>, reviewCommits: Map<Long, String?> = emptyMap()): List<ReviewThread> = comments
         .mapNotNull { comment ->
             val newLine = comment.position?.takeIf { it > 0 }
             val oldLine = comment.originalPosition?.takeIf { it > 0 }
@@ -48,7 +52,9 @@ object ReviewThreads {
         }
         .groupBy({ it.first }, { it.second })
         .map { (key, thread) ->
-            ReviewThread(key.path, key.side, key.line, key.commitId, thread.sortedWith(compareBy({ it.createdAt ?: "" }, { it.id })))
+            val sorted = thread.sortedWith(compareBy({ it.createdAt ?: "" }, { it.id }))
+            val anchor = sorted.first().reviewId?.let { reviewCommits[it] }?.takeIf { it.isNotBlank() }
+            ReviewThread(key.path, key.side, key.line, anchor, sorted)
         }
         .sortedWith(compareBy({ it.path }, { it.line }, { it.id }))
 
