@@ -79,17 +79,17 @@ class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea
                     checkBox("Reload open pull requests when the IDE window regains focus")
                         .bindSelected(settings::refreshOnFrameActivation)
                 }
-                row {
-                    checkBox("Code suggestions in review comments")
-                        .bindSelected(settings::codeSuggestions)
-                        .comment("Off by default. Adds a Suggest Change button to new review comments and an Apply button on suggestions from other plugin users. A suggestion is stored in the comment text itself, with a hidden marker at its end. Applies to comments opened afterwards.")
-                }
             }
             group("Experimental") {
                 row {
                     checkBox("Comment on multiple lines")
                         .bindSelected(settings::multiLineComments)
-                        .comment("Select several lines, then add a comment: the range is stored as a hidden HTML comment in the comment text, since Gitea comments are anchored to one line. Colleagues without the plugin see a normal single-line comment. Ranges written by others are shown even when this is off.")
+                        .comment("Experimental: might break or change. Off by default.")
+                }
+                row {
+                    checkBox("Code suggestions in review comments")
+                        .bindSelected(settings::codeSuggestions)
+                        .comment("Experimental: might break or change. Off by default.")
                 }
             }
             group("Debug") {
