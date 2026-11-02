@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.pullrequest.review.editor
 
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.github.hypercookie.giteaplugin.pullrequest.review.ChangedBlock
 import com.github.hypercookie.giteaplugin.pullrequest.review.CommentPlacement
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaNewCommentViewModel
@@ -75,6 +76,8 @@ class GiteaReviewEditorModel(
     private val document: Document,
     private val showChanges: Boolean,
     private val editorLines: StateFlow<EditorLineTransfer> = MutableStateFlow(EditorLineTransfer.Identity),
+    /** 0-based document lines the user has selected, if any; the range of a multi-line comment. */
+    private val selectedLines: () -> IntRange? = { null },
 ) : CodeReviewEditorModel<GiteaEditorInlay>, CodeReviewEditorGutterActionableChangesModel {
 
     private class Mappings(
@@ -306,8 +309,20 @@ class GiteaReviewEditorModel(
             it.vm.requestFocus()
             return
         }
-        val vm = GiteaNewCommentViewModel(cs, data, path, side, refLine) { removeNewComment(refLine) }
-        newComments.value = current + (refLine to GiteaEditorInlay.NewComment(vm))
+        // Opt-in: a selection of several lines containing the clicked one
+        // becomes one comment on its last line, with the first line in a
+        // hidden marker (see MultiLineRange).
+        val selection = if (GiteaSettings.getInstance().multiLineComments) selectedLines()?.takeIf { it.last > it.first && docLine in it } else null
+        val endRef = selection?.let { LineMapping.transfer(m.docToRef, it.last) }
+        val startRef = selection?.let { LineMapping.transfer(m.docToRef, it.first) }
+        val range = if (endRef != null && startRef != null && startRef < endRef) startRef to endRef else null
+        val anchor = range?.second ?: refLine
+        current[anchor]?.let {
+            it.vm.requestFocus()
+            return
+        }
+        val vm = GiteaNewCommentViewModel(cs, data, path, side, anchor, range?.first) { removeNewComment(anchor) }
+        newComments.value = current + (anchor to GiteaEditorInlay.NewComment(vm))
         vm.requestFocus()
     }
 

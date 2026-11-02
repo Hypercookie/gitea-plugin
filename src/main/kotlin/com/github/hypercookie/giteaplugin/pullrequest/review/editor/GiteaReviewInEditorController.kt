@@ -66,6 +66,18 @@ class GiteaReviewInEditorController : EditorFactoryListener {
     }
 
     companion object {
+        /** Selected lines of [editor] (a selection ending at a line start doesn't include that line). */
+        fun editorSelectedLines(editor: EditorEx): () -> IntRange? = {
+            val m = editor.selectionModel
+            if (!m.hasSelection()) null else {
+                val doc = editor.document
+                val first = doc.getLineNumber(m.selectionStart)
+                var last = doc.getLineNumber(m.selectionEnd)
+                if (last > first && doc.getLineStartOffset(last) == m.selectionEnd) last--
+                first..last
+            }
+        }
+
         /**
          * Installs review UI for [path] into [editor] until [cs] is cancelled.
          * Shared with the diff viewer extension.
@@ -79,7 +91,7 @@ class GiteaReviewInEditorController : EditorFactoryListener {
             side: ReviewSide = ReviewSide.NEW,
             showChanges: Boolean = true,
         ): Nothing {
-            val model = GiteaReviewEditorModel(cs, data, path, basePath, side, editor.document, showChanges)
+            val model = GiteaReviewEditorModel(cs, data, path, basePath, side, editor.document, showChanges, selectedLines = editorSelectedLines(editor))
             if (showChanges) cs.launch(Dispatchers.Main) { CodeReviewEditorGutterChangesRenderer.render(model, editor) }
             renderReview(cs, data, editor, model)
             awaitCancellation()

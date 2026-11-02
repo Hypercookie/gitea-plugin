@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.pullrequest.review.editor
 
+import com.github.hypercookie.giteaplugin.pullrequest.review.MultiLineRange
 import com.github.hypercookie.giteaplugin.api.dto.GiteaUser
 import com.github.hypercookie.giteaplugin.api.dto.PullReviewComment
 import com.github.hypercookie.giteaplugin.pullrequest.reactions.GiteaReactable
@@ -195,6 +196,12 @@ object GiteaReviewEditorComponents {
             add(ActionLink("Show outdated comment") { inlay.collapsedState.value = false }.apply { isFocusPainted = false })
         }
 
+    /** "Lines 3–5" above a comment that carries a range marker. */
+    private fun rangeLabel(range: MultiLineRange): JComponent =
+        javax.swing.JLabel("Lines ${range.start}–${range.end}").apply {
+            foreground = com.intellij.util.ui.UIUtil.getContextHelpForeground()
+        }
+
     private fun outdatedTag(): JComponent =
         CollaborationToolsUIUtil.createTagLabel(CollaborationToolsBundle.message("review.thread.outdated.tag"))
 
@@ -212,12 +219,14 @@ object GiteaReviewEditorComponents {
     ): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
         val reactionsVm = giteaReactionsViewModelOrNull(cs, GiteaReactable.Comment(comment.id), data.currentUser) { data.reactions }
+        val parsed = MultiLineRange.parse(comment.body)
         val view = verticalPanel(CodeReviewTimelineUIUtil.VERTICAL_GAP).apply {
-            add(GiteaMarkdown.createBody(comment.body, apply))
+            parsed.range?.let { add(rangeLabel(it)) }
+            add(GiteaMarkdown.createBody(parsed.text, apply))
             reactionsVm?.let { add(GiteaReactionsComponentFactory.create(cs, it)) }
         }
         val author = comment.user
-        val editable = GiteaCommentEditing.editable(cs, data, comment.id, author, comment.body, view)
+        val editable = GiteaCommentEditing.editable(cs, data, comment.id, author, parsed.text, view, parsed.range, comment.body)
         return CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, editable.content) {
             iconTooltip = author?.presentableName()
             maxContentWidth = null
@@ -295,7 +304,11 @@ object GiteaReviewEditorComponents {
 
     private fun createPending(cs: CoroutineScope, project: Project, inlay: GiteaEditorInlay.Pending, apply: GiteaCodeBlockApply?): JComponent {
         val avatars = GiteaAvatarIcons.getInstance(project)
-        val body = GiteaMarkdown.createBody(inlay.comment.body, apply)
+        val parsedBody = MultiLineRange.parse(inlay.comment.body)
+        val body = verticalPanel(CodeReviewTimelineUIUtil.VERTICAL_GAP).apply {
+            parsedBody.range?.let { add(rangeLabel(it)) }
+            add(GiteaMarkdown.createBody(parsedBody.text, apply))
+        }
         val author = inlay.author.value
         val item = CodeReviewChatItemUIUtil.build(COMPACT, { size -> avatars.getIcon(author, size) }, body) {
             iconTooltip = author?.presentableName()

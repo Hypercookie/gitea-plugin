@@ -24,6 +24,7 @@ class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(
         @JvmField val refreshOnFrameActivation: Boolean = true,
         @JvmField val showRequestCounter: Boolean = false,
         @JvmField val codeSuggestions: Boolean = false,
+        @JvmField val multiLineComments: Boolean = false,
     )
 
     /** "Gitea Commit Checks" column in the Git log and its status requests
@@ -59,6 +60,13 @@ class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(
     var codeSuggestions: Boolean
         get() = state.codeSuggestions
         set(value) { updateState { it.copy(codeSuggestions = value) } }
+
+    /** Comments on a selected range of lines, stored as a hidden marker in the
+     * comment body (see `MultiLineRange`); off by default. Ranges written by
+     * others are shown either way. */
+    var multiLineComments: Boolean
+        get() = state.multiLineComments
+        set(value) { updateState { it.copy(multiLineComments = value) } }
 
     /** Debug widget in the status bar counting Gitea API requests. */
     var showRequestCounter: Boolean
