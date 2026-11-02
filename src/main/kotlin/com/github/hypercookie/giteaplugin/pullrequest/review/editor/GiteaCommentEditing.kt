@@ -16,7 +16,11 @@ import com.intellij.collaboration.ui.codereview.comment.CodeReviewCommentUIUtil
 import com.intellij.collaboration.ui.codereview.comment.CodeReviewSubmittableTextViewModelBase
 import com.intellij.collaboration.ui.codereview.comment.CommentInputActionsComponentFactory
 import com.intellij.collaboration.ui.codereview.timeline.comment.CommentTextFieldFactory
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.util.ui.EmptyIcon
+import kotlinx.coroutines.CancellationException
 import com.intellij.util.ui.UIUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
@@ -65,8 +69,8 @@ internal object GiteaCommentEditing {
 
     /**
      * [content] shows [view] (the comment's rendered body) or, while
-     * editing, the text field instead; [editButton] starts editing and is
-     * visible on the signed-in user's own comments only.
+     * editing, the text field instead; [editButton] holds the edit and the
+     * delete button, visible on the signed-in user's own comments only.
      */
     class Editable(val content: JComponent, val editButton: JComponent)
 
@@ -116,10 +120,31 @@ internal object GiteaCommentEditing {
             vm.requestFocus()
         }
 
-        val editButton = CodeReviewCommentUIUtil.createEditButton { start(hidden.text) }.apply { bindVisibility(cs, canEdit) }
+        val editButton = JPanel(ListLayout.horizontal(CodeReviewCommentUIUtil.Actions.HORIZONTAL_GAP)).apply {
+            isOpaque = false
+            add(CodeReviewCommentUIUtil.createEditButton { start(hidden.text) })
+            add(CodeReviewCommentUIUtil.createDeleteCommentIconButton { confirmAndDelete(cs, data, commentId) })
+            bindVisibility(cs, canEdit)
+        }
         // Drawn again while being edited: carry on where the old editor was.
         data.commentEdits.draft(commentId)?.takeIf { canEdit.value }?.let(::start)
         return Editable(content, editButton)
+    }
+
+    /** Asks, then deletes the comment on the server and drops it everywhere it is shown. */
+    private fun confirmAndDelete(cs: CoroutineScope, data: GiteaPullRequestReviewData, commentId: Long) {
+        if (!MessageDialogBuilder.yesNo("Delete Comment", "Are you sure you want to delete this comment? This can't be undone.").ask(data.project)) return
+        cs.launch {
+            try {
+                data.deleteComment(commentId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                NotificationGroupManager.getInstance().getNotificationGroup("Gitea")
+                    .createNotification("Could not delete the comment", e.message ?: e.toString(), NotificationType.ERROR)
+                    .notify(data.project)
+            }
+        }
     }
 
     private fun isOwn(user: GiteaUser?, author: GiteaUser?) = user != null && author != null && user.id == author.id

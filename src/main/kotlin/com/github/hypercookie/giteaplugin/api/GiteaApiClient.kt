@@ -254,6 +254,11 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
     suspend fun editComment(owner: String, repo: String, commentId: Long, body: String): IssueComment =
         patch("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/comments/$commentId", EditIssueCommentOption(body))
 
+    /** Deletes a comment: a top-level one or an inline review comment. Only
+     * its author (or a repository admin) may. */
+    suspend fun deleteComment(owner: String, repo: String, commentId: Long): Unit =
+        deleteNoBody("/api/v1/repos/${enc(owner)}/${enc(repo)}/issues/comments/$commentId")
+
     // --- Reviews & inline comments -----------------------------------------
 
     suspend fun listReviews(owner: String, repo: String, index: Long): List<PullReview> =
@@ -400,6 +405,11 @@ class GiteaApiClient(serverUrl: String, private val token: suspend () -> String)
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build(),
         )
+        checkStatus(response)
+    }
+
+    private suspend fun deleteNoBody(path: String): Unit = withContext(Dispatchers.IO) {
+        val response = execute(requestBuilder(path).DELETE().build())
         checkStatus(response)
     }
 

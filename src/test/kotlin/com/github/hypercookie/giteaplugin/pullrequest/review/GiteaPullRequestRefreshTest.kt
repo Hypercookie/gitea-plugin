@@ -185,6 +185,29 @@ class GiteaPullRequestRefreshTest : BasePlatformTestCase() {
         Unit
     }
 
+    fun `test deleting a comment sends DELETE and reloads comments and timeline`() = runBlocking {
+        var deleted: String? = null
+        server.createContext("/api/v1/repos/o/r/issues/comments/1") { exchange ->
+            if (exchange.requestMethod == "DELETE") {
+                deleted = exchange.requestURI.path
+                reviewCommentBodies = emptyList()
+                timelineBodies = emptyList()
+            }
+            exchange.sendResponseHeaders(204, -1)
+            exchange.close()
+        }
+        val data = data()
+        val loader = GiteaTimelineLoader(scope, data)
+        data.awaitComments("first")
+        loader.awaitBodies("first")
+
+        data.deleteComment(1)
+
+        assertEquals("/api/v1/repos/o/r/issues/comments/1", deleted)
+        withTimeout(TIMEOUT_MS) { data.comments.first { it.isEmpty() } }
+        Unit
+    }
+
     private companion object {
         const val TIMEOUT_MS = 10_000L
         const val PR_JSON = """{"id":1,"number":1,"title":"Test","state":"open","base":{"ref":"main","sha":"base"},"head":{"ref":"feature","sha":"head"}}"""
