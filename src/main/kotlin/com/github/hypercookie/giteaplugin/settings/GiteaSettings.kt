@@ -25,7 +25,7 @@ class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(
         @JvmField val showRequestCounter: Boolean = false,
         @JvmField val codeSuggestions: Boolean = false,
         @JvmField val multiLineComments: Boolean = false,
-        @JvmField val mcpWriteTools: Boolean = true,
+        @JvmField val mcpWriteTools: Boolean = false,
     )
 
     /** "Gitea Commit Checks" column in the Git log and its status requests
@@ -71,7 +71,7 @@ class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(
 
     /** Lets MCP clients (AI assistants) change pull requests through the IDE's
      * MCP server: comment, reply, resolve, react, submit reviews. Reading
-     * tools are always available. */
+     * tools are always available. Off by default. */
     var mcpWriteTools: Boolean
         get() = state.mcpWriteTools
         set(value) { updateState { it.copy(mcpWriteTools = value) } }

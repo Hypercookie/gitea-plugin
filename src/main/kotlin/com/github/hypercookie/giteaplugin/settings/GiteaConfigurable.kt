@@ -87,7 +87,7 @@ class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea
                 row {
                     checkBox("Let MCP clients change pull requests")
                         .bindSelected(settings::mcpWriteTools)
-                        .comment("The IDE's MCP server (Settings | Tools | MCP Server) offers Gitea tools to AI assistants. Reading pull requests is always possible; this switch covers commenting, replying, resolving threads, reactions and submitting reviews, which are done as your Gitea account.")
+                        .comment("Off by default. The IDE's MCP server (Settings | Tools | MCP Server) offers Gitea tools to AI assistants. Reading pull requests is always possible; this switch covers commenting, replying, resolving threads, reactions and submitting reviews, which are done as your Gitea account.")
                 }
             }
             group("Experimental") {
