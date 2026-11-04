@@ -1,0 +1,7 @@
+<!-- Gitea tools for the IDE's MCP server. Loaded only when the MCP Server
+     plugin is installed and enabled (plugin.xml: optional dependency). -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="com.github.hypercookie.giteaplugin.mcp.GiteaMcpToolset"/>
+    </extensions>
+</idea-plugin>

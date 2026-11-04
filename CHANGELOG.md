@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-04
+### Added
+- Gitea tools for the IDE's MCP server (Settings | Tools | MCP Server), so AI assistants can work with pull requests: list and search them, read details, files, commits, timeline, checks, review threads, comments and reactions, and comment, reply, resolve threads, react and submit reviews. The plugin still works without the MCP Server plugin. Changing pull requests is off by default; turn it on under Settings | Version Control | Gitea | Features.
+
 ## [1.1.0] - 2026-11-03
 ### Added
 - Support for IntelliJ 2026.3 (build 263), as a separate plugin archive: 2026.3 moved the version control modules the plugin depends on.

@@ -84,6 +84,11 @@ class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea
                         .bindSelected(settings::codeSuggestions)
                         .comment("Off by default. Adds a Suggest Change button to new review comments and an Apply button on suggestions from other plugin users. A suggestion is stored in the comment text itself, with a hidden marker at its end. Applies to comments opened afterwards.")
                 }
+                row {
+                    checkBox("Let MCP clients change pull requests")
+                        .bindSelected(settings::mcpWriteTools)
+                        .comment("Off by default. The IDE's MCP server (Settings | Tools | MCP Server) offers Gitea tools to AI assistants. Reading pull requests is always possible; this switch covers commenting, replying, resolving threads, reactions and submitting reviews, which are done as your Gitea account.")
+                }
             }
             group("Experimental") {
                 row {
