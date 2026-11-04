@@ -1,7 +1,8 @@
-# Attaches the plugin archive to a GitHub release when it is published, then
-# publishes it to JetBrains Marketplace (a version like 0.1.0-beta goes to the
-# beta channel). Marketplace publishing needs the secrets PUBLISH_TOKEN,
-# CERTIFICATE_CHAIN, PRIVATE_KEY and PRIVATE_KEY_PASSWORD.
+# Attaches the plugin archives to a GitHub release when it is published. It
+# publishes to JetBrains Marketplace (a version like 0.1.0-beta goes to the
+# beta channel) only when the secret PUBLISH_TOKEN is set, together with
+# CERTIFICATE_CHAIN, PRIVATE_KEY and PRIVATE_KEY_PASSWORD; without it the
+# release just gets its zips.
 
 name: Release
 on:
@@ -19,6 +20,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      # Read by the Publish Plugin step's condition; a step's own env is not
+      # visible to its `if`.
+      PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
     steps:
       - name: Maximize Build Space
         # Third-party action in a job that holds the signing and Marketplace
@@ -70,6 +75,8 @@ jobs:
         run: gh release upload "$TAG" ./build/distributions/*
 
       - name: Publish Plugin
+        # Skipped unless a Marketplace token is configured.
+        if: ${{ env.PUBLISH_TOKEN != '' }}
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
           CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}

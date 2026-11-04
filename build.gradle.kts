@@ -63,7 +63,11 @@ dependencies {
     // JSON (de)serialization for Gitea API DTOs. HTTP transport uses JDK's
     // built-in java.net.http.HttpClient — no separate HTTP client dependency,
     // avoids classloader conflicts with whatever the IJ Platform bundles internally.
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    // The IDE bundles kotlinx.serialization, so it is compileOnly: a second
+    // copy in the plugin would load its own KSerializer classes, and the
+    // MCP server could not build schemas for the plugin's tool parameters
+    // (it then drops every Gitea tool).
+    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // Markdown rendering uses the org.intellij.markdown parser bundled with the
     // IntelliJ Platform (as the GitHub plugin does), so no Markdown library is
