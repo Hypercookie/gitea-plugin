@@ -4,6 +4,7 @@ import com.github.hypercookie.giteaplugin.log.GiteaCommitStatusProvider
 import com.github.hypercookie.giteaplugin.mcp.GiteaMcpToolset
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.mcpserver.McpToolset
+import com.intellij.mcpserver.McpToolsProvider
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.openapi.extensions.PluginId
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
@@ -55,5 +56,13 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
         assertEquals(false, toolset.javaClass.getMethod("isExperimental").invoke(toolset))
         assertEquals(true, toolset.javaClass.getMethod("isUserConfigurable").invoke(toolset))
         assertEquals("Gitea", toolset.javaClass.getMethod("displayName").invoke(toolset))
+    }
+
+    fun testMcpServerListsGiteaTools() {
+        // What the MCP server itself offers to clients: every provider's
+        // tools, built by reflection from the toolsets (schemas included).
+        val names = McpToolsProvider.EP.extensionList.flatMap { it.getTools() }.map { it.descriptor.name }
+        val expected = GiteaMcpToolset::class.java.methods.mapNotNull { it.getAnnotation(McpTool::class.java)?.name }
+        assertTrue("missing: ${expected - names.toSet()}; all: $names", names.containsAll(expected))
     }
 }
