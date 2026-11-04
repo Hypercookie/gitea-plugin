@@ -29,4 +29,10 @@ class GiteaSuggestionTest : TestCase() {
         assertEquals(GiteaSuggestion.hashOf(listOf("a  ")), GiteaSuggestion.hashOf(listOf("a")))
         assertFalse(GiteaSuggestion.hashOf(listOf("a")) == GiteaSuggestion.hashOf(listOf("b")))
     }
+
+    fun testCountsSuggestionBlocks() {
+        assertEquals(0, GiteaSuggestion.count("```kotlin\nx\n```"))
+        assertEquals(1, GiteaSuggestion.count("a\n```suggestion\nx\n```"))
+        assertEquals(2, GiteaSuggestion.count("```suggestion\nx\n```\n\n```suggestion\ny\n```"))
+    }
 }

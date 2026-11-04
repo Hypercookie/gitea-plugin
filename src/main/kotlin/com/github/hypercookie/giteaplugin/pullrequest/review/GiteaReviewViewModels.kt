@@ -121,6 +121,8 @@ class GiteaNewCommentViewModel(
     /** Inserts a suggestion block holding [original], the commented code,
      * into the text. Submitting then adds the hidden suggestion marker. */
     fun startSuggestion(original: List<String>) {
+        // One suggestion per comment.
+        if (GiteaSuggestion.count(text.value) > 0) return
         suggestionOriginal = original
         val current = text.value
         text.value = (if (current.isBlank()) "" else current.trimEnd() + "\n\n") + GiteaSuggestion.template(original)
