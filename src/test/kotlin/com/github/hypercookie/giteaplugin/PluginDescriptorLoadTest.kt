@@ -46,4 +46,14 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
         assertEquals(names.size, names.toSet().size)
         assertTrue(names.all { it.startsWith("gitea_") })
     }
+
+    fun testMcpToolsetIsNotExperimentalAndUserConfigurable() {
+        // Newer IDEs default toolsets to experimental, which hides them from
+        // the MCP server's exposed tools; looked up by JVM name because the
+        // methods don't exist on the oldest supported line.
+        val toolset = GiteaMcpToolset()
+        assertEquals(false, toolset.javaClass.getMethod("isExperimental").invoke(toolset))
+        assertEquals(true, toolset.javaClass.getMethod("isUserConfigurable").invoke(toolset))
+        assertEquals("Gitea", toolset.javaClass.getMethod("displayName").invoke(toolset))
+    }
 }

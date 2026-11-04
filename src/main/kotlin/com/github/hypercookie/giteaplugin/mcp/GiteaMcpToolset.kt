@@ -1,12 +1,16 @@
 package com.github.hypercookie.giteaplugin.mcp
 
-import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
+
+/** Shown for the toolset in the MCP Server settings. */
+const val GITEA_MCP_DESCRIPTION =
+    "Read and review Gitea pull requests: list, details, files, commits, timeline, checks, review threads, comments, reactions; " +
+        "comment, reply, resolve, react and submit reviews."
 
 /** One inline comment for [GiteaMcpToolset.gitea_submit_review]. */
 @Serializable
@@ -29,7 +33,7 @@ class GiteaReviewCommentInput(
  * are addressed by number; pass `repository` (owner/name) only when the
  * project has several Gitea repositories.
  */
-class GiteaMcpToolset : McpToolset {
+class GiteaMcpToolset : GiteaMcpToolsetBase() {
 
     private suspend fun service(): GiteaMcpService = GiteaMcpService(currentCoroutineContext().project)
 
