@@ -12,6 +12,7 @@
           <li>Check out a pull request branch from the list.</li>
           <li>After pushing a branch without an open pull request, get a notification that opens Gitea's page to create one.</li>
           <li>See the status checks of each commit in a column of the Git log.</li>
+          <li>With the IDE's MCP Server enabled, let AI assistants read and review pull requests through Gitea tools (reading, commenting, replying, resolving, reactions, submitting reviews).</li>
         </ul>
         <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Features that contact the server on their own, such as the commit checks column, can be turned off there. Tested with Gitea 1.27.</p>
         <p>Requires the Git plugin.</p>
@@ -19,6 +20,9 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>Git4Idea</depends>
+    <!-- Gitea tools for AI assistants through the IDE's MCP server; the plugin
+         works without it. -->
+    <depends optional="true" config-file="gitea-mcp.xml">com.intellij.mcpServer</depends>
     <!-- Module dependencies differ per IDE line; each build includes its
          line's file from platforms/<line>/src/main/resources. -->
     <xi:include href="/META-INF/gitea-platform.xml" xpointer="xpointer(/idea-plugin/*)"/>
