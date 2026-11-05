@@ -14,8 +14,6 @@
 - Release 1.2.0 by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/74
 - Don't fail the release when the changelog PR can't be created by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/73
 
-**Full Changelog**: https://github.com/Hypercookie/gitea-plugin/compare/1.1.1...v1.2.0
-
 ### Added
 
 - File filters in the pull request overview: changed locally, unresolved/pending/my comments, change type and file type
