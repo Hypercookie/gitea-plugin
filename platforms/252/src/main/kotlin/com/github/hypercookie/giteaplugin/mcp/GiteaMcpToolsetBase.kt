@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.mcp
 
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.intellij.mcpserver.McpToolset
 
 /**
@@ -12,6 +13,7 @@ import com.intellij.mcpserver.McpToolset
  * declares them with `override`.
  */
 abstract class GiteaMcpToolsetBase : McpToolset {
+    fun isEnabled(): Boolean = GiteaSettings.getInstance().mcpEnabled
     fun isExperimental(): Boolean = false
     fun isUserConfigurable(): Boolean = true
     fun displayName(): String = "Gitea"

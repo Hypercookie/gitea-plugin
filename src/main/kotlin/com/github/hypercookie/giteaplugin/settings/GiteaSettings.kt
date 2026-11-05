@@ -26,6 +26,7 @@ class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(
         @JvmField val codeSuggestions: Boolean = false,
         @JvmField val multiLineComments: Boolean = false,
         @JvmField val mcpWriteTools: Boolean = false,
+        @JvmField val mcpEnabled: Boolean = false,
     )
 
     /** "Gitea Commit Checks" column in the Git log and its status requests
@@ -68,6 +69,13 @@ class GiteaSettings : SerializablePersistentStateComponent<GiteaSettings.State>(
     var multiLineComments: Boolean
         get() = state.multiLineComments
         set(value) { updateState { it.copy(multiLineComments = value) } }
+
+    /** Offers the Gitea tools to the IDE's MCP server at all. When off, the
+     * toolset reports itself disabled and disappears from the MCP Server
+     * settings and from the tool list, without an IDE restart. Off by default. */
+    var mcpEnabled: Boolean
+        get() = state.mcpEnabled
+        set(value) { updateState { it.copy(mcpEnabled = value) } }
 
     /** Lets MCP clients (AI assistants) change pull requests through the IDE's
      * MCP server: comment, reply, resolve, react, submit reviews. Reading
