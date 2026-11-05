@@ -14,6 +14,7 @@ import com.github.hypercookie.giteaplugin.util.runCatchingCancellable
 import com.intellij.collaboration.ui.toolwindow.ReviewTabsComponentFactory
 import com.intellij.collaboration.ui.toolwindow.manageReviewToolwindowTabs
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.DumbAware
@@ -56,7 +57,21 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
         toolWindow.setTitleActions(
             listOf(
                 object : DumbAwareAction("Refresh", "Reload pull requests", AllIcons.Actions.Refresh) {
+                    // Each refresh costs a request per open pull request,
+                    // review and reaction list; clicking it again right away
+                    // would only repeat them.
+                    @Volatile private var lastRefreshAt = 0L
+
+                    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+
+                    override fun update(e: AnActionEvent) {
+                        e.presentation.isEnabled = System.currentTimeMillis() - lastRefreshAt >= REFRESH_COOLDOWN_MS
+                    }
+
                     override fun actionPerformed(e: AnActionEvent) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastRefreshAt < REFRESH_COOLDOWN_MS) return
+                        lastRefreshAt = now
                         val projectVm = twVm.projectVm.value
                         if (projectVm == null) twVm.connect() else projectVm.listVm.reload()
                         GiteaReviewSessionService.getInstance(project).refreshAllData()
@@ -135,3 +150,6 @@ class GiteaToolWindowFactory : ToolWindowFactory, DumbAware {
             }
     }
 }
+
+/** Least time between two clicks of the tool window's Refresh. */
+private const val REFRESH_COOLDOWN_MS = 2_000L

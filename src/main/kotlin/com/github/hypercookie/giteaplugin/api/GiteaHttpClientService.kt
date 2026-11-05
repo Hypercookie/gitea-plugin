@@ -31,7 +31,8 @@ import java.time.Duration
  * installs as the default proxy selector.
  *
  * It also counts the API requests sent since the IDE started (or since the
- * plugin was loaded), for the debug status bar widget.
+ * plugin was loaded), for the debug status bar widget, and limits how fast
+ * they go to each server ([limiterFor]).
  */
 @Service(Service.Level.APP)
 class GiteaHttpClientService : Disposable {
@@ -57,6 +58,13 @@ class GiteaHttpClientService : Disposable {
      * most frequent first, so the debug widget shows where they go. */
     fun requestsByEndpoint(): List<Pair<String, Long>> =
         byEndpoint.map { (endpoint, count) -> endpoint to count.get() }.sortedByDescending { it.second }
+
+    private val limiters = java.util.concurrent.ConcurrentHashMap<String, GiteaRequestLimiter>()
+
+    /** The request rate limit of the server at [authority] (`host:port`),
+     * shared by all accounts and projects that talk to it. */
+    internal fun limiterFor(authority: String): GiteaRequestLimiter =
+        limiters.computeIfAbsent(authority.lowercase()) { GiteaRequestLimiter() }
 
     override fun dispose() {
         client.shutdownNow()
