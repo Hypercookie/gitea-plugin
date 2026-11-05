@@ -57,6 +57,9 @@ import com.intellij.collaboration.ui.icon.CIBuildStatusIcons
 import com.intellij.openapi.diagnostic.thisLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
@@ -126,33 +129,37 @@ object GiteaPullRequestDetailsComponent {
 
     private fun createChangesComponent(cs: CoroutineScope, data: GiteaPullRequestReviewData, changesVm: GiteaPullRequestChangesViewModel): JComponent {
         val wrapper = Wrapper(JBLabel("Loading…"))
+        var shownScope: CoroutineScope? = null
         cs.bindOnEdt(changesVm.changeListVm) { result ->
+            shownScope?.cancel()
+            val childCs = CoroutineScope(cs.coroutineContext + SupervisorJob(cs.coroutineContext[Job])).also { shownScope = it }
             val content = when {
                 result == null -> JBLabel("Loading…")
                 result.isFailure -> errorPanel("Can't load changes", result.exceptionOrNull()!!)
-                else -> {
-                    val vm = result.getOrThrow()
-                    val progress = CodeReviewProgressTreeModelFromDetails(cs, vm)
-                    val tree = CodeReviewChangeListComponentFactory.createIn(cs, vm, progress, "Pull request does not contain any changes")
-                    val jumpToSource = GiteaJumpToSourceAction(data).apply { registerCustomShortcutSet(tree, null) }
-                    tree.installPopupHandler(
-                        DefaultActionGroup(
-                            ActionManager.getInstance().getAction("Diff.ShowDiff"),
-                            jumpToSource,
-                            Separator.getInstance(),
-                            ActionManager.getInstance().getAction("ExpandAll"),
-                            ActionManager.getInstance().getAction("CollapseAll"),
-                        ),
-                    )
-                    UiDataProvider.wrapComponent(ScrollPaneFactory.createScrollPane(tree, true)) { sink ->
-                        sink[CodeReviewChangeListViewModel.DATA_KEY] = vm
-                    }
-                }
+                else -> GiteaFilteredChanges.create(childCs, data, result.getOrThrow()) { scope, vm -> createTree(scope, data, vm) }
             }
             wrapper.setContent(content)
             wrapper.revalidate()
         }
         return wrapper
+    }
+
+    private fun createTree(cs: CoroutineScope, data: GiteaPullRequestReviewData, vm: GiteaChangeListViewModel): JComponent {
+        val progress = CodeReviewProgressTreeModelFromDetails(cs, vm)
+        val tree = CodeReviewChangeListComponentFactory.createIn(cs, vm, progress, "No files to show")
+        val jumpToSource = GiteaJumpToSourceAction(data).apply { registerCustomShortcutSet(tree, null) }
+        tree.installPopupHandler(
+            DefaultActionGroup(
+                ActionManager.getInstance().getAction("Diff.ShowDiff"),
+                jumpToSource,
+                Separator.getInstance(),
+                ActionManager.getInstance().getAction("ExpandAll"),
+                ActionManager.getInstance().getAction("CollapseAll"),
+            ),
+        )
+        return UiDataProvider.wrapComponent(ScrollPaneFactory.createScrollPane(tree, true)) { sink ->
+            sink[CodeReviewChangeListViewModel.DATA_KEY] = vm
+        }
     }
 
     /** Requested reviewers without a review are "waiting for review";

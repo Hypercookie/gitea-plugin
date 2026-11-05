@@ -6,6 +6,7 @@
 
 ### Added
 
+- File filters in the pull request overview: changed locally, unresolved/pending/my comments, change type and file type
 - Review mode for the MCP tools: `gitea_add_pending_review_comment`, `gitea_get_pending_review`, `gitea_discard_pending_review` and `gitea_submit_pending_review` queue inline comments (shared with the IDE's own pending review) and submit them as one review with Approve, Comment or Request changes.
 
 ## [1.1.1-252] - 2026-11-05
