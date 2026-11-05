@@ -115,8 +115,13 @@ jobs:
             --force \
             || true
 
-          gh pr create \
+          # The release assets are already uploaded at this point, so a
+          # refused PR (the repository setting "Allow GitHub Actions to
+          # create and approve pull requests" is off) must not fail the run.
+          if ! gh pr create \
             --title "Changelog update - \`$VERSION\`" \
             --body "Current pull request contains patched \`CHANGELOG.md\` file for the \`$VERSION\` version." \
             --label "$LABEL" \
-            --head "$BRANCH"
+            --head "$BRANCH"; then
+            echo "::warning::Could not open the changelog PR. Open it manually: https://github.com/${{ github.repository }}/pull/new/$BRANCH"
+          fi
