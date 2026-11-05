@@ -85,15 +85,17 @@ class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea
                 }
                 lateinit var mcpEnabledBox: Cell<JBCheckBox>
                 row {
-                    mcpEnabledBox = checkBox("Offer Gitea tools to the IDE's MCP server")
+                    mcpEnabledBox = checkBox("Offer Gitea tools to the IDE's MCP server (read-only)")
                         .bindSelected(settings::mcpEnabled)
-                        .comment("When off, the Gitea tools are removed from Settings | Tools | MCP Server | Exposed Tools and from MCP clients. No restart needed.")
+                        .comment("Off by default. Lets AI assistants read pull requests through Settings | Tools | MCP Server. When off, the Gitea tools are removed from Exposed Tools and from MCP clients, no restart needed.")
                 }
-                row {
-                    checkBox("Let MCP clients change pull requests")
-                        .enabledIf(mcpEnabledBox.selected)
-                        .bindSelected(settings::mcpWriteTools)
-                        .comment("Off by default. The IDE's MCP server (Settings | Tools | MCP Server) offers Gitea tools to AI assistants. Reading pull requests is always possible; this switch covers commenting, replying, resolving threads, reactions and submitting reviews, which are done as your Gitea account.")
+                indent {
+                    row {
+                        checkBox("Also allow changing pull requests")
+                            .enabledIf(mcpEnabledBox.selected)
+                            .bindSelected(settings::mcpWriteTools)
+                            .comment("Off by default. Adds commenting, replying, resolving threads, reactions and submitting reviews, which are done as your Gitea account.")
+                    }
                 }
             }
             group("Experimental") {

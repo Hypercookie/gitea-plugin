@@ -2,6 +2,7 @@ package com.github.hypercookie.giteaplugin
 
 import com.github.hypercookie.giteaplugin.log.GiteaCommitStatusProvider
 import com.github.hypercookie.giteaplugin.mcp.GiteaMcpToolset
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.McpToolsProvider
@@ -58,7 +59,32 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
         assertEquals("Gitea", toolset.javaClass.getMethod("displayName").invoke(toolset))
     }
 
+    fun testMcpToolsetFollowsTheSetting() {
+        val settings = GiteaSettings.getInstance()
+        val before = settings.mcpEnabled
+        try {
+            val toolset = GiteaMcpToolset()
+            settings.mcpEnabled = false
+            assertEquals(false, toolset.javaClass.getMethod("isEnabled").invoke(toolset))
+            settings.mcpEnabled = true
+            assertEquals(true, toolset.javaClass.getMethod("isEnabled").invoke(toolset))
+        } finally {
+            settings.mcpEnabled = before
+        }
+    }
+
     fun testMcpServerListsGiteaTools() {
+        val settings = GiteaSettings.getInstance()
+        val before = settings.mcpEnabled
+        settings.mcpEnabled = true
+        try {
+            checkMcpServerListsGiteaTools()
+        } finally {
+            settings.mcpEnabled = before
+        }
+    }
+
+    private fun checkMcpServerListsGiteaTools() {
         // What the MCP server itself offers to clients: every provider's
         // tools, built by reflection from the toolsets (schemas included).
         val names = McpToolsProvider.EP.extensionList.flatMap { it.getTools() }.map { it.descriptor.name }
