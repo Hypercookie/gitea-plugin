@@ -73,7 +73,7 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
             settings.mcpEnabled = false
             assertTrue(McpToolset.EP.extensionList.any { it is GiteaMcpToolset })
             checkMcpServerListsGiteaTools()
-            assertThrows(Exception::class.java) { kotlinx.coroutines.runBlocking { GiteaMcpToolset().gitea_list_repositories() } }
+            assertListRepositoriesFails()
         } finally {
             settings.mcpEnabled = before
         }
@@ -98,6 +98,13 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
 
     fun testMcpServerListsGiteaTools() {
         checkMcpServerListsGiteaTools()
+    }
+
+    // Lambdas live in helpers: the compiler turns a lambda inside a test* method
+    // into a private synthetic test*$lambda method, which JUnit 3 reports as a
+    // failing "warning" test.
+    private fun assertListRepositoriesFails() {
+        assertThrows(Exception::class.java) { kotlinx.coroutines.runBlocking { GiteaMcpToolset().gitea_list_repositories() } }
     }
 
     private fun checkMcpServerListsGiteaTools() {
