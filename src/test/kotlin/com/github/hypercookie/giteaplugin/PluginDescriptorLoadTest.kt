@@ -71,7 +71,7 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
         val before = settings.mcpEnabled
         try {
             settings.mcpEnabled = false
-            assertTrue(McpToolset.enabledToolsets.any { it is GiteaMcpToolset })
+            assertTrue(McpToolset.EP.extensionList.any { it is GiteaMcpToolset })
             checkMcpServerListsGiteaTools()
             assertThrows(Exception::class.java) { kotlinx.coroutines.runBlocking { GiteaMcpToolset().gitea_list_repositories() } }
         } finally {
