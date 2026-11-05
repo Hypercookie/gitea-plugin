@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Review mode for the MCP tools: `gitea_add_pending_review_comment`, `gitea_get_pending_review`, `gitea_discard_pending_review` and `gitea_submit_pending_review` queue inline comments (shared with the IDE's own pending review) and submit them as one review with Approve, Comment or Request changes.
+
 ## [1.1.1-252] - 2026-11-05
 
 - Publish to Marketplace only when a token is configured by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/66
