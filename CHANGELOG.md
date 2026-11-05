@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- File filters in the pull request overview: changed locally, unresolved/pending/my comments, change type and file type
+
 ## [1.1.1-252] - 2026-11-05
 
 - Publish to Marketplace only when a token is configured by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/66
