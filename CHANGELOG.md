@@ -4,6 +4,27 @@
 
 ## [Unreleased]
 
+## [1.2.0-252] - 2026-11-05
+
+- Changelog update - 1.1.1 by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/68
+- Add review mode to the Gitea MCP tools by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/70
+- Hide Gitea MCP tools when the MCP setting is off by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/69
+- Add file filters to the pull request overview by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/71
+- Update README to the latest state by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/72
+- Release 1.2.0 by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/74
+- Don't fail the release when the changelog PR can't be created by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/73
+
+**Full Changelog**: https://github.com/Hypercookie/gitea-plugin/compare/1.1.1...v1.2.0
+
+### Added
+
+- File filters in the pull request overview: changed locally, unresolved/pending/my comments, change type and file type
+- Review mode for the MCP tools: `gitea_add_pending_review_comment`, `gitea_get_pending_review`, `gitea_discard_pending_review` and `gitea_submit_pending_review` queue inline comments (shared with the IDE's own pending review) and submit them as one review with Approve, Comment or Request changes.
+
+### Changed
+
+- The Gitea MCP tools are now off by default, including the read tools: turn on "Offer Gitea tools to the IDE's MCP server (read-only)" under Settings | Version Control | Gitea | Features. Turning it off removes the tools from Exposed Tools and from MCP clients without a restart. "Also allow changing pull requests" (comments, replies, resolving, reactions, reviews, review mode) is a second switch under it, also off by default.
+
 ## [1.2.0] - 2026-11-05
 
 ### Added
@@ -20,8 +41,6 @@
 - Publish to Marketplace only when a token is configured by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/66
 - Expose Gitea pull request tools through the IDE's MCP server by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/67
 - Make suggestions easier to apply and limit them to one per comment by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/64
-
-**Full Changelog**: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.0...1.1.1
 
 ### Added
 
@@ -94,8 +113,9 @@
 - Commit status checks in a "Gitea Commit Checks" column of the Git log.
 - Editable pull request diffs and Jump to Source while the pull request branch is checked out.
 
-[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.0...HEAD
-[1.2.0]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.1...v1.2.0
+[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.0-252...HEAD
+[1.2.0]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.1-252...v1.2.0
+[1.2.0-252]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.0...v1.2.0-252
 [1.1.1]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.0...v1.1.1
 [1.1.1-252]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.1...v1.1.1-252
 [1.1.0]: https://github.com/Hypercookie/gitea-plugin/compare/v1.0.0...v1.1.0
