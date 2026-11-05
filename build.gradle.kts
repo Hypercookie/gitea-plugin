@@ -67,7 +67,7 @@ dependencies {
     // copy in the plugin would load its own KSerializer classes, and the
     // MCP server could not build schemas for the plugin's tool parameters
     // (it then drops every Gitea tool).
-    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
 
     // Markdown rendering uses the org.intellij.markdown parser bundled with the
     // IntelliJ Platform (as the GitHub plugin does), so no Markdown library is
@@ -75,7 +75,7 @@ dependencies {
 
     // Coroutines are bundled by the IntelliJ Platform at runtime; compileOnly
     // avoids shipping/duplicating a second copy on the plugin classpath.
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
 
     intellijPlatform {
         // Per IDE line, with why each module is needed, in
