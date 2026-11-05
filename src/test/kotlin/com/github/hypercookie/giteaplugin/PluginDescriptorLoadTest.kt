@@ -1,6 +1,9 @@
 package com.github.hypercookie.giteaplugin
 
 import com.github.hypercookie.giteaplugin.log.GiteaCommitStatusProvider
+import com.github.hypercookie.giteaplugin.mcp.GiteaMcpService
+import com.github.hypercookie.giteaplugin.mcp.GiteaToolException
+import com.github.hypercookie.giteaplugin.mcp.McpInlineComment
 import com.github.hypercookie.giteaplugin.mcp.GiteaMcpToolset
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.intellij.ide.plugins.PluginManagerCore
@@ -70,6 +73,23 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
             assertEquals(true, toolset.javaClass.getMethod("isEnabled").invoke(toolset))
         } finally {
             settings.mcpEnabled = before
+        }
+    }
+
+    fun testPendingReviewWriteToolsNeedBothSwitches() {
+        val settings = GiteaSettings.getInstance()
+        val (enabled, write) = settings.mcpEnabled to settings.mcpWriteTools
+        try {
+            val service = GiteaMcpService(project)
+            for ((e, w) in listOf(false to false, true to false, false to true)) {
+                settings.mcpEnabled = e
+                settings.mcpWriteTools = w
+                assertThrows(GiteaToolException::class.java) { service.addPendingReviewComment(null, 1, McpInlineComment("a", 1, "x")) }
+                assertThrows(GiteaToolException::class.java) { service.discardPendingReview(null, 1, null) }
+            }
+        } finally {
+            settings.mcpEnabled = enabled
+            settings.mcpWriteTools = write
         }
     }
 

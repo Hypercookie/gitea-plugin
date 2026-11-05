@@ -73,7 +73,8 @@ class GiteaMcpService(private val project: Project) {
     private fun names(list: List<String>) = list.distinct().joinToString(", ")
 
     private fun requireWriteEnabled() {
-        if (!GiteaSettings.getInstance().mcpWriteTools) {
+        val settings = GiteaSettings.getInstance()
+        if (!settings.mcpEnabled || !settings.mcpWriteTools) {
             throw GiteaToolException("Changing pull requests through MCP is turned off. Enable it in Settings | Version Control | Gitea | Features.")
         }
     }
