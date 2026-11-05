@@ -1,0 +1,7 @@
+<!-- 2026.3 lets plugins filter MCP tools at runtime, which hides the Gitea
+     tools as soon as the setting is turned off. -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolFilterProvider implementation="com.github.hypercookie.giteaplugin.mcp.GiteaMcpToolFilterProvider"/>
+    </extensions>
+</idea-plugin>

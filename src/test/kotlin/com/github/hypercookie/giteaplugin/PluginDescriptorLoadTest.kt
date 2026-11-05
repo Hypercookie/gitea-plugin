@@ -62,15 +62,18 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
         assertEquals("Gitea", toolset.javaClass.getMethod("displayName").invoke(toolset))
     }
 
-    fun testMcpToolsetFollowsTheSetting() {
+    fun testGiteaToolsStayListedWhileTheSettingIsOff() {
+        // Regression: the IDE computes its tool list once, so gating the toolset
+        // with isEnabled() on the setting (off by default) removed the tools for
+        // good. They must be listed whatever the setting says; the setting
+        // filters them (2026.3) and makes calls fail.
         val settings = GiteaSettings.getInstance()
         val before = settings.mcpEnabled
         try {
-            val toolset = GiteaMcpToolset()
             settings.mcpEnabled = false
-            assertEquals(false, toolset.javaClass.getMethod("isEnabled").invoke(toolset))
-            settings.mcpEnabled = true
-            assertEquals(true, toolset.javaClass.getMethod("isEnabled").invoke(toolset))
+            assertTrue(McpToolset.EP.extensionList.any { it is GiteaMcpToolset })
+            checkMcpServerListsGiteaTools()
+            assertListRepositoriesFails()
         } finally {
             settings.mcpEnabled = before
         }
@@ -94,14 +97,14 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
     }
 
     fun testMcpServerListsGiteaTools() {
-        val settings = GiteaSettings.getInstance()
-        val before = settings.mcpEnabled
-        settings.mcpEnabled = true
-        try {
-            checkMcpServerListsGiteaTools()
-        } finally {
-            settings.mcpEnabled = before
-        }
+        checkMcpServerListsGiteaTools()
+    }
+
+    // Lambdas live in helpers: the compiler turns a lambda inside a test* method
+    // into a private synthetic test*$lambda method, which JUnit 3 reports as a
+    // failing "warning" test.
+    private fun assertListRepositoriesFails() {
+        assertThrows(Exception::class.java) { kotlinx.coroutines.runBlocking { GiteaMcpToolset().gitea_list_repositories() } }
     }
 
     private fun checkMcpServerListsGiteaTools() {

@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.mcp
 
+import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
@@ -35,7 +36,15 @@ class GiteaReviewCommentInput(
  */
 class GiteaMcpToolset : GiteaMcpToolsetBase() {
 
-    private suspend fun service(): GiteaMcpService = GiteaMcpService(currentCoroutineContext().project)
+    private suspend fun service(): GiteaMcpService {
+        // The tool list is computed once by the IDE and not recomputed when this
+        // setting changes (isEnabled() would only be read at startup), so the
+        // switch is also enforced when a tool is called.
+        if (!GiteaSettings.getInstance().mcpEnabled) {
+            mcpFail("Gitea tools are turned off. Enable them in Settings | Version Control | Gitea | Features.")
+        }
+        return GiteaMcpService(currentCoroutineContext().project)
+    }
 
     private suspend fun <T> run(block: suspend (GiteaMcpService) -> T): T =
         try {
