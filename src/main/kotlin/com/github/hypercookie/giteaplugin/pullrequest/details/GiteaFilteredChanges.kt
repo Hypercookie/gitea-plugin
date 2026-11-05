@@ -98,11 +98,6 @@ object GiteaFilteredChanges {
 
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
-        override fun update(e: AnActionEvent) {
-            val active = filters.value.size + extensions.value.size
-            e.presentation.icon = if (active > 0) AllIcons.General.FilterEdited else AllIcons.General.Filter
-        }
-
         override fun actionPerformed(e: AnActionEvent) {
             val group = DefaultActionGroup()
             fun toggles(vararg items: GiteaFileFilter) = items.forEach { group.add(FilterToggle(it, filters)) }
