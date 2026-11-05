@@ -96,7 +96,9 @@ class PluginDescriptorLoadTest : BasePlatformTestCase() {
         }
     }
 
-    fun testMcpServerListsGiteaTools() = checkMcpServerListsGiteaTools()
+    fun testMcpServerListsGiteaTools() {
+        checkMcpServerListsGiteaTools()
+    }
 
     private fun checkMcpServerListsGiteaTools() {
         // What the MCP server itself offers to clients: every provider's
