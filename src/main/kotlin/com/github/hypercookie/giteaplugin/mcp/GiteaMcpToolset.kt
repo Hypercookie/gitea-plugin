@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 /** Shown for the toolset in the MCP Server settings. */
 const val GITEA_MCP_DESCRIPTION =
     "Read and review Gitea pull requests: list, details, files, commits, timeline, checks, review threads, comments, reactions; " +
-        "comment, reply, resolve, react and submit reviews."
+        "comment, reply, resolve, react, queue review comments (review mode) and submit reviews."
 
 /** One inline comment for [GiteaMcpToolset.gitea_submit_review]. */
 @Serializable
@@ -177,4 +177,41 @@ class GiteaMcpToolset : GiteaMcpToolsetBase() {
     ): String = run {
         it.submitReview(repository, number, event, body, comments.orEmpty().map { c -> McpInlineComment(c.path, c.line, c.body, c.oldSide) })
     }
+
+    // --- Review mode: queue inline comments, then submit them as one review ---
+
+    @McpTool(name = "gitea_get_pending_review")
+    @McpDescription("Lists the inline comments queued for the user's not yet submitted review of a pull request (review mode). The queue is the same one the IDE shows in the editor and diff.")
+    suspend fun gitea_get_pending_review(
+        @McpDescription("Pull request number") number: Long,
+        @McpDescription("owner/name, only needed if the project has several Gitea repositories") repository: String? = null,
+    ): String = run { it.getPendingReview(repository, number) }
+
+    @McpTool(name = "gitea_add_pending_review_comment")
+    @McpDescription("Review mode: queues an inline comment on a file line without posting it. Nothing is visible on Gitea until gitea_submit_pending_review. Can be turned off in the Gitea settings.")
+    suspend fun gitea_add_pending_review_comment(
+        @McpDescription("Pull request number") number: Long,
+        @McpDescription("Path of the file in the pull request, as listed by gitea_get_pull_request_files") path: String,
+        @McpDescription("1-based line number in the new version of the file (or the old version if oldSide is true)") line: Int,
+        @McpDescription("The comment text (Markdown)") body: String,
+        @McpDescription("True to comment on a line of the old (base) version of the file; default false") oldSide: Boolean? = null,
+        @McpDescription("owner/name, only needed if the project has several Gitea repositories") repository: String? = null,
+    ): String = run { it.addPendingReviewComment(repository, number, McpInlineComment(path, line, body, oldSide ?: false)) }
+
+    @McpTool(name = "gitea_discard_pending_review")
+    @McpDescription("Review mode: removes one queued comment (by its index from gitea_get_pending_review) or, without an index, the whole queue. Can be turned off in the Gitea settings.")
+    suspend fun gitea_discard_pending_review(
+        @McpDescription("Pull request number") number: Long,
+        @McpDescription("1-based index of the comment to remove; omit to remove all queued comments") index: Int? = null,
+        @McpDescription("owner/name, only needed if the project has several Gitea repositories") repository: String? = null,
+    ): String = run { it.discardPendingReview(repository, number, index) }
+
+    @McpTool(name = "gitea_submit_pending_review")
+    @McpDescription("Review mode: submits all queued inline comments as one review with a verdict: APPROVED, COMMENT or REQUEST_CHANGES, and an optional summary. Can be turned off in the Gitea settings.")
+    suspend fun gitea_submit_pending_review(
+        @McpDescription("Pull request number") number: Long,
+        @McpDescription("APPROVED, COMMENT or REQUEST_CHANGES") event: String,
+        @McpDescription("Review summary (Markdown); required for COMMENT and REQUEST_CHANGES unless comments are queued") body: String? = null,
+        @McpDescription("owner/name, only needed if the project has several Gitea repositories") repository: String? = null,
+    ): String = run { it.submitPendingReview(repository, number, event, body) }
 }
