@@ -4,12 +4,28 @@
 
 ## [Unreleased]
 
-## [1.1.1] - 2026-11-04
+## [1.1.1-252] - 2026-11-05
+
+- Publish to Marketplace only when a token is configured by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/66
+- Expose Gitea pull request tools through the IDE's MCP server by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/67
+- Make suggestions easier to apply and limit them to one per comment by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/64
+
+**Full Changelog**: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.0...1.1.1
+
 ### Added
+
+- Gitea tools for the IDE's MCP server (Settings | Tools | MCP Server), so AI assistants can work with pull requests: list and search them, read details, files, commits, timeline, checks, review threads, comments and reactions, and comment, reply, resolve threads, react and submit reviews. The plugin still works without the MCP Server plugin. Changing pull requests is off by default; turn it on under Settings | Version Control | Gitea | Features.
+
+## [1.1.1] - 2026-11-04
+
+### Added
+
 - Gitea tools for the IDE's MCP server (Settings | Tools | MCP Server), so AI assistants can work with pull requests: list and search them, read details, files, commits, timeline, checks, review threads, comments and reactions, and comment, reply, resolve threads, react and submit reviews. The plugin still works without the MCP Server plugin. Changing pull requests is off by default; turn it on under Settings | Version Control | Gitea | Features.
 
 ## [1.1.0] - 2026-11-03
+
 ### Added
+
 - Support for IntelliJ 2026.3 (build 263), as a separate plugin archive: 2026.3 moved the version control modules the plugin depends on.
 - Experimental, off by default (Settings | Version Control | Gitea | Experimental): multi-line review comments. Select lines and use Add Comment on Selected Lines; the range is stored as a hidden marker in the comment, which Gitea hides, and shown as a highlighted range in the editor and diffs. Others' ranges are always shown as a "Lines 3-5" label.
 - Experimental, off by default: code suggestions. A Suggest Change button starts a comment with a suggestion block; other plugin users get an Apply button under it that replaces the lines in the local file (one undo step, refused if the original code has changed). Plain suggestion blocks typed in the Gitea web UI get an Apply button too, and a comment can hold one suggestion.
@@ -17,22 +33,27 @@
 - Select in Changes Tree action in the pull request diff, to find the diffed file in the changes tree.
 
 ### Changed
+
 - The pull request diff tab is named after the current file instead of the pull request, and follows you when you step to another file.
 - Editing your own comment hides the plugin's hidden markers and keeps them on save.
 - Resolve and Reply on review comments are hidden on Gitea servers that lack them (resolving needs Gitea 1.26, replying 1.27) instead of failing.
 - Tested with Gitea 1.24 to 1.27 and 28.1.
 
 ### Fixed
+
 - Review comments no longer show on the wrong line, or without an "outdated" marker, when lines were added or moved after the commit that last changed the commented line.
 
 ## [1.0.0] - 2026-10-16
+
 ### Added
+
 - Settings to turn off the commit checks column, review comments in the editor, reactions, the pull request suggestion after a push and reloading on window focus; turning a feature off also stops its requests.
 - An opt-in debug widget in the status bar that counts the Gitea API requests sent since the IDE started.
 - Code blocks in review comments in the editor: Apply and Copy icon buttons on hover; Apply replaces the commented line with the block (greyed out, with the reason, where the file can't be edited).
 - Shift+Cmd+Enter (Shift+Ctrl+Enter on Windows and Linux) posts a new review comment as a single comment; Cmd+Enter still starts or adds to the review.
 
 ### Changed
+
 - Supports IDE builds 252 to 262 (2025.2 to 2026.2); 2026.3 support follows in a later version.
 - Review comments in the editor widen to fit their longest code line, up to the editor's width; wider code scrolls sideways instead of being cut off.
 - Code blocks in the pull request timeline scroll sideways and have a Copy button on hover, and timeline comments always fit the view's width instead of being cut off on the right.
@@ -43,10 +64,13 @@
 - The debug request counter's tooltip lists the most requested endpoints.
 
 ### Fixed
+
 - Start Review, Add Single Comment, Reply and Comment stay disabled, and their shortcuts do nothing, until the comment has text other than whitespace.
 
 ## [0.1.0-beta] - 2026-10-15
+
 ### Added
+
 - Gitea accounts with token login, stored in the IDE password safe.
 - Pull Requests tool window with search, quick filters, filters and paging.
 - Pull request tab with commits, changed files, status checks, reviewers and diffs.
@@ -59,6 +83,9 @@
 - Commit status checks in a "Gitea Commit Checks" column of the Git log.
 - Editable pull request diffs and Jump to Source while the pull request branch is checked out.
 
-[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.1-252...HEAD
+[1.1.1]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.0...v1.1.1
+[1.1.1-252]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.1...v1.1.1-252
+[1.1.0]: https://github.com/Hypercookie/gitea-plugin/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Hypercookie/gitea-plugin/compare/v0.1.0-beta...v1.0.0
 [0.1.0-beta]: https://github.com/Hypercookie/gitea-plugin/commits/v0.1.0-beta
