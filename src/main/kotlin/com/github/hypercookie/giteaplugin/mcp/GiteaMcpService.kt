@@ -11,6 +11,8 @@ import com.github.hypercookie.giteaplugin.api.dto.ReviewEvent
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewSide
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewThread
 import com.github.hypercookie.giteaplugin.pullrequest.review.ReviewThreads
+import com.github.hypercookie.giteaplugin.pullrequest.PendingReviewStoreService
+import com.github.hypercookie.giteaplugin.repo.GiteaRepoContext
 import com.github.hypercookie.giteaplugin.repo.GiteaRepoLinkService
 import com.github.hypercookie.giteaplugin.settings.GiteaSettings
 import com.intellij.openapi.project.Project
@@ -43,7 +45,10 @@ data class McpInlineComment(val path: String, val line: Int, val body: String, v
  */
 class GiteaMcpService(private val project: Project) {
 
-    private class Target(val client: GiteaApiClient, val owner: String, val repo: String, val serverUrl: String)
+    private class Target(
+        val client: GiteaApiClient, val owner: String, val repo: String, val serverUrl: String,
+        val context: GiteaRepoContext,
+    )
 
     private val json = Json { prettyPrint = false }
 
@@ -62,7 +67,7 @@ class GiteaMcpService(private val project: Project) {
             GiteaRepoLinkService.getInstance(project).resolveDefault()
                 ?: throw GiteaToolException("The project has several Gitea repositories; pass 'repository' as one of: ${names(matches.map { "${it.owner}/${it.repo}" }.distinct())}")
         }
-        return Target(GiteaAccountManager.getInstance().clientFor(context.account), context.owner, context.repo, context.account.serverUrl)
+        return Target(GiteaAccountManager.getInstance().clientFor(context.account), context.owner, context.repo, context.account.serverUrl, context)
     }
 
     private fun names(list: List<String>) = list.distinct().joinToString(", ")
@@ -332,36 +337,105 @@ class GiteaMcpService(private val project: Project) {
         render(buildJsonObject { put("reaction", reaction); put("added", add) })
     }
 
+    private fun parseEvent(event: String): ReviewEvent = when (event.trim().uppercase()) {
+        "APPROVE", "APPROVED" -> ReviewEvent.APPROVED
+        "COMMENT" -> ReviewEvent.COMMENT
+        "REQUEST_CHANGES" -> ReviewEvent.REQUEST_CHANGES
+        else -> throw GiteaToolException("event must be APPROVED, COMMENT or REQUEST_CHANGES")
+    }
+
+    private fun toInline(c: McpInlineComment): CreatePullReviewComment {
+        if (c.line < 1) throw GiteaToolException("Line numbers are 1-based: ${c.path}:${c.line}")
+        requireText(c.body)
+        return CreatePullReviewComment(
+            body = c.body, path = c.path,
+            newPosition = if (c.oldSide) 0 else c.line.toLong(),
+            oldPosition = if (c.oldSide) c.line.toLong() else 0,
+        )
+    }
+
+    private fun requireReviewContent(event: ReviewEvent, body: String?, commentCount: Int) {
+        if (event != ReviewEvent.APPROVED && body.isNullOrBlank() && commentCount == 0) {
+            throw GiteaToolException("A $event review needs a body or at least one inline comment.")
+        }
+    }
+
+    private fun reviewJson(review: com.github.hypercookie.giteaplugin.api.dto.PullReview): String = render(buildJsonObject {
+        put("reviewId", review.id)
+        put("state", review.state.name)
+        put("url", review.htmlUrl)
+    })
+
     suspend fun submitReview(
         repository: String?, number: Long, event: String, body: String?, comments: List<McpInlineComment>,
     ): String = guarded {
         requireWriteEnabled()
-        val reviewEvent = when (event.trim().uppercase()) {
-            "APPROVE", "APPROVED" -> ReviewEvent.APPROVED
-            "COMMENT" -> ReviewEvent.COMMENT
-            "REQUEST_CHANGES" -> ReviewEvent.REQUEST_CHANGES
-            else -> throw GiteaToolException("event must be APPROVED, COMMENT or REQUEST_CHANGES")
-        }
-        if (reviewEvent != ReviewEvent.APPROVED && body.isNullOrBlank() && comments.isEmpty()) {
-            throw GiteaToolException("A $reviewEvent review needs a body or at least one inline comment.")
-        }
-        val inline = comments.map {
-            if (it.line < 1) throw GiteaToolException("Line numbers are 1-based: ${it.path}:${it.line}")
-            requireText(it.body)
-            CreatePullReviewComment(
-                body = it.body, path = it.path,
-                newPosition = if (it.oldSide) 0 else it.line.toLong(),
-                oldPosition = if (it.oldSide) it.line.toLong() else 0,
-            )
-        }
+        val reviewEvent = parseEvent(event)
+        requireReviewContent(reviewEvent, body, comments.size)
+        val inline = comments.map(::toInline)
         val t = target(repository)
         val head = t.client.getPullRequest(t.owner, t.repo, number).head.sha
-        val review = t.client.createReview(t.owner, t.repo, number, CreatePullReviewOptions(reviewEvent, body.orEmpty(), head, inline))
-        render(buildJsonObject {
-            put("reviewId", review.id)
-            put("state", review.state.name)
-            put("url", review.htmlUrl)
-        })
+        reviewJson(t.client.createReview(t.owner, t.repo, number, CreatePullReviewOptions(reviewEvent, body.orEmpty(), head, inline)))
+    }
+
+    // --- Review mode: queue comments, then submit them as one review ------------
+    // The queue is the IDE's own pending-review store, so comments added here
+    // show up in the editor and the pull request tab, and the other way round.
+
+    private fun pendingStore(t: Target, number: Long) =
+        PendingReviewStoreService.getInstance(project).storeFor(t.context, number)
+
+    private fun pendingJson(comments: List<CreatePullReviewComment>): JsonElement = buildJsonArray {
+        comments.forEachIndexed { i, c ->
+            add(buildJsonObject {
+                put("index", i + 1)
+                put("path", c.path)
+                put("line", if (c.oldPosition > 0) c.oldPosition else c.newPosition)
+                put("side", if (c.oldPosition > 0) "old" else "new")
+                put("body", c.body)
+            })
+        }
+    }
+
+    fun getPendingReview(repository: String?, number: Long): String {
+        val t = target(repository)
+        return render(buildJsonObject { put("comments", pendingJson(pendingStore(t, number).pendingComments)) })
+    }
+
+    fun addPendingReviewComment(repository: String?, number: Long, comment: McpInlineComment): String {
+        requireWriteEnabled()
+        val t = target(repository)
+        val store = pendingStore(t, number)
+        store.addComment(toInline(comment))
+        return render(buildJsonObject { put("pendingComments", store.pendingComments.size) })
+    }
+
+    /** Removes the pending comment at 1-based [index], or all of them when [index] is null. */
+    fun discardPendingReview(repository: String?, number: Long, index: Int?): String {
+        requireWriteEnabled()
+        val t = target(repository)
+        val store = pendingStore(t, number)
+        if (index == null) {
+            store.clear()
+        } else {
+            val comment = store.pendingComments.getOrNull(index - 1)
+                ?: throw GiteaToolException("There is no pending comment $index; see gitea_get_pending_review.")
+            store.removeComment(comment)
+        }
+        return render(buildJsonObject { put("pendingComments", store.pendingComments.size) })
+    }
+
+    suspend fun submitPendingReview(repository: String?, number: Long, event: String, body: String?): String = guarded {
+        requireWriteEnabled()
+        val reviewEvent = parseEvent(event)
+        val t = target(repository)
+        val store = pendingStore(t, number)
+        val pending = store.pendingComments
+        requireReviewContent(reviewEvent, body, pending.size)
+        val head = t.client.getPullRequest(t.owner, t.repo, number).head.sha
+        val review = t.client.createReview(t.owner, t.repo, number, CreatePullReviewOptions(reviewEvent, body.orEmpty(), head, pending))
+        store.removeAll(pending)
+        reviewJson(review)
     }
 
     private fun requireText(text: String) {
