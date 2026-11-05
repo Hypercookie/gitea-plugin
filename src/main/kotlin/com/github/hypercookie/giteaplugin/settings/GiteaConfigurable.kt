@@ -19,9 +19,13 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.awt.RelativePoint
+import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.Align
+import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.bindSelected
+import com.intellij.ui.dsl.builder.enabledIf
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.selected
 import icons.CollaborationToolsIcons
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -79,8 +83,15 @@ class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea
                     checkBox("Reload open pull requests when the IDE window regains focus")
                         .bindSelected(settings::refreshOnFrameActivation)
                 }
+                lateinit var mcpEnabledBox: Cell<JBCheckBox>
+                row {
+                    mcpEnabledBox = checkBox("Offer Gitea tools to the IDE's MCP server")
+                        .bindSelected(settings::mcpEnabled)
+                        .comment("When off, the Gitea tools are removed from Settings | Tools | MCP Server | Exposed Tools and from MCP clients. No restart needed.")
+                }
                 row {
                     checkBox("Let MCP clients change pull requests")
+                        .enabledIf(mcpEnabledBox.selected)
                         .bindSelected(settings::mcpWriteTools)
                         .comment("Off by default. The IDE's MCP server (Settings | Tools | MCP Server) offers Gitea tools to AI assistants. Reading pull requests is always possible; this switch covers commenting, replying, resolving threads, reactions and submitting reviews, which are done as your Gitea account.")
                 }
