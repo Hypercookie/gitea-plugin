@@ -23,9 +23,7 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.bindSelected
-import com.intellij.ui.dsl.builder.enabledIf
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.ui.dsl.builder.selected
 import icons.CollaborationToolsIcons
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -91,10 +89,11 @@ class GiteaConfigurable(private val project: Project) : BoundConfigurable("Gitea
                 }
                 indent {
                     row {
-                        checkBox("Also allow changing pull requests")
-                            .enabledIf(mcpEnabledBox.selected)
+                        val writeBox = checkBox("Also allow changing pull requests")
+                            .enabled(settings.mcpEnabled)
                             .bindSelected(settings::mcpWriteTools)
                             .comment("Off by default. Adds commenting, replying, resolving threads, reactions and submitting reviews, which are done as your Gitea account.")
+                        mcpEnabledBox.component.addActionListener { writeBox.enabled(mcpEnabledBox.component.isSelected) }
                     }
                 }
             }
