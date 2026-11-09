@@ -1,7 +1,7 @@
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
     <id>com.github.hypercookie.giteaplugin</id>
-    <name>Gitea</name>
-    <vendor>hypercookie</vendor>
+    <name>Gitea Pull Requests</name>
+    <vendor url="https://github.com/Hypercookie/gitea-plugin">hypercookie</vendor>
     <description><![CDATA[
         <p>Provides integration with <a href="https://about.gitea.com/">Gitea</a> pull requests.</p>
         <ul>
@@ -16,6 +16,7 @@
         </ul>
         <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Features that contact the server on their own, such as the commit checks column, can be turned off there. Tested with Gitea 1.27.</p>
         <p>Requires the Git plugin.</p>
+        <p><i>Unofficial community plugin, not affiliated with or endorsed by the Gitea project.</i></p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

@@ -3,281 +3,64 @@
 [![Build](https://github.com/Hypercookie/gitea-plugin/actions/workflows/build.yml/badge.svg)](https://github.com/Hypercookie/gitea-plugin/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-> **AI Disclaimer**
-> 
-> Zero effort has been made to hide the fact that this project was largely implemented using GenAI tools. The reason for this heavy AI usage is that I am doing this in my free time and I do have a full time job. I have done my very best to ensure that the code in this repository is up to quality standards, that features work, and security best practises are followed. 
-
 Review [Gitea](https://about.gitea.com/) pull requests without leaving your
-IDE. Browse and filter pull requests, read their timeline, see review comments
-next to your code, and reply, resolve, comment and submit reviews from IntelliJ
-IDEA and other JetBrains IDEs.
+IDE: browse and filter pull requests, read the timeline, see review comments
+next to your code, and reply, resolve, comment and submit reviews. It is built
+on the IntelliJ Platform's code review components, so it looks and works like
+the bundled GitHub and GitLab plugins.
 
-The plugin is built on the IntelliJ Platform's code review components, the
-same ones the bundled GitHub and GitLab plugins use, so it looks and works
-like them.
+_Unofficial community plugin, not affiliated with or endorsed by the Gitea project._
 
-## Contents
-
-- [Features](#features)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Getting started](#getting-started)
-- [Settings](#settings)
-- [MCP server tools](#mcp-server-tools)
-- [Known limitations](#known-limitations)
-- [Development](#development)
-- [License](#license)
+<!-- SCREENSHOT 1: Hero. The Pull Requests tool window next to an open pull request tab (list + details). Suggested file: docs/images/overview.png -->
+> 📸 **Screenshot placeholder 1:** pull request list and details tab (`docs/images/overview.png`)
 
 ## Features
 
-### Pull request list
+- **Pull request list** with search and quick filters (open, mine, assigned to me, review requests), plus state, author, label and assignee filters.
+- **Details tab** with commits, changed files (filterable), status checks, merge conflicts and reviewers, and a timeline with reactions.
+- **Review in the editor:** threads appear under the commented lines on the checked-out branch. Reply, resolve, add comments from the gutter, and collect them in a pending review.
+- **Diff viewer** support with comment navigation across files.
+- **Submit reviews** with Approve, Request Changes or Comment.
+- **Git log column** showing the commit status checks (opt-in).
+- **AI assistants** can read and review pull requests through the IDE's MCP Server (opt-in, read-only by default).
 
-- A **Pull Requests** tool window lists the pull requests of the current
-  repository, with title, number, author, labels, assignees, state and comment
-  count. More results load as you scroll.
-- Quick filters for open pull requests, your pull requests, pull requests
-  assigned to you and review requests, plus filters for state, author, label,
-  assignee and sort order.
-- View, check out, open in the browser or copy the link of any pull request
-  from its context menu.
+<!-- SCREENSHOT 2: Review threads in the editor, with the gutter comment icon and the pending review banner. Suggested file: docs/images/review-in-editor.png -->
+> 📸 **Screenshot placeholder 2:** review threads in the editor (`docs/images/review-in-editor.png`)
 
-### Pull request details
+<!-- SCREENSHOT 3: Submit Review popup, or the timeline tab. Suggested file: docs/images/submit-review.png -->
+> 📸 **Screenshot placeholder 3:** submit review popup or timeline (`docs/images/submit-review.png`)
 
-- Each pull request opens in its own tab with its commits, source branch,
-  changed files, commit status checks, merge conflicts and pending reviewers.
-- The changed files can be filtered: changed locally, has unresolved, pending,
-  your own or any comments (or none), and by change type (added, modified,
-  deleted, renamed) and file type. Active filters combine.
-- The diff tab is named after the current file and follows you when you step
-  to another one. **Select in Changes Tree** finds the diffed file in the
-  pull request's changes tree.
-- Open the diff of the whole pull request or of a single commit in the IDE's
-  diff viewer, or use **Jump to Source** (<kbd>F4</kbd>) in the changed files
-  to open the local file.
-- **Previous Comment** and **Next Comment** in the diff toolbar step through
-  the review threads of the pull request, across files. Resolved threads are
-  skipped unless **Include Resolved Comments in Navigation** is turned on in
-  the diff's context menu.
-- The timeline opens in an editor tab with the description, comments, reviews,
-  pushed commits and other events, and a field for new comments.
-- Reactions show as pills under the description and each comment. Hover a pill
-  to see who reacted, click it to add or remove your own reaction, or pick a
-  new one with the smiley in the comment's header.
-
-### Review in the editor
-
-- On the branch of an open pull request, review threads appear under the
-  commented lines in the regular editor, and lines changed by the pull request
-  are marked in the gutter.
-- Threads follow your local edits. A thread whose line has changed since the
-  comment was written stays at the changed block, collapsed and marked
-  **Outdated**.
-- Reply to threads, resolve and unresolve them, and add new comments from the
-  gutter, either to a pending review (<kbd>Cmd/Ctrl</kbd>+<kbd>Enter</kbd>) or
-  as a single comment (<kbd>Shift</kbd>+<kbd>Cmd/Ctrl</kbd>+<kbd>Enter</kbd>).
-- Edit and delete your own comments, in the editor and in the timeline.
-- Code blocks in comments have Copy and Apply buttons on hover; Apply
-  replaces the commented line with the block.
-- The same comments appear in the side-by-side, unified and one-sided diff
-  viewers.
-- Typing `@` in a comment suggests users to mention.
-- Review comments show reactions, which you can add and remove as in the
-  timeline.
-- A banner above the editor shows when a review is pending, and when the
-  local branch is ahead of, behind or diverged from the pull request.
-- The pull request is found through the branch's upstream, so local branches
-  with a different name work, and multi-root projects are supported.
-
-### Experimental features
-
-Both are off by default, might change or break, and are turned on under
-<kbd>Settings</kbd> | <kbd>Version Control</kbd> | <kbd>Gitea</kbd> |
-**Experimental**. Gitea's API has neither, so the plugin stores the data as a
-hidden marker in the comment text, which Gitea does not display.
-
-- **Comment on multiple lines**: select lines and use **Add Comment on
-  Selected Lines**. The range is highlighted in the editor and diffs. Ranges
-  written by others are always shown as a "Lines 3-5" label.
-- **Code suggestions in review comments**: **Suggest Change** starts a comment
-  with a suggestion block holding the commented lines. Anyone using the plugin
-  gets an **Apply suggestion** button under it, which replaces the lines in the
-  local file as one undo step (and refuses if the original code has changed).
-  Plain `suggestion` blocks typed in the Gitea web UI get the button too. A
-  comment can hold one suggestion.
-
-### Submitting reviews
-
-- **Submit Review** shows the number of pending comments, a field for the
-  review summary, and the actions **Approve**, **Request Changes** and
-  **Comment**. Pending comments can also be discarded.
-- Approve and Request Changes are hidden on your own pull requests, which Gitea
-  does not allow.
-
-### Git log
-
-- A **Gitea Commit Checks** column shows the commit status of each commit in
-  the Git log. Click it to open the check or the commit page. It is off by
-  default, since it asks the server once per commit shown; turn it on in the
-  Gitea settings.
-
-### Accounts
-
-- Accounts are managed under <kbd>Settings</kbd> | <kbd>Version Control</kbd> |
-  <kbd>Gitea</kbd>. The server URL and access token are checked before an
-  account is saved, and one account can be set as the project default.
-- Access tokens are stored in the IDE's password safe.
-- Git remotes are matched to accounts by host and path, so servers hosted
-  under a subpath (such as `https://example.com/gitea`) work. HTTPS, `ssh://`
-  and `git@host:owner/repo.git` remotes are supported.
-
-## Settings
-
-Under <kbd>Settings</kbd> | <kbd>Version Control</kbd> | <kbd>Gitea</kbd>:
-
-- **Accounts** and the project's default account.
-- **Features**: turn off review comments in the editor, reactions, the pull
-  request suggestion after a push and reloading on window focus (turning a
-  feature off also stops its requests), and turn on the commit checks column
-  in the Git log. Two switches for the [MCP tools](#mcp-server-tools) are here
-  too.
-- **Experimental**: multi-line comments and code suggestions, see above.
-- **Debug**: a status bar widget counting the Gitea API requests sent since
-  the IDE started.
-
-## MCP server tools
-
-If the IDE's MCP Server plugin is installed, the plugin can offer Gitea tools
-to AI assistants connected to it. The plugin works as before without the MCP
-Server plugin.
-
-- **Off by default.** Turn on **Offer Gitea tools to the IDE's MCP server
-  (read-only)** under <kbd>Settings</kbd> | <kbd>Version Control</kbd> |
-  <kbd>Gitea</kbd> | **Features**. Turning it off removes the tools again
-  without a restart. Once on, they show as "Gitea" under <kbd>Settings</kbd> |
-  <kbd>Tools</kbd> | <kbd>MCP Server</kbd> | **Exposed Tools**, where each can
-  be switched off.
-- **Read tools**: list repositories, list and search pull requests, and read a
-  pull request's details, files, commits, timeline, checks, comments, review
-  threads and reactions. `gitea_get_pending_review` shows the comments queued
-  in the IDE's pending review.
-- **Write tools** need the second switch, **Also allow changing pull
-  requests**, which is off by default. They comment, reply, resolve threads,
-  add and remove reactions and submit reviews as your Gitea account, so treat
-  the pull request text an assistant reads as untrusted input.
-- **Review mode** (also behind the write switch): `gitea_add_pending_review_comment`
-  queues inline comments without posting them, `gitea_discard_pending_review`
-  removes one or all, and `gitea_submit_pending_review` submits them as one
-  review with Approve, Comment or Request Changes. The queue is the same
-  pending review the IDE shows in the editor and diff.
+<!-- SCREENSHOT 4: Settings | Version Control | Gitea page with an account. Suggested file: docs/images/settings.png -->
+> 📸 **Screenshot placeholder 4:** the Gitea settings page (`docs/images/settings.png`)
 
 ## Requirements
 
-- IntelliJ IDEA 2025.2 or later, or another JetBrains IDE on platform build
-  252 or later, with the bundled Git plugin enabled. Builds 252 to 262 and
-  263 (2026.3) each have their own plugin archive.
-- Gitea 1.24 or later; the plugin is tested against 1.24, 1.25, 1.26, 1.27
-  and 28.1. Resolving review comments needs Gitea 1.26 and replying to them
-  1.27; on older servers those actions are hidden.
+- IntelliJ IDEA 2025.2 or later (or another JetBrains IDE on build 252+) with the Git plugin.
+- Gitea 1.24 or later. Resolving comments needs 1.26, replying to them 1.27; on older servers those actions are hidden.
 
 ## Installation
 
-1. Download the archive for your IDE from the
-   [latest release](https://github.com/Hypercookie/gitea-plugin/releases/latest):
-   `gitea-plugin-<version>-252.zip` for builds 252 to 262 (2025.2 to 2026.2),
-   `gitea-plugin-<version>-263.zip` for 2026.3.
-2. In the IDE, open <kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>⚙</kbd> |
-   <kbd>Install Plugin from Disk...</kbd>, select the downloaded archive (don't
-   unzip it) and restart the IDE.
-
-To build from source instead:
-
-```shell
-git clone https://github.com/Hypercookie/gitea-plugin.git
-cd gitea-plugin
-./gradlew buildPlugin
-```
-
-The archive is written to `build/distributions/`; install it the same way.
+- **JetBrains Marketplace:** in the IDE open <kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>Marketplace</kbd> and search for "Gitea". _(Once published.)_
+- **From a release:** download the zip for your IDE from the [latest release](https://github.com/Hypercookie/gitea-plugin/releases/latest) (`-252` for 2025.2 to 2026.2, `-263` for 2026.3) and use <kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>⚙</kbd> | <kbd>Install Plugin from Disk...</kbd>.
 
 ## Getting started
 
-1. In Gitea, create an access token under <kbd>Settings</kbd> |
-   <kbd>Applications</kbd> with read and write access to repositories and
-   issues. The plugin reads your profile, pull requests, issues and repository
-   contents, and writes reviews and comments.
-2. In the IDE, open <kbd>Settings</kbd> | <kbd>Version Control</kbd> |
-   <kbd>Gitea</kbd>, click <kbd>+</kbd>, enter the server URL (for example
-   `https://gitea.example.com`) and the token, and click **Log In**.
-3. Open a project whose Git remote points to that server, then open the
-   **Pull Requests** tool window.
-4. Double-click a pull request to open it. Select changed files and click
-   **Show Diff** to review them, or click **View Timeline**.
-5. To review in the editor, check out the pull request. Files on its branch
-   show existing comments, and you can add new ones from the gutter.
-6. Click **Submit Review** in the pull request tab or the editor banner.
+1. In Gitea, create an access token under <kbd>Settings</kbd> | <kbd>Applications</kbd> with read and write access to repositories and issues.
+2. In the IDE open <kbd>Settings</kbd> | <kbd>Version Control</kbd> | <kbd>Gitea</kbd>, click <kbd>+</kbd>, enter the server URL and the token, and log in. The token is stored in the IDE's password safe.
+3. Open a project whose Git remote points to that server and open the **Pull Requests** tool window.
+4. Double-click a pull request. To review in the editor, check out its branch.
+5. Click **Submit Review** in the pull request tab or the editor banner.
 
-## Known limitations
+## More
 
-- Pull requests from forks cannot be checked out.
-- Requesting reviewers, editing labels and assignees, and creating, merging or
-  closing pull requests are not supported yet.
-- Gitea returns no reactions with comments, so they load with one request per
-  comment. Other people's new reactions appear after refreshing the pull
-  request or reopening the timeline.
-- Files cannot be marked as viewed, because Gitea's API does not support it.
-  It has no multi-line comments or suggestions either; the experimental
-  versions of both rely on hidden markers in the comment text.
-- The timeline does not show the code snippet of review threads.
-- Timeline tabs are not restored after restarting the IDE.
+- [Full feature and settings reference, MCP tools, known limitations](docs/features.md)
+- [Development guide](docs/development.md)
+- [Changelog](CHANGELOG.md)
 
-## Development
+## AI disclaimer
 
-The project uses Kotlin and the
-[IntelliJ Platform Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html),
-and builds once per IDE line range: `platforms/<line>/` holds each range's IDE
-version, build range and line-specific code (see
-[docs/platform-versions.md](docs/platform-versions.md)). Without
-`-Pplatform`, the build targets 252 to 262 against IntelliJ IDEA 2025.2.
-
-```shell
-./gradlew runIde                  # start a sandbox IDE with the plugin installed
-./gradlew check                   # run the tests
-./gradlew verifyPlugin            # run the IntelliJ Plugin Verifier
-./gradlew buildPlugin             # build the plugin archive
-./gradlew check -Pplatform=263    # the same for 2026.3
-```
-
-`verifyPlugin` checks the plugin against the latest release of every IDE
-version in the profile's range; `-PverifyIdeLine=261` checks one. It fails on
-compatibility problems and on any use of internal IntelliJ Platform API.
-
-Live integration tests run against a Gitea server when `GITEA_DEV_TOKEN` is
-set. `scripts/gitea-test-server.sh` starts a throwaway one of any version;
-see [docs/local-gitea-dev-instance.md](docs/local-gitea-dev-instance.md).
-
-Source layout under `src/main/kotlin/com/github/hypercookie/giteaplugin`:
-
-| Package                     | Contents                                                     |
-|-----------------------------|--------------------------------------------------------------|
-| `accounts`                  | Accounts, token storage and the project default account     |
-| `api`                       | Gitea REST API client and data types                         |
-| `log`                       | Commit checks column in the Git log                          |
-| `pullrequest`               | Editor banner, branch to pull request lookup, pending review |
-| `pullrequest/toolwindow`    | Tool window and its tabs                                     |
-| `pullrequest/list`          | Pull request list, search and filters                        |
-| `pullrequest/details`       | Pull request tab: commits, branch, files, checks, diffs      |
-| `pullrequest/timeline`      | Timeline editor tab                                          |
-| `pullrequest/reactions`     | Reactions on comments and the description, reaction picker   |
-| `pullrequest/review`        | Review data, threads, line mapping, submit review popup      |
-| `pullrequest/review/editor` | Review in the editor: comments and gutter                    |
-| `pullrequest/diff`          | Comments in the diff viewer                                  |
-| `mcp`                       | Gitea tools for the IDE's MCP server                         |
-| `repo`                      | Matching Git remotes to accounts                             |
-| `settings`                  | Settings page and login                                      |
-| `util`                      | Shared helpers                                               |
+This project was largely implemented with GenAI tools, and I make no effort to hide it. I build it in my free time next to a full-time job, and I have done my best to keep the code to a good standard, the features working and security practices followed.
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE). Parts of the user interface
-are adapted from IntelliJ IDEA Community Edition, also licensed under the
-Apache License 2.0; see [NOTICE](NOTICE).
+[Apache License 2.0](LICENSE). Parts of the user interface are adapted from IntelliJ IDEA Community Edition, also Apache 2.0; see [NOTICE](NOTICE).
