@@ -29,6 +29,7 @@
 
 
     <extensions defaultExtensionNs="com.intellij">
+        <errorHandler implementation="com.github.hypercookie.giteaplugin.debug.GiteaErrorReportSubmitter"/>
         <toolWindow factoryClass="com.github.hypercookie.giteaplugin.pullrequest.toolwindow.GiteaToolWindowFactory"
                     id="Gitea Pull Requests" anchor="left" doNotActivateOnStart="true" canCloseContents="true"
                     icon="com.github.hypercookie.giteaplugin.icons.GiteaIcons.Gitea"/>
