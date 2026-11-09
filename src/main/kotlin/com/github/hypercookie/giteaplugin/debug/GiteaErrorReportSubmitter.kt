@@ -1,12 +1,11 @@
 package com.github.hypercookie.giteaplugin.debug
 
 import com.intellij.ide.BrowserUtil
-import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.ide.plugins.PluginManager
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.diagnostic.ErrorReportSubmitter
 import com.intellij.openapi.diagnostic.IdeaLoggingEvent
 import com.intellij.openapi.diagnostic.SubmittedReportInfo
-import com.intellij.openapi.extensions.PluginId
 import java.awt.Component
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -28,7 +27,7 @@ class GiteaErrorReportSubmitter : ErrorReportSubmitter() {
         parentComponent: Component,
         consumer: Consumer<in SubmittedReportInfo>,
     ): Boolean {
-        val version = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.version ?: "unknown"
+        val version = PluginManager.getPluginByClass(GiteaErrorReportSubmitter::class.java)?.version ?: "unknown"
         val ide = ApplicationInfo.getInstance().let { "${it.fullApplicationName} (${it.build.asString()})" }
         val url = buildIssueUrl(
             pluginVersion = version,
@@ -43,7 +42,6 @@ class GiteaErrorReportSubmitter : ErrorReportSubmitter() {
     }
 
     companion object {
-        private const val PLUGIN_ID = "com.github.hypercookie.giteaplugin"
         private const val NEW_ISSUE_URL = "https://github.com/Hypercookie/gitea-plugin/issues/new"
 
         // Browsers and GitHub reject very long URLs, so the stack trace is cut.
