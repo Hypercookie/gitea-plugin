@@ -1,9 +1,9 @@
-# Gitea for JetBrains IDEs
+# Gitea pull requests & MCP for JetBrains IDEs
 
 [![Build](https://github.com/Hypercookie/gitea-plugin/actions/workflows/build.yml/badge.svg)](https://github.com/Hypercookie/gitea-plugin/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-Review [Gitea](https://about.gitea.com/) pull requests without leaving your
+**Gitea pull requests & MCP** lets you review [Gitea](https://about.gitea.com/) pull requests without leaving your
 IDE: browse and filter pull requests, read the timeline, see review comments
 next to your code, and reply, resolve, comment and submit reviews. It is built
 on the IntelliJ Platform's code review components, so it looks and works like
@@ -37,7 +37,7 @@ Multi-line comments and suggestions are under <kbd>Settings</kbd> | <kbd>Version
 
 ## Installation
 
-- **JetBrains Marketplace:** in the IDE open <kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>Marketplace</kbd> and search for "Gitea". _(Once published.)_
+- **JetBrains Marketplace:** in the IDE open <kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>Marketplace</kbd> and search for "Gitea pull requests & MCP". _(Once published.)_
 - **From a release:** download the zip for your IDE from the [latest release](https://github.com/Hypercookie/gitea-plugin/releases/latest) (`-252` for 2025.2 to 2026.2, `-263` for 2026.3) and use <kbd>Settings</kbd> | <kbd>Plugins</kbd> | <kbd>⚙</kbd> | <kbd>Install Plugin from Disk...</kbd>.
 
 ## Getting started
