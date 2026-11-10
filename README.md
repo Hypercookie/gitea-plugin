@@ -11,6 +11,14 @@ the bundled GitHub and GitLab plugins.
 
 _Unofficial community plugin, not affiliated with or endorsed by the Gitea project._
 
+## What sets it apart
+
+As of November 2026, and to the best of our knowledge from the JetBrains Marketplace listings of the other Gitea plugins:
+
+- **Multi-line comments** (opt-in): comment on a selected range of lines, in the editor and in diffs. Gitea's API has no line ranges, so the plugin stores the range with the comment; the other Gitea plugins we compared don't offer it.
+- **Code suggestions** (opt-in): write a suggestion into a review comment and apply it to the local file in one click, as one undo step. This also works for suggestions typed in Gitea's web UI.
+- **Full MCP integration:** AI assistants connect through the IDE's MCP Server and can read pull requests, comment, reply, resolve threads, react, and queue and submit whole reviews. Both the read tools and the write tools are off by default and switched on separately.
+
 ## Features
 
 - **Pull request list** with search and quick filters (open, mine, assigned to me, review requests), plus state, author, label and assignee filters.
@@ -19,7 +27,8 @@ _Unofficial community plugin, not affiliated with or endorsed by the Gitea proje
 - **Diff viewer** support with comment navigation across files.
 - **Submit reviews** with Approve, Request Changes or Comment.
 - **Git log column** showing the commit status checks (opt-in).
-- **AI assistants** can read and review pull requests through the IDE's MCP Server (opt-in, read-only by default).
+
+Multi-line comments and suggestions are under <kbd>Settings</kbd> | <kbd>Version Control</kbd> | <kbd>Gitea</kbd> | **Experimental**, and the MCP switches are under **Features**; details are in the [reference](docs/features.md).
 
 ## Requirements
 

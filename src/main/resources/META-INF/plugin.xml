@@ -8,11 +8,13 @@
           <li>List, search and filter the pull requests of the current repository in the Pull Requests tool window.</li>
           <li>Open a pull request to see its commits, changed files, status checks and timeline, and view file diffs.</li>
           <li>Review in the editor: see review threads next to the code of the checked-out pull request branch, reply to and resolve them, and add new comments from the gutter.</li>
+          <li>Comment on multiple lines (opt-in, experimental): select a range of lines and comment on all of them.</li>
+          <li>Code suggestions (opt-in, experimental): suggest a change in a review comment and apply it to the local file in one click.</li>
           <li>Collect comments in a pending review and submit it as approval, comment or change request.</li>
           <li>Check out a pull request branch from the list.</li>
           <li>After pushing a branch without an open pull request, get a notification that opens Gitea's page to create one.</li>
           <li>See the status checks of each commit in a column of the Git log.</li>
-          <li>With the IDE's MCP Server enabled, let AI assistants read and review pull requests through Gitea tools (reading, commenting, replying, resolving, reactions, submitting reviews).</li>
+          <li>MCP integration (opt-in): with the IDE's MCP Server enabled, AI assistants can read pull requests, comment, reply, resolve threads, add reactions, and queue and submit reviews through Gitea tools. Reading and changing are separate switches in the settings.</li>
         </ul>
         <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Features that contact the server on their own, such as the commit checks column, can be turned off there. Tested with Gitea 1.27.</p>
         <p>Requires the Git plugin.</p>
