@@ -1,9 +1,9 @@
-<idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
+<idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude" url="https://github.com/Hypercookie/gitea-plugin">
     <id>com.github.hypercookie.giteaplugin</id>
-    <name>Gitea</name>
-    <vendor>hypercookie</vendor>
+    <name>Gitea pull requests</name>
+    <vendor url="https://github.com/Hypercookie/gitea-plugin">hypercookie</vendor>
     <description><![CDATA[
-        <p>Provides integration with <a href="https://about.gitea.com/">Gitea</a> pull requests.</p>
+        <p>Review Gitea pull requests in the IDE: browse, comment and submit reviews.</p>
         <ul>
           <li>List, search and filter the pull requests of the current repository in the Pull Requests tool window.</li>
           <li>Open a pull request to see its commits, changed files, status checks and timeline, and view file diffs.</li>
@@ -16,6 +16,8 @@
         </ul>
         <p>To configure, open <b>Settings / Preferences</b> and go to Version Control | Gitea. Features that contact the server on their own, such as the commit checks column, can be turned off there. Tested with Gitea 1.27.</p>
         <p>Requires the Git plugin.</p>
+        <p>Report problems or ideas in the <a href="https://github.com/Hypercookie/gitea-plugin/issues">issue tracker</a>. Source code and documentation: <a href="https://github.com/Hypercookie/gitea-plugin">GitHub</a>.</p>
+        <p><i>Unofficial community plugin, not affiliated with or endorsed by the Gitea project (<a href="https://about.gitea.com/">about.gitea.com</a>).</i></p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
