@@ -11,9 +11,6 @@ the bundled GitHub and GitLab plugins.
 
 _Unofficial community plugin, not affiliated with or endorsed by the Gitea project._
 
-<!-- SCREENSHOT 1: Hero. The Pull Requests tool window next to an open pull request tab (list + details). Suggested file: docs/images/overview.png -->
-> 📸 **Screenshot placeholder 1:** pull request list and details tab (`docs/images/overview.png`)
-
 ## Features
 
 - **Pull request list** with search and quick filters (open, mine, assigned to me, review requests), plus state, author, label and assignee filters.
@@ -23,15 +20,6 @@ _Unofficial community plugin, not affiliated with or endorsed by the Gitea proje
 - **Submit reviews** with Approve, Request Changes or Comment.
 - **Git log column** showing the commit status checks (opt-in).
 - **AI assistants** can read and review pull requests through the IDE's MCP Server (opt-in, read-only by default).
-
-<!-- SCREENSHOT 2: Review threads in the editor, with the gutter comment icon and the pending review banner. Suggested file: docs/images/review-in-editor.png -->
-> 📸 **Screenshot placeholder 2:** review threads in the editor (`docs/images/review-in-editor.png`)
-
-<!-- SCREENSHOT 3: Submit Review popup, or the timeline tab. Suggested file: docs/images/submit-review.png -->
-> 📸 **Screenshot placeholder 3:** submit review popup or timeline (`docs/images/submit-review.png`)
-
-<!-- SCREENSHOT 4: Settings | Version Control | Gitea page with an account. Suggested file: docs/images/settings.png -->
-> 📸 **Screenshot placeholder 4:** the Gitea settings page (`docs/images/settings.png`)
 
 ## Requirements
 
