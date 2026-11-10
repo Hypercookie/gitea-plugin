@@ -1,6 +1,6 @@
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude" url="https://github.com/Hypercookie/gitea-plugin">
     <id>com.github.hypercookie.giteaplugin</id>
-    <name>Gitea pull requests</name>
+    <name>Gitea pull requests &amp; MCP</name>
     <vendor url="https://github.com/Hypercookie/gitea-plugin">hypercookie</vendor>
     <description><![CDATA[
         <p>Review Gitea pull requests in the IDE: browse, comment and submit reviews.</p>
