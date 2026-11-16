@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [1.2.3-252] - 2026-11-10
+
+- Add in-IDE error reporting by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/80
+- Prepare release 1.2.3: highlight multi-line comments, suggestions and MCP by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/83
+- Name the plugin "Gitea pull requests & MCP" by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/84
+- Use the new plugin name in the README by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/85
+
+**Full Changelog**: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.2...v1.2.3
+
 ## [1.2.0-252] - 2026-11-05
 
 - Changelog update - 1.1.1 by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/68
@@ -13,8 +22,6 @@
 - Update README to the latest state by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/72
 - Release 1.2.0 by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/74
 - Don't fail the release when the changelog PR can't be created by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/73
-
-**Full Changelog**: https://github.com/Hypercookie/gitea-plugin/compare/1.1.1...v1.2.0
 
 ### Added
 
@@ -113,7 +120,8 @@
 - Commit status checks in a "Gitea Commit Checks" column of the Git log.
 - Editable pull request diffs and Jump to Source while the pull request branch is checked out.
 
-[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.0-252...HEAD
+[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.3-252...HEAD
+[1.2.3-252]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.0-252...v1.2.3-252
 [1.2.0]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.1-252...v1.2.0
 [1.2.0-252]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.0...v1.2.0-252
 [1.1.1]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.0...v1.1.1
