@@ -28,7 +28,7 @@ jobs:
       gitea: ${{ steps.plan.outputs.gitea }}
     steps:
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
 
       - name: Plan jobs
         id: plan
@@ -59,7 +59,7 @@ jobs:
         platform: ${{ fromJSON(needs.matrix.outputs.platforms) }}
     steps:
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -104,7 +104,7 @@ jobs:
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/lib/android
 
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -139,7 +139,7 @@ jobs:
         gitea: ${{ fromJSON(needs.matrix.outputs.gitea) }}
     steps:
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -176,7 +176,7 @@ jobs:
       contents: write
     steps:
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Java
         uses: actions/setup-java@v5
