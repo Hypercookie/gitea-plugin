@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+## [1.2.4-252] - 2026-11-25
+
+- Support new IntelliJ Platform and Gitea versions by @github-actions[bot] in https://github.com/Hypercookie/gitea-plugin/pull/78
+- Release automatically when the version is raised by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/95
+- Mark pull request files as viewed by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/96
+- Bump ossf/scorecard-action from 2.4.1 to 2.5.0 by @dependabot[bot] in https://github.com/Hypercookie/gitea-plugin/pull/92
+- Bump actions/upload-artifact from 4.6.1 to 7.0.2 by @dependabot[bot] in https://github.com/Hypercookie/gitea-plugin/pull/89
+- Bump org.jetbrains.intellij.platform.settings from 2.19.0 to 2.20.1 by @dependabot[bot] in https://github.com/Hypercookie/gitea-plugin/pull/94
+- Bump actions/checkout from 4.2.2 to 7.0.1 by @dependabot[bot] in https://github.com/Hypercookie/gitea-plugin/pull/91
+- Bump github/codeql-action from 3 to 4 by @dependabot[bot] in https://github.com/Hypercookie/gitea-plugin/pull/90
+- Bump gradle-wrapper from 9.8.1 to 9.9.1 by @dependabot[bot] in https://github.com/Hypercookie/gitea-plugin/pull/93
+- Release 1.2.4 by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/97
+
 ## [1.2.0-252] - 2026-11-05
 
 - Changelog update - 1.1.1 by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/68
@@ -13,8 +26,6 @@
 - Update README to the latest state by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/72
 - Release 1.2.0 by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/74
 - Don't fail the release when the changelog PR can't be created by @Hypercookie in https://github.com/Hypercookie/gitea-plugin/pull/73
-
-**Full Changelog**: https://github.com/Hypercookie/gitea-plugin/compare/1.1.1...v1.2.0
 
 ### Added
 
@@ -113,7 +124,8 @@
 - Commit status checks in a "Gitea Commit Checks" column of the Git log.
 - Editable pull request diffs and Jump to Source while the pull request branch is checked out.
 
-[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.0-252...HEAD
+[Unreleased]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.4-252...HEAD
+[1.2.4-252]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.0-252...v1.2.4-252
 [1.2.0]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.1-252...v1.2.0
 [1.2.0-252]: https://github.com/Hypercookie/gitea-plugin/compare/v1.2.0...v1.2.0-252
 [1.1.1]: https://github.com/Hypercookie/gitea-plugin/compare/v1.1.0...v1.1.1
