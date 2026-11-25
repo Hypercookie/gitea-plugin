@@ -68,6 +68,8 @@
                 text="Select in Changes Tree" description="Select the file of this diff in the pull request's changes tree" icon="AllIcons.General.Locate">
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
         </action>
+        <action id="Gitea.Diff.ToggleViewed" class="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaToggleViewedAction"
+                text="Viewed" description="Mark this file as viewed (kept in the IDE only, not sent to Gitea)" icon="AllIcons.Actions.Checked"/>
         <action id="Gitea.Diff.Review.IncludeResolvedComments" class="com.github.hypercookie.giteaplugin.pullrequest.diff.GiteaIncludeResolvedCommentsAction"
                 text="Include Resolved Comments in Navigation">
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
