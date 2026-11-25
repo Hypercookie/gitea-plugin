@@ -152,6 +152,7 @@ object GiteaPullRequestDetailsComponent {
             DefaultActionGroup(
                 ActionManager.getInstance().getAction("Diff.ShowDiff"),
                 jumpToSource,
+                GiteaToggleViewedAction(),
                 Separator.getInstance(),
                 ActionManager.getInstance().getAction("ExpandAll"),
                 ActionManager.getInstance().getAction("CollapseAll"),
@@ -315,5 +316,27 @@ private class GiteaJumpToSourceAction(private val data: GiteaPullRequestReviewDa
 
     override fun actionPerformed(e: AnActionEvent) {
         if (isCheckedOut()) super.actionPerformed(e)
+    }
+}
+
+/** Marks the selected files of the changes tree as viewed, or as not viewed when they all are already. */
+private class GiteaToggleViewedAction : DumbAwareAction() {
+    override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+
+    private fun target(e: AnActionEvent): Pair<GiteaChangeListViewModel, List<com.intellij.collaboration.util.RefComparisonChange>>? {
+        val vm = e.getData(CodeReviewChangeListViewModel.DATA_KEY) as? GiteaChangeListViewModel ?: return null
+        val selected = vm.changesSelection.value?.changes.orEmpty()
+        return if (selected.isEmpty()) null else vm to selected
+    }
+
+    override fun update(e: AnActionEvent) {
+        val (vm, selected) = target(e) ?: run { e.presentation.isEnabled = false; return }
+        e.presentation.isEnabled = true
+        e.presentation.text = if (vm.allViewed(selected)) "Mark as Not Viewed" else "Mark as Viewed"
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val (vm, selected) = target(e) ?: return
+        vm.setViewed(selected, !vm.allViewed(selected))
     }
 }
