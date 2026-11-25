@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.pullrequest.details
 
+import com.github.hypercookie.giteaplugin.pullrequest.GiteaViewedFilesService
 import com.github.hypercookie.giteaplugin.pullrequest.review.GiteaPullRequestReviewData
 import com.github.hypercookie.giteaplugin.util.bindOnEdt
 import com.intellij.icons.AllIcons
@@ -50,8 +51,14 @@ object GiteaFilteredChanges {
 
         val content = Wrapper()
         var treeScope: CoroutineScope? = null
-        val filterContext = combine(data.threads, data.pending, data.currentUser, GiteaChangeFilters.localChanges(data)) { threads, pending, me, local ->
-            GiteaChangeFilters.context(data, threads, pending, me, local)
+        val filterContext = combine(
+            data.threads,
+            data.pending,
+            data.currentUser,
+            GiteaChangeFilters.localChanges(data),
+            GiteaViewedFilesService.getInstance(data.project).viewedPaths(GiteaViewedFilesService.keyOf(data)),
+        ) { threads, pending, me, local, viewed ->
+            GiteaChangeFilters.context(data, threads, pending, me, local, viewed)
         }
         val shown = combine(filters, extensions, filterContext) { f, e, c ->
             GiteaChangeFilters.apply(baseVm.changes, { GiteaChangeFilters.pathOf(data, it) }, f, e, c)
@@ -102,6 +109,8 @@ object GiteaFilteredChanges {
             val group = DefaultActionGroup()
             fun toggles(vararg items: GiteaFileFilter) = items.forEach { group.add(FilterToggle(it, filters)) }
             toggles(GiteaFileFilter.CHANGED_LOCALLY)
+            group.add(Separator.create("Viewed"))
+            toggles(GiteaFileFilter.NOT_VIEWED, GiteaFileFilter.VIEWED)
             group.add(Separator.create("Comments"))
             toggles(
                 GiteaFileFilter.UNRESOLVED_COMMENTS,

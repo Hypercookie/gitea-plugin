@@ -1,0 +1,53 @@
+# Releases automatically when a pull request that raises `version` in
+# gradle.properties is merged to main: creates the tag and GitHub release
+# (notes generated from the merged pull requests) and starts the Release
+# workflow, which attaches the zips and publishes to JetBrains Marketplace.
+# Nothing to do by hand after the merge. A version that already has a tag
+# is skipped, so other merges to main release nothing.
+
+name: Auto Release
+on:
+  push:
+    branches: [ main ]
+    paths: [ gradle.properties ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # tag and release
+      actions: write    # start the Release workflow
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Fetch Sources
+        uses: actions/checkout@v6
+
+      - name: Create release and start publishing
+        run: |
+          VERSION=$(sed -nE 's/^version[[:space:]]*=[[:space:]]*([^[:space:]]+).*/\1/p' gradle.properties | head -1)
+          [ -n "$VERSION" ] || { echo "::error::No version in gradle.properties"; exit 1; }
+          TAG="v$VERSION"
+
+          if gh release view "$TAG" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists, nothing to release."
+            exit 0
+          fi
+
+          # 1.2.0-beta.1 style versions are pre-releases (Marketplace beta channel).
+          FLAGS=()
+          case "$VERSION" in *-*) FLAGS+=(--prerelease) ;; esac
+
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$VERSION" --generate-notes "${FLAGS[@]}"
+
+          # Releases made with GITHUB_TOKEN start no workflow by themselves.
+          gh workflow run release.yml --ref main -f tag="$TAG"
