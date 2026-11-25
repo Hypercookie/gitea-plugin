@@ -1,3 +1,7 @@
+# Runs for every published release: one created by hand, or by the Auto
+# Release workflow, which dispatches this (a release created with GITHUB_TOKEN
+# starts no workflow by itself).
+#
 # Attaches the plugin archives to a GitHub release when it is published. It
 # publishes to JetBrains Marketplace (a version like 0.1.0-beta goes to the
 # beta channel) only when the secret PUBLISH_TOKEN is set, together with
@@ -8,6 +12,11 @@ name: Release
 on:
   release:
     types: [ prereleased, released ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of an existing GitHub release to build and publish
+        required: true
 
 permissions:
   contents: read
@@ -24,6 +33,8 @@ jobs:
       # Read by the Publish Plugin step's condition; a step's own env is not
       # visible to its `if`.
       PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Maximize Build Space
         # Third-party action in a job that holds the signing and Marketplace
@@ -36,7 +47,7 @@ jobs:
       - name: Fetch Sources
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -49,14 +60,21 @@ jobs:
         with:
           cache-read-only: true
 
-      - name: Patch Changelog
-        if: ${{ github.event.release.body != '' }}
-        env:
-          CHANGELOG: ${{ github.event.release.body }}
+      # The release's notes, for both the event and the manual start.
+      - name: Read Release Notes
+        id: notes
         run: |
           RELEASE_NOTE="./build/tmp/release_note.txt"
           mkdir -p "$(dirname "$RELEASE_NOTE")"
-          echo "$CHANGELOG" > $RELEASE_NOTE
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RELEASE_NOTE"
+          if [ -s "$RELEASE_NOTE" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Patch Changelog
+        if: ${{ steps.notes.outputs.present == 'true' }}
+        run: |
+          RELEASE_NOTE="./build/tmp/release_note.txt"
 
           ./gradlew patchChangelog --release-note-file=$RELEASE_NOTE
 
@@ -69,10 +87,7 @@ jobs:
           done
 
       - name: Upload Release Asset
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$TAG" ./build/distributions/*
+        run: gh release upload "$TAG" ./build/distributions/* --clobber
 
       - name: Publish Plugin
         # Skipped unless a Marketplace token is configured.
@@ -88,12 +103,11 @@ jobs:
           done
 
       - name: Create Pull Request
-        if: ${{ github.event.release.body != '' }}
+        if: ${{ steps.notes.outputs.present == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Through the environment, not ${{ }} in the script: a tag name
           # can contain shell syntax.
-          VERSION: ${{ github.event.release.tag_name }}
+          VERSION: ${{ env.TAG }}
         run: |
           BRANCH="changelog-update-$VERSION"
           LABEL="release changelog"
