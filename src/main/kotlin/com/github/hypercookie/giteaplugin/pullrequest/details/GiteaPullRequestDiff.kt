@@ -75,7 +75,7 @@ object GiteaPullRequestDiff {
         }
     }
 
-    private val COMMENT_NAVIGATION_ACTIONS = listOf("Gitea.Diff.Review.PreviousComment", "Gitea.Diff.Review.NextComment", "Gitea.Diff.SelectInChangesTree")
+    private val COMMENT_NAVIGATION_ACTIONS = listOf("Gitea.Diff.Review.PreviousComment", "Gitea.Diff.Review.NextComment", "Gitea.Diff.SelectInChangesTree", "Gitea.Diff.ToggleViewed")
 
     private fun navigationFile(request: SimpleDiffRequest): CommentNavigation.File {
         val ctx = request.getUserData(GITEA_DIFF_COMMENT_CONTEXT_KEY)!!

@@ -1,5 +1,6 @@
 package com.github.hypercookie.giteaplugin.pullrequest.details
 
+import com.github.hypercookie.giteaplugin.pullrequest.GiteaViewedFilesService
 import com.github.hypercookie.giteaplugin.api.dto.GitCommit
 import com.github.hypercookie.giteaplugin.pullrequest.GiteaBranchPrResolverService
 import com.github.hypercookie.giteaplugin.pullrequest.list.GiteaPullRequestActions
@@ -164,12 +165,23 @@ class GiteaChangeListViewModel(
     private val _selection = MutableStateFlow<ChangesSelection?>(null)
     override val changesSelection: StateFlow<ChangesSelection?> = _selection.asStateFlow()
 
+    private val viewedFiles = GiteaViewedFilesService.getInstance(data.project)
+    private val viewedKey = GiteaViewedFilesService.keyOf(data)
+
+    /** True when every one of [selected] is marked as viewed. */
+    fun allViewed(selected: Collection<RefComparisonChange>): Boolean =
+        selected.isNotEmpty() && selected.all { c -> GiteaChangeFilters.pathOf(data, c)?.let { viewedFiles.isViewed(viewedKey, it) } == true }
+
+    fun setViewed(selected: Collection<RefComparisonChange>, viewed: Boolean) =
+        viewedFiles.setViewed(viewedKey, selected.mapNotNull { GiteaChangeFilters.pathOf(data, it) }, viewed)
+
     override val detailsByChange: StateFlow<Map<RefComparisonChange, CodeReviewChangeDetails>> =
-        data.threads.map { threads ->
+        combine(data.threads, viewedFiles.viewedPaths(viewedKey)) { threads, viewed ->
             changes.associateWith { change ->
                 val path = change.filePathAfter?.let { GiteaChangePaths.relative(data, it) }
                 val count = threads.count { it.path == path && it.side == ReviewSide.NEW && !it.isResolved }
-                CodeReviewChangeDetails(isRead = true, discussions = count)
+                // Not-viewed files show bold in the tree, like unread files in the GitHub plugin.
+                CodeReviewChangeDetails(isRead = GiteaChangeFilters.pathOf(data, change) in viewed, discussions = count)
             }
         }.stateIn(cs, SharingStarted.Eagerly, emptyMap())
 
