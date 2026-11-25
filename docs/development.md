@@ -47,3 +47,14 @@ Source layout under `src/main/kotlin/com/github/hypercookie/giteaplugin`:
 | `settings`                  | Settings page and login                                      |
 | `util`                      | Shared helpers                                               |
 
+
+## Releasing
+
+Raise `version` in `gradle.properties` in a pull request and merge it. The
+Auto Release workflow then tags `v<version>`, creates the GitHub release
+(a version with a suffix like `-beta.1` is a pre-release) and starts the
+Release workflow, which builds one zip per IDE line, attaches them to the
+release and publishes them to JetBrains Marketplace (needs the secrets
+`PUBLISH_TOKEN`, `CERTIFICATE_CHAIN`, `PRIVATE_KEY` and `PRIVATE_KEY_PASSWORD`;
+without `PUBLISH_TOKEN` the publish step is skipped). A version that already has
+a tag is skipped. Publishing a release by hand still works the same way.

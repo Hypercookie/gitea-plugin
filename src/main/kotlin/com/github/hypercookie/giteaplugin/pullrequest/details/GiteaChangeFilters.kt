@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 /** Filters of the changes tree in the pull request overview. All active ones must match (AND). */
 enum class GiteaFileFilter(val title: String) {
     CHANGED_LOCALLY("Changed locally"),
+    VIEWED("Viewed"),
+    NOT_VIEWED("Not viewed"),
     UNRESOLVED_COMMENTS("Has unresolved comments"),
     PENDING_COMMENTS("Has pending comments"),
     MY_COMMENTS("Has my comments"),
@@ -33,6 +35,7 @@ data class GiteaFilterContext(
     val pendingPaths: Set<String> = emptySet(),
     val myCommentPaths: Set<String> = emptySet(),
     val commentedPaths: Set<String> = emptySet(),
+    val viewedPaths: Set<String> = emptySet(),
 )
 
 object GiteaChangeFilters {
@@ -53,12 +56,14 @@ object GiteaChangeFilters {
         pending: List<CreatePullReviewComment>,
         me: GiteaUser?,
         local: Set<String>,
+        viewed: Set<String> = emptySet(),
     ): GiteaFilterContext = GiteaFilterContext(
         localPaths = local,
         unresolvedPaths = threads.filter { !it.isResolved }.mapTo(HashSet()) { it.path },
         pendingPaths = pending.mapTo(HashSet()) { it.path },
         myCommentPaths = if (me == null) emptySet() else threads.filter { t -> t.comments.any { it.user?.id == me.id } }.mapTo(HashSet()) { it.path },
         commentedPaths = threads.mapTo(HashSet()) { it.path },
+        viewedPaths = viewed,
     )
 
     /** [pathOf] gives a change's repo-relative path (null: unknown, never matches a path filter). */
@@ -78,6 +83,8 @@ object GiteaChangeFilters {
             (extensions.isEmpty() || extensionOf(path.orEmpty()) in extensions) && filters.all { filter ->
                 when (filter) {
                     GiteaFileFilter.CHANGED_LOCALLY -> path in context.localPaths
+                    GiteaFileFilter.VIEWED -> path in context.viewedPaths
+                    GiteaFileFilter.NOT_VIEWED -> path !in context.viewedPaths
                     GiteaFileFilter.UNRESOLVED_COMMENTS -> path in context.unresolvedPaths
                     GiteaFileFilter.PENDING_COMMENTS -> path in context.pendingPaths
                     GiteaFileFilter.MY_COMMENTS -> path in context.myCommentPaths
